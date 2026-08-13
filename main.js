@@ -39,6 +39,10 @@ var CONFIG = {
   stealPct: 0.2,      // 싸움 승리 시 상대에게서 뺏는 골드 비율(0.2 = 20%)
   protectPrice: 3000, // 파괴방지권 1개 가격(파괴 1회를 막아줌)
 
+  fightBreakChance: 0.15,  // 싸움 패배 시 무기가 1단계 하락할 확률
+  dropProtectChance: 0.03, // 사냥 시 파괴방지권이 드랍될 확률
+  dropGoldChance: 0.07,    // 사냥 시 골드뭉치가 드랍될 확률
+
   // 데이터 저장 파일 경로(메신저봇R FileStream). 저장 안 되면 메모리에만 유지됨.
   dbPath: '/sdcard/msgbot/game_rpg.json',
 };
@@ -310,11 +314,23 @@ var cmdHunt = {
     if (slain) gold = Math.round(gold * 1.5); // 처치 보너스
     p.gold += gold;
 
+    // 레어 드랍
+    var dropMsg = '';
+    if (Math.random() < CONFIG.dropProtectChance) {
+      p.protects++;
+      dropMsg = '\n🎁 레어 드랍!! 🛡️ 파괴방지권 1개 획득! (보유 ' + p.protects + '개)';
+      addLog(ctx.room, '🎁 ' + ctx.sender + ' 방지권 드랍!');
+    } else if (Math.random() < CONFIG.dropGoldChance) {
+      var bonus = Math.round(randInt(200, 600) * m.gpp);
+      p.gold += bonus;
+      dropMsg = '\n🎁 골드뭉치 발견! 💰 +' + g(bonus);
+    }
+
     addLog(ctx.room, '🗡️ ' + ctx.sender + ' ' + m.name + ' ' + (slain ? '처치' : '사냥') + ' (+' + g(gold) + ')');
     saveDB();
     return '🗡️ ' + ctx.sender + ' 님 앞에 ' + m.name + ' 출현! (HP ' + m.hp + ')\n' +
       weaponName(p.level) + ' 로 ' + dealt + ' 데미지!' + (slain ? '  💀 처치!' : '') + '\n' +
-      '💰 +' + g(gold) + '  (보유 ' + g(p.gold) + ')\n' +
+      '💰 +' + g(gold) + '  (보유 ' + g(p.gold) + ')' + dropMsg + '\n' +
       '오늘 남은 사냥: ' + huntsLeft(p) + '/' + CONFIG.dailyHunts + '회';
   }
 };
@@ -379,12 +395,21 @@ var cmdFight = {
     loseP.gold -= steal;
     winP.gold += steal;
 
+    // 무기 손상: 패자는 낮은 확률로 무기 1단계 하락
+    var breakMsg = '';
+    if (loseP.level > 0 && Math.random() < CONFIG.fightBreakChance) {
+      var lbefore = loseP.level;
+      loseP.level--;
+      breakMsg = '\n💢 ' + loser + ' 의 무기가 손상되어 +' + lbefore + ' → +' + loseP.level + ' 하락!';
+      addLog(ctx.room, '💢 ' + loser + ' 무기 손상 +' + lbefore + '→+' + loseP.level);
+    }
+
     addLog(ctx.room, '⚔️ ' + winner + ' 승 vs ' + loser + ' (' + g(steal) + ' 약탈)');
     saveDB();
     return '⚔️ 결투!  ' + ctx.sender + '(' + weaponName(atk.level) + ')\n' +
       '   VS   ' + targetName + '(' + weaponName(def.level) + ')\n\n' +
       '🏆 승자: ' + winner + '!\n' +
-      '💰 ' + winner + ' 님이 ' + loser + ' 님에게서 ' + g(steal) + ' 획득!\n' +
+      '💰 ' + winner + ' 님이 ' + loser + ' 님에게서 ' + g(steal) + ' 획득!' + breakMsg + '\n' +
       '오늘 남은 싸움: ' + fightsLeft(atk) + '/' + CONFIG.dailyFights + '회';
   }
 };
@@ -579,6 +604,9 @@ function response(room, msg, sender, isGroupChat, replier, imageDB, packageName)
  *  - 무기 등급: GRADES 배열 (일반~초월)
  *  - 몬스터/사냥: MONSTERS 배열, huntDamage() 공식, CONFIG.dailyHunts
  *  - 골드: CONFIG.startGold / attendGold / stealPct
+ *  - 파괴방지권: CONFIG.protectPrice
+ *  - 싸움 무기손상 확률: CONFIG.fightBreakChance
+ *  - 사냥 레어 드랍 확률: CONFIG.dropProtectChance / dropGoldChance
  *  - 하루 싸움 횟수: CONFIG.dailyFights
  *  - PvP 밸런스: cmdFight 의 pWin 공식(레벨 차 1당 5%)
  *
