@@ -1,0 +1,112 @@
+:root{
+  --bg:#0e1016; --bg2:#161a24; --card:#1b2130; --card2:#222a3b;
+  --line:#2c3446; --text:#e7ebf3; --muted:#8b93a7;
+  --primary:#6c8cff; --primary2:#546fe0;
+  --gold:#f7c948; --success:#49d17a; --danger:#ff5d6c; --info:#4facfe;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:radial-gradient(1200px 600px at 50% -10%, #1a2030, var(--bg)) fixed;
+  color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  min-height:100vh; -webkit-font-smoothing:antialiased;
+}
+.screen{max-width:520px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,.35)}
+b{font-weight:700}
+small{opacity:.75;font-weight:600}
+
+/* 버튼 */
+.btn{cursor:pointer;border:1px solid var(--line);background:var(--card2);color:var(--text);
+  border-radius:12px;padding:12px 14px;font-size:15px;font-weight:700;transition:.12s;user-select:none}
+.btn:hover{filter:brightness(1.12)}
+.btn:active{transform:translateY(1px) scale(.99)}
+.btn.primary{background:linear-gradient(180deg,var(--primary),var(--primary2));border-color:transparent}
+.btn.big{width:100%;padding:15px;font-size:17px}
+.btn.sm{padding:7px 10px;font-size:13px}
+.btn.ghost{background:transparent}
+.btn.action{flex:1;background:var(--card2)}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
+
+/* 로그인 */
+.login-card{margin-top:14vh;text-align:center}
+.login-card h1{margin:.2em 0;font-size:30px}
+.login-card .sub{color:var(--muted);margin:.2em 0 1.2em}
+.login-card input{width:100%;margin:7px 0;padding:13px;border-radius:12px;border:1px solid var(--line);
+  background:#0f131c;color:var(--text);font-size:16px;text-align:center}
+.login-card .btn{margin-top:10px}
+.hint{color:var(--muted);font-size:12px;margin-top:14px;line-height:1.5}
+.err{color:var(--danger);font-size:13px;min-height:18px;margin:8px 0 0}
+
+/* 상단바 */
+.topbar{display:flex;align-items:center;gap:8px;max-width:520px;margin:0 auto 12px;padding:4px}
+.me-nick{font-weight:800;font-size:16px}
+.chips{margin-left:auto;display:flex;gap:6px}
+.chip{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:6px 11px;font-size:14px}
+.chip.gold b{color:var(--gold)}
+.wrap{display:flex;flex-direction:column;gap:12px}
+
+/* 무기 패널 */
+.weapon-panel{display:flex;flex-direction:column;align-items:center;gap:12px}
+.weapon-art{height:150px;display:flex;align-items:center;justify-content:center}
+.weapon-art svg{width:110px;height:150px;transition:.2s}
+.weapon-name{font-size:22px;font-weight:800;text-align:center}
+.odds-row{display:flex;gap:14px;justify-content:center;margin-top:6px;font-size:13px;color:var(--muted)}
+.odds.success b{color:var(--success)} .odds.destroy b{color:var(--danger)}
+.next-cost{color:var(--muted);font-size:13px;margin-top:2px}
+.enhance{margin-top:4px}
+@keyframes flash-ok{0%{box-shadow:0 0 0 0 rgba(73,209,122,.6)}100%{box-shadow:0 0 0 40px rgba(73,209,122,0)}}
+@keyframes flash-bad{0%{box-shadow:0 0 0 0 rgba(255,93,108,.6)}100%{box-shadow:0 0 0 40px rgba(255,93,108,0)}}
+@keyframes shake{10%,90%{transform:translateX(-2px)}30%,70%{transform:translateX(4px)}50%{transform:translateX(-6px)}}
+.weapon-panel.ok{animation:flash-ok .5s}
+.weapon-panel.bad{animation:flash-bad .5s}
+.weapon-art.shake{animation:shake .4s}
+
+/* 액션 */
+.actions{display:flex;gap:8px}
+
+/* 스탯 */
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;text-align:center}
+.stats>div{display:flex;flex-direction:column;gap:3px}
+.stats span{color:var(--muted);font-size:11px}
+.stats b{font-size:14px}
+
+/* 탭 */
+.tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.tab{white-space:nowrap;background:transparent;border:1px solid var(--line);border-radius:20px;
+  padding:8px 12px;color:var(--muted);font-size:13px;font-weight:700;cursor:pointer}
+.tab.active{background:var(--card);color:var(--text);border-color:var(--primary)}
+.panel{min-height:120px}
+
+/* 리스트 */
+.row{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row .rk{width:26px;text-align:center;font-weight:800}
+.row .nm{font-weight:700;flex:1;cursor:pointer}
+.row .nm:hover{text-decoration:underline}
+.row .val{color:var(--muted);font-size:13px}
+.row .val.gold{color:var(--gold)}
+.empty{color:var(--muted);text-align:center;padding:24px 0}
+.logline{padding:7px 4px;border-bottom:1px solid var(--line);font-size:13px;color:#cfd6e6}
+.logline:last-child{border-bottom:0}
+
+/* 싸움 목록 */
+.fightrow{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line)}
+.fightrow:last-child{border-bottom:0}
+.fightrow .nm{flex:1;font-weight:700}
+.fightrow .w{color:var(--muted);font-size:12px}
+
+/* 토스트 */
+.toast{border-radius:12px;padding:12px 14px;font-weight:700;text-align:center;border:1px solid var(--line);background:var(--card2)}
+.toast.ok{background:rgba(73,209,122,.14);border-color:var(--success);color:#c9f7d8}
+.toast.bad{background:rgba(255,93,108,.14);border-color:var(--danger);color:#ffd6da}
+.toast.info{background:rgba(79,172,254,.14);border-color:var(--info);color:#d3ecff}
+
+/* 모달 */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
+.modal-card{position:relative;max-width:360px;width:100%}
+.modal .close{position:absolute;top:10px;right:10px}
+.modal h3{margin:.1em 0 .6em}
+.pf-line{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
+.pf-line:last-child{border-bottom:0}
+.pf-line span{color:var(--muted)}

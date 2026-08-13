@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>⚔️ 강화 RPG</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- 로그인 -->
+<div id="login" class="screen">
+  <div class="card login-card">
+    <h1>⚔️ 강화 RPG</h1>
+    <p class="sub">닉네임과 PIN으로 시작하세요</p>
+    <input id="nick" placeholder="닉네임 (1~12자)" maxlength="12" autocomplete="off">
+    <input id="pin" placeholder="PIN 숫자 4자리" maxlength="4" inputmode="numeric" autocomplete="off">
+    <button id="loginBtn" class="btn primary big">시작</button>
+    <p id="loginErr" class="err"></p>
+    <p class="hint">처음 입력한 닉네임+PIN으로 계정이 생성됩니다. PIN을 기억하세요!</p>
+  </div>
+</div>
+
+<!-- 게임 -->
+<div id="game" class="screen" hidden>
+  <header class="topbar">
+    <span class="me-nick" id="hNick">-</span>
+    <span class="chips">
+      <span class="chip gold">💰 <b id="hGold">0</b></span>
+      <span class="chip">🛡️ <b id="hProtect">0</b></span>
+    </span>
+    <button id="logoutBtn" class="btn ghost sm">로그아웃</button>
+  </header>
+
+  <main class="wrap">
+    <section class="card weapon-panel">
+      <div id="weaponArt" class="weapon-art"></div>
+      <div class="weapon-info">
+        <div id="weaponName" class="weapon-name">+0 ⚪ 일반</div>
+        <div class="odds-row">
+          <span class="odds success">성공 <b id="oddsS">-</b></span>
+          <span class="odds destroy">파괴 <b id="oddsD">-</b></span>
+        </div>
+        <div id="nextCost" class="next-cost">다음 강화 비용 20G</div>
+      </div>
+      <button id="enhanceBtn" class="btn primary big enhance">⚒️ 강화</button>
+    </section>
+
+    <div id="toast" class="toast" hidden></div>
+
+    <section class="actions">
+      <button id="huntBtn" class="btn action">🗡️ 사냥 <small id="huntLeft"></small></button>
+      <button id="attendBtn" class="btn action">📅 출석</button>
+      <button id="protectBtn" class="btn action">🛡️ 방지권 구매</button>
+    </section>
+
+    <section class="card stats">
+      <div><span>최고기록</span><b id="sBest">+0</b></div>
+      <div><span>파괴</span><b id="sBreaks">0</b></div>
+      <div><span>전적</span><b id="sRecord">0승 0패</b></div>
+      <div><span>강화순위</span><b id="sRank">-</b></div>
+      <div><span>남은 싸움</span><b id="sFights">-</b></div>
+    </section>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="rank">🏅 랭킹</button>
+      <button class="tab" data-tab="goldrank">💰 부자</button>
+      <button class="tab" data-tab="fight">⚔️ 싸움</button>
+      <button class="tab" data-tab="hogu">🤡 오늘의호구</button>
+      <button class="tab" data-tab="log">📜 로그</button>
+    </nav>
+    <section id="panel" class="card panel"></section>
+  </main>
+</div>
+
+<!-- 프로필 모달 -->
+<div id="modal" class="modal" hidden>
+  <div class="card modal-card">
+    <button id="modalClose" class="btn ghost sm close">✕</button>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
