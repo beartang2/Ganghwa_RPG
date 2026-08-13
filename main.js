@@ -138,6 +138,44 @@ function huntsLeft(p) {
   if (p.huntDay !== today()) return CONFIG.dailyHunts;
   return Math.max(0, CONFIG.dailyHunts - p.huntsUsed);
 }
+// 승률(%) 문자열
+function winRate(p) {
+  var total = p.wins + p.losses;
+  return total === 0 ? '-' : Math.round(p.wins / total * 100) + '%';
+}
+// 강화 순위(등수, 전체 인원)
+function enhanceRank(room, name) {
+  var R = getRoom(room);
+  var arr = [];
+  for (var n in R.players) {
+    if (R.players.hasOwnProperty(n)) arr.push({ n: n, lv: R.players[n].level, best: R.players[n].best });
+  }
+  arr.sort(function (a, b) { return b.lv - a.lv || b.best - a.best; });
+  for (var i = 0; i < arr.length; i++) {
+    if (arr[i].n === name) return { rank: i + 1, total: arr.length };
+  }
+  return { rank: 0, total: arr.length };
+}
+// 프로필 카드 렌더링 (self=true 면 본인 전용 정보 추가)
+function renderProfile(room, name, self) {
+  var R = getRoom(room);
+  var p = R.players[name];
+  var rk = enhanceRank(room, name);
+  var lines = [
+    '📇 ' + name + ' 님의 프로필',
+    '무기: ' + weaponName(p.level),
+    '💰 골드: ' + g(p.gold) + '   🛡️ 방지권: ' + p.protects + '개',
+    '전적: ' + p.wins + '승 ' + p.losses + '패 (승률 ' + winRate(p) + ')',
+    '최고기록: +' + p.best + '   파괴: ' + p.breaks + '회',
+    '강화 순위: ' + (rk.rank || '-') + '위 (총 ' + rk.total + '명)'
+  ];
+  if (self) {
+    lines.push('남은 사냥: ' + huntsLeft(p) + '/' + CONFIG.dailyHunts +
+      '   남은 싸움: ' + fightsLeft(p) + '/' + CONFIG.dailyFights);
+    lines.push('다음 강화 비용: ' + g(enhanceCost(p.level)));
+  }
+  return lines.join('\n');
+}
 
 /* ------------------------------------------------------------------
  * 4. 무기 등급 (5단계: 일반 → 희귀 → 에픽 → 전설 → 초월, 만렙 +25)
@@ -335,20 +373,28 @@ var cmdHunt = {
   }
 };
 
-// --- 내정보 ---
+// --- 내정보 (본인 프로필) ---
 var cmdInfo = {
   names: ['내정보', '정보', 'ㄴㅈㅂ', '내무기'],
   help: '내정보 — 내 무기 · 골드 · 전적 확인',
   run: function (ctx) {
-    var p = getPlayer(ctx.room, ctx.sender);
-    return '📜 ' + ctx.sender + ' 님의 정보\n' +
-      '무기: ' + weaponName(p.level) + '\n' +
-      '💰 골드: ' + g(p.gold) + '  (다음 강화 ' + g(enhanceCost(p.level)) + ')\n' +
-      '🛡️ 방지권: ' + p.protects + '개\n' +
-      '최고기록: +' + p.best + '   파괴: ' + p.breaks + '회\n' +
-      '전적: ' + p.wins + '승 ' + p.losses + '패\n' +
-      '남은 사냥: ' + huntsLeft(p) + '/' + CONFIG.dailyHunts + '회   ' +
-      '남은 싸움: ' + fightsLeft(p) + '/' + CONFIG.dailyFights + '회';
+    getPlayer(ctx.room, ctx.sender); // 없으면 생성
+    return renderProfile(ctx.room, ctx.sender, true);
+  }
+};
+
+// --- 프로필 (본인/상대 조회) ---
+var cmdProfile = {
+  names: ['프로필', 'profile'],
+  help: '프로필 [이름] — 나 또는 상대의 무기 · 골드 · 전적 조회',
+  run: function (ctx) {
+    var name = ctx.args.join(' ').replace(/^@/, '').trim();
+    if (!name) name = ctx.sender; // 이름 없으면 본인
+    var R = getRoom(ctx.room);
+    if (!R.players[name]) {
+      return '"' + name + '" 님을 찾을 수 없어요.\n(아직 게임에 참여 안 함 — "강화"를 한 번 해야 등록돼요. 이름은 정확히!)';
+    }
+    return renderProfile(ctx.room, name, name === ctx.sender);
   }
 };
 
@@ -527,7 +573,7 @@ var cmdOdds = {
 };
 
 // 등록된 명령어
-var COMMANDS = [cmdEnhance, cmdAttend, cmdHunt, cmdProtect, cmdInfo, cmdFight,
+var COMMANDS = [cmdEnhance, cmdAttend, cmdHunt, cmdProtect, cmdInfo, cmdProfile, cmdFight,
   cmdRank, cmdGoldRank, cmdLog, cmdHogu, cmdOdds];
 
 /* ------------------------------------------------------------------
