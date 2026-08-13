@@ -27,6 +27,12 @@ var CONFIG = {
   // 하루에 걸 수 있는 싸움 횟수
   dailyFights: 5,
 
+  // 하루에 할 수 있는 사냥 횟수
+  dailyHunts: 20,
+
+  // 강화 최대 단계(초월 만렙)
+  maxLevel: 25,
+
   // 골드 설정
   startGold: 1000,    // 신규 플레이어 시작 골드
   attendGold: 1000,   // 출석 시 지급 골드(하루 1회)
@@ -99,6 +105,8 @@ function getPlayer(room, name) {
       gold: CONFIG.startGold,
       fightDay: '',      // 마지막 싸운 날짜
       fightsUsed: 0,     // 오늘 사용한 싸움 횟수
+      huntDay: '',       // 마지막 사냥 날짜
+      huntsUsed: 0,      // 오늘 사용한 사냥 횟수
       attendDay: '',     // 마지막 출석 날짜
       destroyDay: '',    // 마지막으로 파괴된 날짜
       destroysToday: 0   // 오늘 파괴된 횟수(오늘의 호구용)
@@ -119,25 +127,31 @@ function fightsLeft(p) {
   if (p.fightDay !== today()) return CONFIG.dailyFights;
   return Math.max(0, CONFIG.dailyFights - p.fightsUsed);
 }
+// 오늘 남은 사냥 횟수
+function huntsLeft(p) {
+  if (p.huntDay !== today()) return CONFIG.dailyHunts;
+  return Math.max(0, CONFIG.dailyHunts - p.huntsUsed);
+}
 
 /* ------------------------------------------------------------------
- * 4. 무기 이름 (강화 단계별 등급)
+ * 4. 무기 등급 (5단계: 일반 → 희귀 → 에픽 → 전설 → 초월, 만렙 +25)
  * ------------------------------------------------------------------ */
-var TIERS = [
-  { min: 21, name: '🌟 신의검' },
-  { min: 18, name: '✨ 전설의검' },
-  { min: 15, name: '🐉 용검' },
-  { min: 12, name: '🔥 미스릴검' },
-  { min: 9,  name: '⚔️ 기사검' },
-  { min: 6,  name: '⚔️ 강철검' },
-  { min: 3,  name: '🗡️ 청동검' },
-  { min: 0,  name: '🗡️ 나무막대기' }
+var GRADES = [
+  { min: 21, name: '초월', emoji: '🌈' }, // 21~25
+  { min: 16, name: '전설', emoji: '🟠' }, // 16~20
+  { min: 11, name: '에픽', emoji: '🟣' }, // 11~15
+  { min: 6,  name: '희귀', emoji: '🔵' }, // 6~10
+  { min: 0,  name: '일반', emoji: '⚪' }  // 0~5
 ];
-function weaponName(level) {
-  for (var i = 0; i < TIERS.length; i++) {
-    if (level >= TIERS[i].min) return '+' + level + ' ' + TIERS[i].name;
+function grade(level) {
+  for (var i = 0; i < GRADES.length; i++) {
+    if (level >= GRADES[i].min) return GRADES[i];
   }
-  return '+' + level;
+  return GRADES[GRADES.length - 1];
+}
+function weaponName(level) {
+  var gr = grade(level);
+  return '+' + level + ' ' + gr.emoji + ' ' + gr.name;
 }
 
 /* ------------------------------------------------------------------
@@ -146,19 +160,33 @@ function weaponName(level) {
  * ------------------------------------------------------------------ */
 function odds(level) {
   var success, destroy;
-  if (level <= 2)       { success = 0.95; destroy = 0.00; }
-  else if (level <= 5)  { success = 0.80; destroy = 0.00; }
-  else if (level <= 8)  { success = 0.65; destroy = 0.05; }
-  else if (level <= 11) { success = 0.50; destroy = 0.10; }
-  else if (level <= 14) { success = 0.35; destroy = 0.17; }
-  else if (level <= 17) { success = 0.25; destroy = 0.25; }
-  else if (level <= 20) { success = 0.15; destroy = 0.35; }
-  else                  { success = 0.08; destroy = 0.45; }
+  if (level <= 4)        { success = 0.90; destroy = 0.00; } // 일반
+  else if (level <= 9)   { success = 0.70; destroy = 0.03; } // 희귀
+  else if (level <= 14)  { success = 0.50; destroy = 0.10; } // 에픽
+  else if (level <= 19)  { success = 0.30; destroy = 0.22; } // 전설
+  else                   { success = 0.13; destroy = 0.40; } // 초월
   return { success: success, destroy: destroy, fail: 1 - success - destroy };
 }
 // 강화 비용: 단계가 높을수록 비싸진다
 function enhanceCost(level) {
   return 20 + level * 10;
+}
+
+/* ------------------------------------------------------------------
+ *  몬스터 (사냥용) — hp: 체력, gpp: 데미지당 골드(난이도)
+ *  강한 몬스터일수록 gpp(골드효율)가 높지만 체력이 많아 다 깎기 어렵다.
+ * ------------------------------------------------------------------ */
+var MONSTERS = [
+  { name: '🐀 들쥐',   hp: 50,   gpp: 1.0 },
+  { name: '🐗 멧돼지', hp: 120,  gpp: 1.3 },
+  { name: '🐺 늑대',   hp: 200,  gpp: 1.6 },
+  { name: '🐻 곰',     hp: 350,  gpp: 2.0 },
+  { name: '🐉 드래곤', hp: 600,  gpp: 3.0 },
+  { name: '👹 마왕',   hp: 1000, gpp: 4.0 }
+];
+// 무기 강화 수치에 따른 사냥 데미지
+function huntDamage(level) {
+  return randInt(10, 30) + level * 8;
 }
 
 /* ------------------------------------------------------------------
@@ -172,6 +200,9 @@ var cmdEnhance = {
   help: '강화 — 무기 강화 (골드 소모, 실패 시 깨질 수도!)',
   run: function (ctx) {
     var p = getPlayer(ctx.room, ctx.sender);
+    if (p.level >= CONFIG.maxLevel) {
+      return ctx.sender + ' 🌈 이미 만렙! +' + CONFIG.maxLevel + ' 초월 — 이 방의 최강자입니다!';
+    }
     var cost = enhanceCost(p.level);
     if (p.gold < cost) {
       return ctx.sender + ' 💸 골드 부족!\n필요 ' + g(cost) + ' / 보유 ' + g(p.gold) +
@@ -229,6 +260,35 @@ var cmdAttend = {
   }
 };
 
+// --- 사냥 (골드 획득) ---
+var cmdHunt = {
+  names: ['사냥', 'ㅅㄴ', 'hunt'],
+  help: '사냥 — 랜덤 몬스터를 잡아 골드 획득 (하루 ' + CONFIG.dailyHunts + '회)',
+  run: function (ctx) {
+    var p = getPlayer(ctx.room, ctx.sender);
+    if (p.huntDay !== today()) { p.huntDay = today(); p.huntsUsed = 0; }
+    if (p.huntsUsed >= CONFIG.dailyHunts) {
+      return '오늘 사냥을 다 했어요! (' + CONFIG.dailyHunts + '/' + CONFIG.dailyHunts + ')\n내일 다시 사냥하세요.';
+    }
+    p.huntsUsed++;
+
+    var m = MONSTERS[randInt(0, MONSTERS.length - 1)];
+    var dmg = huntDamage(p.level);
+    var dealt = Math.min(dmg, m.hp);
+    var slain = dmg >= m.hp;
+    var gold = Math.round(dealt * m.gpp);
+    if (slain) gold = Math.round(gold * 1.5); // 처치 보너스
+    p.gold += gold;
+
+    addLog(ctx.room, '🗡️ ' + ctx.sender + ' ' + m.name + ' ' + (slain ? '처치' : '사냥') + ' (+' + g(gold) + ')');
+    saveDB();
+    return '🗡️ ' + ctx.sender + ' 님 앞에 ' + m.name + ' 출현! (HP ' + m.hp + ')\n' +
+      weaponName(p.level) + ' 로 ' + dealt + ' 데미지!' + (slain ? '  💀 처치!' : '') + '\n' +
+      '💰 +' + g(gold) + '  (보유 ' + g(p.gold) + ')\n' +
+      '오늘 남은 사냥: ' + huntsLeft(p) + '/' + CONFIG.dailyHunts + '회';
+  }
+};
+
 // --- 내정보 ---
 var cmdInfo = {
   names: ['내정보', '정보', 'ㄴㅈㅂ', '내무기'],
@@ -240,6 +300,7 @@ var cmdInfo = {
       '💰 골드: ' + g(p.gold) + '  (다음 강화 ' + g(enhanceCost(p.level)) + ')\n' +
       '최고기록: +' + p.best + '   파괴: ' + p.breaks + '회\n' +
       '전적: ' + p.wins + '승 ' + p.losses + '패\n' +
+      '남은 사냥: ' + huntsLeft(p) + '/' + CONFIG.dailyHunts + '회   ' +
       '남은 싸움: ' + fightsLeft(p) + '/' + CONFIG.dailyFights + '회';
   }
 };
@@ -366,21 +427,29 @@ var cmdOdds = {
   names: ['강화확률', '확률', 'odds'],
   help: '강화확률 — 단계별 성공/파괴 확률표',
   run: function (ctx) {
-    var showLevels = [0, 3, 6, 9, 12, 15, 18, 21];
+    var rows = [
+      { lv: 0,  g: '⚪ 일반' },
+      { lv: 5,  g: '🔵 희귀' },
+      { lv: 10, g: '🟣 에픽' },
+      { lv: 15, g: '🟠 전설' },
+      { lv: 20, g: '🌈 초월' },
+      { lv: 24, g: '🌈 만렙직전' }
+    ];
     var lines = ['📊 강화 확률표 (성공 / 파괴 / 비용)'];
-    for (var i = 0; i < showLevels.length; i++) {
-      var lv = showLevels[i];
+    for (var i = 0; i < rows.length; i++) {
+      var lv = rows[i].lv;
       var o = odds(lv);
-      lines.push('+' + lv + '↑:  성공 ' + pct(o.success) + '  파괴 ' + pct(o.destroy) +
-        '  (' + g(enhanceCost(lv)) + ')');
+      lines.push('+' + lv + ' ' + rows[i].g + ':  성공 ' + pct(o.success) +
+        '  파괴 ' + pct(o.destroy) + '  (' + g(enhanceCost(lv)) + ')');
     }
-    lines.push('\n※ 파괴되면 +0 리셋! 실패는 유지(+10↑ 은 하락)');
+    lines.push('\n등급: ⚪일반(~5) 🔵희귀(~10) 🟣에픽(~15) 🟠전설(~20) 🌈초월(~25)');
+    lines.push('※ 파괴되면 +0 리셋! 실패는 유지(+10↑ 은 하락)');
     return lines.join('\n');
   }
 };
 
 // 등록된 명령어
-var COMMANDS = [cmdEnhance, cmdAttend, cmdInfo, cmdFight, cmdRank, cmdLog, cmdHogu, cmdOdds];
+var COMMANDS = [cmdEnhance, cmdAttend, cmdHunt, cmdInfo, cmdFight, cmdRank, cmdLog, cmdHogu, cmdOdds];
 
 /* ------------------------------------------------------------------
  * 7. 라우터
@@ -393,7 +462,7 @@ function buildHelp() {
   }
   lines.push('· ' + p + '도움말 — 이 목록');
   lines.push('');
-  lines.push('👉 "출석"으로 골드 받고, "강화" 연타로 무기를 키우고, "싸움 이름" 으로 골드를 뺏으세요!');
+  lines.push('👉 "출석"+"사냥"으로 골드를 모아 "강화" 연타, "싸움 이름" 으로 골드를 뺏으세요!');
   return lines.join('\n');
 }
 
@@ -452,8 +521,9 @@ function response(room, msg, sender, isGroupChat, replier, imageDB, packageName)
  *  튜닝 가이드
  * ------------------------------------------------------------------
  *  - 강화 난이도: odds() 의 success/destroy 값
- *  - 강화 비용: enhanceCost() 공식
- *  - 무기 등급/이름: TIERS 배열
+ *  - 강화 비용: enhanceCost() 공식 / 만렙: CONFIG.maxLevel
+ *  - 무기 등급: GRADES 배열 (일반~초월)
+ *  - 몬스터/사냥: MONSTERS 배열, huntDamage() 공식, CONFIG.dailyHunts
  *  - 골드: CONFIG.startGold / attendGold / stealPct
  *  - 하루 싸움 횟수: CONFIG.dailyFights
  *  - PvP 밸런스: cmdFight 의 pWin 공식(레벨 차 1당 5%)
