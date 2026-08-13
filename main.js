@@ -166,7 +166,7 @@ function odds(level) {
   else if (level <= 9)   { success = 0.85; destroy = 0.02; } // 희귀
   else if (level <= 14)  { success = 0.72; destroy = 0.04; } // 에픽
   else if (level <= 19)  { success = 0.58; destroy = 0.06; } // 전설
-  else                   { success = 0.45; destroy = 0.09; } // 초월
+  else                   { success = 0.445; destroy = 0.09; } // 초월 (+25 만렙 평균 ~827회)
   return { success: success, destroy: destroy, fail: 1 - success - destroy };
 }
 // 강화 비용: 단계가 높을수록 비싸진다
