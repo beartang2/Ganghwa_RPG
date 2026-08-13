@@ -37,6 +37,7 @@ var CONFIG = {
   startGold: 1000,    // 신규 플레이어 시작 골드
   attendGold: 1000,   // 출석 시 지급 골드(하루 1회)
   stealPct: 0.2,      // 싸움 승리 시 상대에게서 뺏는 골드 비율(0.2 = 20%)
+  protectPrice: 3000, // 파괴방지권 1개 가격(파괴 1회를 막아줌)
 
   // 데이터 저장 파일 경로(메신저봇R FileStream). 저장 안 되면 메모리에만 유지됨.
   dbPath: '/sdcard/msgbot/game_rpg.json',
@@ -103,6 +104,7 @@ function getPlayer(room, name) {
       wins: 0,           // 싸움 승
       losses: 0,         // 싸움 패
       gold: CONFIG.startGold,
+      protects: 0,       // 보유한 파괴방지권 개수
       fightDay: '',      // 마지막 싸운 날짜
       fightsUsed: 0,     // 오늘 사용한 싸움 횟수
       huntDay: '',       // 마지막 사냥 날짜
@@ -160,11 +162,11 @@ function weaponName(level) {
  * ------------------------------------------------------------------ */
 function odds(level) {
   var success, destroy;
-  if (level <= 4)        { success = 0.90; destroy = 0.00; } // 일반
-  else if (level <= 9)   { success = 0.70; destroy = 0.03; } // 희귀
-  else if (level <= 14)  { success = 0.50; destroy = 0.10; } // 에픽
-  else if (level <= 19)  { success = 0.30; destroy = 0.22; } // 전설
-  else                   { success = 0.13; destroy = 0.40; } // 초월
+  if (level <= 4)        { success = 0.95; destroy = 0.00; } // 일반
+  else if (level <= 9)   { success = 0.85; destroy = 0.02; } // 희귀
+  else if (level <= 14)  { success = 0.72; destroy = 0.04; } // 에픽
+  else if (level <= 19)  { success = 0.58; destroy = 0.06; } // 전설
+  else                   { success = 0.45; destroy = 0.09; } // 초월
   return { success: success, destroy: destroy, fail: 1 - success - destroy };
 }
 // 강화 비용: 단계가 높을수록 비싸진다
@@ -221,12 +223,19 @@ var cmdEnhance = {
       msg = '✅ 강화 성공!  +' + before + ' → +' + p.level + '\n' + weaponName(p.level);
       logLine = '✅ ' + ctx.sender + '  +' + before + '→+' + p.level;
     } else if (r < o.success + o.destroy) {
-      p.level = 0;
-      p.breaks++;
-      if (p.destroyDay !== today()) { p.destroyDay = today(); p.destroysToday = 0; }
-      p.destroysToday++;
-      msg = '💥 파괴!!  +' + before + ' 무기가 산산조각 났습니다...\n처음부터 다시! (현재 +0)';
-      logLine = '💥 ' + ctx.sender + '  +' + before + '→0 파괴';
+      if (p.protects > 0) {
+        // 파괴방지권 발동 — 파괴를 막고 현재 단계 유지
+        p.protects--;
+        msg = '🛡️ 파괴 방지 발동! +' + before + ' 무기를 지켰습니다.\n(남은 방지권 ' + p.protects + '개)';
+        logLine = '🛡️ ' + ctx.sender + '  +' + before + ' 파괴방지';
+      } else {
+        p.level = 0;
+        p.breaks++;
+        if (p.destroyDay !== today()) { p.destroyDay = today(); p.destroysToday = 0; }
+        p.destroysToday++;
+        msg = '💥 파괴!!  +' + before + ' 무기가 산산조각 났습니다...\n처음부터 다시! (현재 +0)';
+        logLine = '💥 ' + ctx.sender + '  +' + before + '→0 파괴';
+      }
     } else {
       if (p.level >= 10) {
         p.level--;
@@ -257,6 +266,27 @@ var cmdAttend = {
     saveDB();
     return '📅 ' + ctx.sender + ' 출석 완료! +' + g(CONFIG.attendGold) +
       '\n현재 보유: ' + g(p.gold);
+  }
+};
+
+// --- 파괴방지권 구매 ---
+var cmdProtect = {
+  names: ['방지권', '파괴방지권', 'protect'],
+  help: '방지권 [개수] — 파괴 1회를 막는 방지권 구매 (개당 ' + CONFIG.protectPrice + 'G)',
+  run: function (ctx) {
+    var p = getPlayer(ctx.room, ctx.sender);
+    var qty = parseInt(ctx.args[0], 10);
+    if (isNaN(qty) || qty < 1) qty = 1;
+    var total = CONFIG.protectPrice * qty;
+    if (p.gold < total) {
+      return ctx.sender + ' 💸 골드 부족!\n방지권 ' + qty + '개 = ' + g(total) + ' / 보유 ' + g(p.gold);
+    }
+    p.gold -= total;
+    p.protects += qty;
+    saveDB();
+    return '🛡️ 파괴방지권 ' + qty + '개 구매! (-' + g(total) + ')\n' +
+      '보유 방지권: ' + p.protects + '개   잔액: ' + g(p.gold) + '\n' +
+      '(다음 파괴 때 자동으로 1개 소모되어 무기를 지킵니다)';
   }
 };
 
@@ -298,6 +328,7 @@ var cmdInfo = {
     return '📜 ' + ctx.sender + ' 님의 정보\n' +
       '무기: ' + weaponName(p.level) + '\n' +
       '💰 골드: ' + g(p.gold) + '  (다음 강화 ' + g(enhanceCost(p.level)) + ')\n' +
+      '🛡️ 방지권: ' + p.protects + '개\n' +
       '최고기록: +' + p.best + '   파괴: ' + p.breaks + '회\n' +
       '전적: ' + p.wins + '승 ' + p.losses + '패\n' +
       '남은 사냥: ' + huntsLeft(p) + '/' + CONFIG.dailyHunts + '회   ' +
@@ -384,6 +415,28 @@ var cmdRank = {
   }
 };
 
+// --- 골드 랭킹 ---
+var cmdGoldRank = {
+  names: ['골드랭킹', '부자', '골드순위', 'goldrank'],
+  help: '골드랭킹 — 이 방의 부자 순위 TOP 10',
+  run: function (ctx) {
+    var R = getRoom(ctx.room);
+    var arr = [];
+    for (var name in R.players) {
+      if (R.players.hasOwnProperty(name)) arr.push({ name: name, gold: R.players[name].gold });
+    }
+    if (!arr.length) return '아직 참가자가 없어요. "강화"로 시작해보세요!';
+    arr.sort(function (a, b) { return b.gold - a.gold; });
+    var medals = ['🥇', '🥈', '🥉'];
+    var lines = ['💰 골드 랭킹 TOP 10'];
+    for (var i = 0; i < arr.length && i < 10; i++) {
+      var tag = i < 3 ? medals[i] : (i + 1) + '.';
+      lines.push(tag + ' ' + arr[i].name + '  ' + g(arr[i].gold));
+    }
+    return lines.join('\n');
+  }
+};
+
 // --- 강화 로그 ---
 var cmdLog = {
   names: ['강화로그', '로그', 'log'],
@@ -449,7 +502,8 @@ var cmdOdds = {
 };
 
 // 등록된 명령어
-var COMMANDS = [cmdEnhance, cmdAttend, cmdHunt, cmdInfo, cmdFight, cmdRank, cmdLog, cmdHogu, cmdOdds];
+var COMMANDS = [cmdEnhance, cmdAttend, cmdHunt, cmdProtect, cmdInfo, cmdFight,
+  cmdRank, cmdGoldRank, cmdLog, cmdHogu, cmdOdds];
 
 /* ------------------------------------------------------------------
  * 7. 라우터
