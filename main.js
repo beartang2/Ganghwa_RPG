@@ -6,7 +6,8 @@
  *  - 메신저봇R 신버전(BotManager) / 구버전(response) 모두 지원.
  *  - 데이터는 파일에 저장되어 봇을 껐다 켜도 유지됩니다(방마다 독립).
  *
- *  명령어: 도움말 · 강화 · 내정보 · 싸움 [상대] · 랭킹 · 강화확률
+ *  명령어: 도움말 · 강화 · 출석 · 내정보 · 싸움 [상대]
+ *          · 랭킹 · 강화로그 · 오늘의호구 · 강화확률
  * ============================================================
  */
 
@@ -25,6 +26,11 @@ var CONFIG = {
 
   // 하루에 걸 수 있는 싸움 횟수
   dailyFights: 5,
+
+  // 골드 설정
+  startGold: 1000,    // 신규 플레이어 시작 골드
+  attendGold: 1000,   // 출석 시 지급 골드(하루 1회)
+  stealPct: 0.2,      // 싸움 승리 시 상대에게서 뺏는 골드 비율(0.2 = 20%)
 
   // 데이터 저장 파일 경로(메신저봇R FileStream). 저장 안 되면 메모리에만 유지됨.
   dbPath: '/sdcard/msgbot/game_rpg.json',
@@ -46,9 +52,14 @@ function today() {
   var d = new Date();
   return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
 }
+// 골드 표기(천단위 콤마)
+function g(n) {
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + 'G';
+}
 
 /* ------------------------------------------------------------------
  * 3. 데이터 저장 (FileStream, 없으면 메모리 폴백)
+ *    DB[방] = { players: { 이름: {...} }, log: [ "...", ... ] }
  * ------------------------------------------------------------------ */
 function loadDB() {
   try {
@@ -66,23 +77,41 @@ function saveDB() {
     }
   } catch (e) {}
 }
-var DB = loadDB(); // { 방이름: { 플레이어이름: {...} } }
+var DB = loadDB();
+
+// 방 데이터 가져오기(없으면 생성)
+function getRoom(room) {
+  if (!DB[room] || !DB[room].players) DB[room] = { players: {}, log: [] };
+  if (!DB[room].log) DB[room].log = [];
+  return DB[room];
+}
 
 // 플레이어 레코드 가져오기(없으면 생성)
 function getPlayer(room, name) {
-  if (!DB[room]) DB[room] = {};
-  if (!DB[room][name]) {
-    DB[room][name] = {
-      level: 0,     // 현재 강화 단계
-      best: 0,      // 최고 기록
-      breaks: 0,    // 파괴(깨짐) 횟수
-      wins: 0,      // 싸움 승
-      losses: 0,    // 싸움 패
-      fightDay: '', // 마지막으로 싸운 날짜
-      fightsUsed: 0 // 오늘 사용한 싸움 횟수
+  var R = getRoom(room);
+  if (!R.players[name]) {
+    R.players[name] = {
+      level: 0,          // 현재 강화 단계
+      best: 0,           // 최고 기록
+      breaks: 0,         // 누적 파괴 횟수
+      wins: 0,           // 싸움 승
+      losses: 0,         // 싸움 패
+      gold: CONFIG.startGold,
+      fightDay: '',      // 마지막 싸운 날짜
+      fightsUsed: 0,     // 오늘 사용한 싸움 횟수
+      attendDay: '',     // 마지막 출석 날짜
+      destroyDay: '',    // 마지막으로 파괴된 날짜
+      destroysToday: 0   // 오늘 파괴된 횟수(오늘의 호구용)
     };
   }
-  return DB[room][name];
+  return R.players[name];
+}
+
+// 강화 로그 추가(방별, 최근 20개 유지)
+function addLog(room, text) {
+  var R = getRoom(room);
+  R.log.push(text);
+  if (R.log.length > 20) R.log.shift();
 }
 
 // 오늘 남은 싸움 횟수(날짜 바뀌면 리셋)
@@ -112,11 +141,8 @@ function weaponName(level) {
 }
 
 /* ------------------------------------------------------------------
- * 5. 강화 확률
- *    단계가 높을수록 성공률↓, 파괴 확률↑
- *    - 성공: +1
- *    - 파괴: +0 으로 리셋 (처음부터 다시!)
- *    - 실패: 유지 (10단계 이상은 1단계 하락)
+ * 5. 강화 확률 & 비용
+ *    단계가 높을수록 성공률↓, 파괴 확률↑, 비용↑
  * ------------------------------------------------------------------ */
 function odds(level) {
   var success, destroy;
@@ -130,53 +156,88 @@ function odds(level) {
   else                  { success = 0.08; destroy = 0.45; }
   return { success: success, destroy: destroy, fail: 1 - success - destroy };
 }
+// 강화 비용: 단계가 높을수록 비싸진다
+function enhanceCost(level) {
+  return 20 + level * 10;
+}
 
 /* ------------------------------------------------------------------
  * 6. 게임 명령어
- *    각 명령어는 names + run(ctx) 를 가진다.
  *    ctx = { room, sender, args, text }
  * ------------------------------------------------------------------ */
 
 // --- 강화 ---
 var cmdEnhance = {
   names: ['강화', 'ㄱㅎ', 'enhance'],
-  help: '강화 — 무기를 강화한다 (실패하면 깨질 수도!)',
+  help: '강화 — 무기 강화 (골드 소모, 실패 시 깨질 수도!)',
   run: function (ctx) {
     var p = getPlayer(ctx.room, ctx.sender);
-    var o = odds(p.level);
+    var cost = enhanceCost(p.level);
+    if (p.gold < cost) {
+      return ctx.sender + ' 💸 골드 부족!\n필요 ' + g(cost) + ' / 보유 ' + g(p.gold) +
+        '\n"출석"으로 매일 골드를 받거나 "싸움"으로 뺏어오세요.';
+    }
+    p.gold -= cost;
+
     var before = p.level;
+    var o = odds(before);
     var r = Math.random();
-    var msg;
+    var msg, logLine;
 
     if (r < o.success) {
       p.level++;
       if (p.level > p.best) p.best = p.level;
       msg = '✅ 강화 성공!  +' + before + ' → +' + p.level + '\n' + weaponName(p.level);
+      logLine = '✅ ' + ctx.sender + '  +' + before + '→+' + p.level;
     } else if (r < o.success + o.destroy) {
       p.level = 0;
       p.breaks++;
+      if (p.destroyDay !== today()) { p.destroyDay = today(); p.destroysToday = 0; }
+      p.destroysToday++;
       msg = '💥 파괴!!  +' + before + ' 무기가 산산조각 났습니다...\n처음부터 다시! (현재 +0)';
+      logLine = '💥 ' + ctx.sender + '  +' + before + '→0 파괴';
     } else {
       if (p.level >= 10) {
         p.level--;
         msg = '❌ 강화 실패...  +' + before + ' → +' + p.level + ' (하락)';
+        logLine = '❌ ' + ctx.sender + '  +' + before + '→+' + p.level;
       } else {
         msg = '❌ 강화 실패...  +' + before + ' 유지';
+        logLine = '❌ ' + ctx.sender + '  +' + before + ' 유지';
       }
     }
+    addLog(ctx.room, logLine);
     saveDB();
-    return ctx.sender + '  ' + msg;
+    return ctx.sender + '  ' + msg + '\n(-' + g(cost) + ', 잔액 ' + g(p.gold) + ')';
+  }
+};
+
+// --- 출석 (골드 획득) ---
+var cmdAttend = {
+  names: ['출석', 'ㅊㅅ', 'daily'],
+  help: '출석 — 하루 1회 골드 받기 (+' + CONFIG.attendGold + 'G)',
+  run: function (ctx) {
+    var p = getPlayer(ctx.room, ctx.sender);
+    if (p.attendDay === today()) {
+      return ctx.sender + ' 오늘은 이미 출석했어요! (보유 ' + g(p.gold) + ')';
+    }
+    p.attendDay = today();
+    p.gold += CONFIG.attendGold;
+    saveDB();
+    return '📅 ' + ctx.sender + ' 출석 완료! +' + g(CONFIG.attendGold) +
+      '\n현재 보유: ' + g(p.gold);
   }
 };
 
 // --- 내정보 ---
 var cmdInfo = {
   names: ['내정보', '정보', 'ㄴㅈㅂ', '내무기'],
-  help: '내정보 — 내 무기/전적 확인',
+  help: '내정보 — 내 무기 · 골드 · 전적 확인',
   run: function (ctx) {
     var p = getPlayer(ctx.room, ctx.sender);
     return '📜 ' + ctx.sender + ' 님의 정보\n' +
       '무기: ' + weaponName(p.level) + '\n' +
+      '💰 골드: ' + g(p.gold) + '  (다음 강화 ' + g(enhanceCost(p.level)) + ')\n' +
       '최고기록: +' + p.best + '   파괴: ' + p.breaks + '회\n' +
       '전적: ' + p.wins + '승 ' + p.losses + '패\n' +
       '남은 싸움: ' + fightsLeft(p) + '/' + CONFIG.dailyFights + '회';
@@ -186,17 +247,14 @@ var cmdInfo = {
 // --- 싸움 (PvP) ---
 var cmdFight = {
   names: ['싸움', '도전', '결투', 'fight'],
-  help: '싸움 [상대이름] — 상대에게 결투 신청 (하루 ' + CONFIG.dailyFights + '회)',
+  help: '싸움 [상대이름] — 결투! 이기면 상대 골드 ' + Math.round(CONFIG.stealPct * 100) + '% 획득 (하루 ' + CONFIG.dailyFights + '회)',
   run: function (ctx) {
     var targetName = ctx.args.join(' ').replace(/^@/, '').trim();
-    if (!targetName) {
-      return '누구랑 싸울까요?  예) 싸움 홍길동';
-    }
-    if (targetName === ctx.sender) {
-      return '자기 자신과는 싸울 수 없어요 😅';
-    }
-    // 상대는 이 방에서 한 번이라도 강화를 해본 사람이어야 함
-    if (!DB[ctx.room] || !DB[ctx.room][targetName]) {
+    if (!targetName) return '누구랑 싸울까요?  예) 싸움 홍길동';
+    if (targetName === ctx.sender) return '자기 자신과는 싸울 수 없어요 😅';
+
+    var R = getRoom(ctx.room);
+    if (!R.players[targetName]) {
       return '"' + targetName + '" 님을 찾을 수 없어요.\n' +
         '(상대도 먼저 "강화"를 한 번 해서 게임에 참여해야 해요. 이름은 정확히!)';
     }
@@ -204,27 +262,37 @@ var cmdFight = {
     var atk = getPlayer(ctx.room, ctx.sender);
     var def = getPlayer(ctx.room, targetName);
 
-    // 하루 횟수 제한 체크(공격자 기준)
     if (atk.fightDay !== today()) { atk.fightDay = today(); atk.fightsUsed = 0; }
     if (atk.fightsUsed >= CONFIG.dailyFights) {
       return '오늘 싸움 횟수를 다 썼어요! (' + CONFIG.dailyFights + '/' + CONFIG.dailyFights + ')\n내일 다시 도전하세요.';
     }
     atk.fightsUsed++;
 
-    // 승패 계산: 레벨 차 1당 5% 유리, 최소 10% 하극상 여지
+    // 승패: 레벨 차 1당 5% 유리, 최소 10% 하극상 여지
     var pWin = 0.5 + (atk.level - def.level) * 0.05;
     if (pWin < 0.1) pWin = 0.1;
     if (pWin > 0.9) pWin = 0.9;
 
     var atkWin = chance(pWin);
-    var winner, loser;
-    if (atkWin) { atk.wins++; def.losses++; winner = ctx.sender; loser = targetName; }
-    else        { atk.losses++; def.wins++; winner = targetName; loser = ctx.sender; }
+    var winP = atkWin ? atk : def;
+    var loseP = atkWin ? def : atk;
+    var winner = atkWin ? ctx.sender : targetName;
+    var loser = atkWin ? targetName : ctx.sender;
 
+    winP.wins++;
+    loseP.losses++;
+
+    // 골드 약탈
+    var steal = Math.floor(loseP.gold * CONFIG.stealPct);
+    loseP.gold -= steal;
+    winP.gold += steal;
+
+    addLog(ctx.room, '⚔️ ' + winner + ' 승 vs ' + loser + ' (' + g(steal) + ' 약탈)');
     saveDB();
     return '⚔️ 결투!  ' + ctx.sender + '(' + weaponName(atk.level) + ')\n' +
       '   VS   ' + targetName + '(' + weaponName(def.level) + ')\n\n' +
-      '🏆 승자: ' + winner + '!  (' + loser + ' 패배)\n' +
+      '🏆 승자: ' + winner + '!\n' +
+      '💰 ' + winner + ' 님이 ' + loser + ' 님에게서 ' + g(steal) + ' 획득!\n' +
       '오늘 남은 싸움: ' + fightsLeft(atk) + '/' + CONFIG.dailyFights + '회';
   }
 };
@@ -234,12 +302,12 @@ var cmdRank = {
   names: ['랭킹', '순위', 'rank'],
   help: '랭킹 — 이 방의 강화 순위 TOP 10',
   run: function (ctx) {
-    var players = DB[ctx.room];
-    if (!players) return '아직 아무도 강화하지 않았어요. "강화"로 시작해보세요!';
+    var R = getRoom(ctx.room);
     var arr = [];
-    for (var name in players) {
-      if (players.hasOwnProperty(name)) arr.push({ name: name, p: players[name] });
+    for (var name in R.players) {
+      if (R.players.hasOwnProperty(name)) arr.push({ name: name, p: R.players[name] });
     }
+    if (!arr.length) return '아직 아무도 강화하지 않았어요. "강화"로 시작해보세요!';
     arr.sort(function (a, b) {
       if (b.p.level !== a.p.level) return b.p.level - a.p.level;
       return b.p.best - a.p.best;
@@ -255,25 +323,64 @@ var cmdRank = {
   }
 };
 
+// --- 강화 로그 ---
+var cmdLog = {
+  names: ['강화로그', '로그', 'log'],
+  help: '강화로그 — 최근 강화/싸움 기록',
+  run: function (ctx) {
+    var R = getRoom(ctx.room);
+    if (!R.log.length) return '아직 기록이 없어요. "강화"로 첫 기록을 남겨보세요!';
+    var recent = R.log.slice(-10).reverse();
+    return '📜 최근 기록 (최신순)\n' + recent.join('\n');
+  }
+};
+
+// --- 오늘의 호구 ---
+var cmdHogu = {
+  names: ['오늘의호구', '호구', 'hogu'],
+  help: '오늘의호구 — 오늘 제일 많이 깨진 사람 🤡',
+  run: function (ctx) {
+    var R = getRoom(ctx.room);
+    var arr = [];
+    for (var name in R.players) {
+      if (!R.players.hasOwnProperty(name)) continue;
+      var pl = R.players[name];
+      if (pl.destroyDay === today() && pl.destroysToday > 0) {
+        arr.push({ name: name, c: pl.destroysToday });
+      }
+    }
+    if (!arr.length) return '😌 오늘은 아직 아무도 안 깨졌어요. 평화로운 하루...';
+    arr.sort(function (a, b) { return b.c - a.c; });
+    var crowns = ['👑', '🥈', '🥉'];
+    var lines = ['🤡 오늘의 호구 (파괴 횟수)'];
+    for (var i = 0; i < arr.length && i < 5; i++) {
+      lines.push((i < 3 ? crowns[i] : (i + 1) + '.') + ' ' + arr[i].name + '  ' + arr[i].c + '번 파괴');
+    }
+    lines.push('\n오늘의 호구는 바로... ' + arr[0].name + ' 님! ㅋㅋㅋ');
+    return lines.join('\n');
+  }
+};
+
 // --- 강화확률 ---
 var cmdOdds = {
   names: ['강화확률', '확률', 'odds'],
   help: '강화확률 — 단계별 성공/파괴 확률표',
   run: function (ctx) {
     var showLevels = [0, 3, 6, 9, 12, 15, 18, 21];
-    var lines = ['📊 강화 확률표 (성공 / 파괴)'];
+    var lines = ['📊 강화 확률표 (성공 / 파괴 / 비용)'];
     for (var i = 0; i < showLevels.length; i++) {
       var lv = showLevels[i];
       var o = odds(lv);
-      lines.push('+' + lv + ' 이상:  성공 ' + pct(o.success) + '  /  파괴 ' + pct(o.destroy));
+      lines.push('+' + lv + '↑:  성공 ' + pct(o.success) + '  파괴 ' + pct(o.destroy) +
+        '  (' + g(enhanceCost(lv)) + ')');
     }
-    lines.push('\n※ 파괴되면 +0 으로 리셋! 실패는 유지(+10↑ 은 하락)');
+    lines.push('\n※ 파괴되면 +0 리셋! 실패는 유지(+10↑ 은 하락)');
     return lines.join('\n');
   }
 };
 
 // 등록된 명령어
-var COMMANDS = [cmdEnhance, cmdInfo, cmdFight, cmdRank, cmdOdds];
+var COMMANDS = [cmdEnhance, cmdAttend, cmdInfo, cmdFight, cmdRank, cmdLog, cmdHogu, cmdOdds];
 
 /* ------------------------------------------------------------------
  * 7. 라우터
@@ -286,7 +393,7 @@ function buildHelp() {
   }
   lines.push('· ' + p + '도움말 — 이 목록');
   lines.push('');
-  lines.push('👉 "강화" 를 연타해서 무기를 키우고, "싸움 이름" 으로 대결하세요!');
+  lines.push('👉 "출석"으로 골드 받고, "강화" 연타로 무기를 키우고, "싸움 이름" 으로 골드를 뺏으세요!');
   return lines.join('\n');
 }
 
@@ -344,15 +451,16 @@ function response(room, msg, sender, isGroupChat, replier, imageDB, packageName)
 /* ==================================================================
  *  튜닝 가이드
  * ------------------------------------------------------------------
- *  - 강화 난이도: 위 odds() 함수의 success/destroy 값을 조절.
- *  - 무기 등급/이름: TIERS 배열 수정.
- *  - 하루 싸움 횟수: CONFIG.dailyFights.
- *  - PvP 밸런스: cmdFight 의 pWin 공식(레벨 차 1당 5%) 조절.
+ *  - 강화 난이도: odds() 의 success/destroy 값
+ *  - 강화 비용: enhanceCost() 공식
+ *  - 무기 등급/이름: TIERS 배열
+ *  - 골드: CONFIG.startGold / attendGold / stealPct
+ *  - 하루 싸움 횟수: CONFIG.dailyFights
+ *  - PvP 밸런스: cmdFight 의 pWin 공식(레벨 차 1당 5%)
  *
  *  새 명령어 추가:
  *    var cmdHello = {
- *      names: ['안녕'],
- *      help: '안녕 — 인사',
+ *      names: ['안녕'], help: '안녕 — 인사',
  *      run: function (ctx) { return ctx.sender + '님 안녕!'; }
  *    };
  *    그리고 COMMANDS 배열에 cmdHello 추가.
