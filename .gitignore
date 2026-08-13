@@ -1,0 +1,10 @@
+# 로컬 · 에디터 파일
+.DS_Store
+*.log
+node_modules/
+.vscode/
+.idea/
+
+# 메신저봇R 개인 설정/데이터 (혹시 백업 시)
+*.local.js
+secrets.js
