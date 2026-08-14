@@ -1,0 +1,6 @@
+# Supabase 프로젝트 설정 (GitHub 연동 마이그레이션용)
+# project_id 는 로컬 식별자 — 대시보드에서 연결한 프로젝트에 마이그레이션이 적용된다.
+project_id = "kakao-ganghwa-rpg"
+
+[db]
+major_version = 15

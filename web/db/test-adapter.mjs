@@ -27,8 +27,10 @@ async function req(method, pathname, { token = '', body = {}, query = '' } = {})
 }
 
 async function main() {
-  await pg.exec(readFileSync(path.join(dir, 'schema.sql'), 'utf8'));
-  console.log('스키마 생성 완료\n');
+  // 단일 소스: Supabase 마이그레이션과 같은 스키마로 검증한다
+  const schemaPath = path.join(dir, '../../supabase/migrations/20260814000000_init.sql');
+  await pg.exec(readFileSync(schemaPath, 'utf8'));
+  console.log('스키마 생성 완료 (supabase/migrations)\n');
 
   // 1) 로그인(신규)
   console.log('[로그인/직업]');

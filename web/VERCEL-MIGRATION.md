@@ -20,7 +20,7 @@
 
 | 파일 | 역할 |
 |------|------|
-| `db/schema.sql` | Supabase(Postgres) 스키마 — SQLite 저장계층과 동일 소유권 규칙 |
+| `../supabase/migrations/*.sql` | Supabase(Postgres) 스키마 — GitHub 연동이 자동 적용(단일 소스) |
 | `api/_lib/store.js` | 로드/스냅샷/ diff 저장 / 세션 (DB 접근은 `q(text,params)` 로 추상화) |
 | `api/_lib/router.js` | 요청 라우팅 — `server.js` 로직을 DB 비의존으로 이식 |
 | `api/[...path].js` | Vercel 진입점 — pg 트랜잭션 열고 라우터 호출 |
@@ -58,7 +58,10 @@
 
 ## 배포 방법 (1단계 시험 배포용)
 
-1. **Supabase 프로젝트 생성** → SQL Editor 에서 `db/schema.sql` 실행
+1. **Supabase 프로젝트 생성** → 스키마 적용 (둘 중 하나)
+   - **GitHub 연동(권장)**: 레포 루트의 `supabase/` 폴더를 연결하면 `supabase/migrations/*.sql`
+     이 자동 적용됨. Working directory 는 레포 루트(빈칸/`.`).
+   - **수동**: SQL Editor 에 `supabase/migrations/20260814000000_init.sql` 붙여넣고 Run
 2. **연결 문자열** 확보: Supabase → Project Settings → Database →
    *Connection string* 의 **Transaction 풀러(포트 6543)** 권장 (서버리스용)
 3. **Vercel 프로젝트** 생성 후 이 저장소 연결

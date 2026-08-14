@@ -1,8 +1,9 @@
--- 강화 RPG — Supabase(Postgres) 스키마
--- SQLite 저장 계층(server.js)과 동일한 소유권 규칙을 그대로 옮긴다:
+-- 강화 RPG — 초기 스키마 (Supabase/Postgres)
+-- GitHub 연동이 이 파일을 연결된 프로젝트에 자동 적용한다.
+-- SQLite 저장 계층(web/server.js)과 동일한 소유권 규칙:
 --   players       — 캐릭터 상태 (nick/level/gold 컬럼 + 나머지는 data JSONB)
 --   player_daily  — 유저×날짜 일일 카운터 (사냥/싸움/레이드/파괴/출석). 날짜별 이력 보존
---   player_limits — 유저별 일일 상한 오버라이드 (NULL = CONFIG 기본값)
+--   player_limits — 유저별 일일 상한 오버라이드 (NULL = 기본값)
 --   parties/logs/meta — 파티/로그/메타
 --   sessions      — 토큰→계정 (인메모리 Map 대체: 서버리스는 인스턴스 간 공유 불가)
 -- 규칙: 컬럼/전용 테이블이 소유한 필드는 data JSONB 에 중복 저장하지 않는다.
@@ -32,7 +33,7 @@ create index if not exists idx_player_daily_day on player_daily(day);
 
 create table if not exists player_limits (
   player_id    text primary key,
-  daily_hunts  integer,                  -- NULL = CONFIG.dailyHunts
+  daily_hunts  integer,                  -- NULL = 기본값 사용
   daily_fights integer,
   daily_raids  integer,
   note         text,
