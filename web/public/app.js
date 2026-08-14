@@ -16,7 +16,7 @@ async function api(pathName, method = 'GET', body) {
 }
 
 /* ---------- 무기 SVG (직업별 모양 + 등급별 장식 업그레이드) ---------- */
-function gradeTier(level) { return level >= 80 ? 4 : level >= 60 ? 3 : level >= 40 ? 2 : level >= 20 ? 1 : 0; }
+function gradeTier(level) { return level >= 70 ? 4 : level >= 50 ? 3 : level >= 26 ? 2 : level >= 16 ? 1 : 0; }
 function sparkle(x, y, c) { return `<path d="M${x} ${y - 3.2} L${x + 1.8} ${y} L${x} ${y + 3.2} L${x - 1.8} ${y} Z" fill="${c}"/>`; }
 function weaponSVG(cls, level, color) {
   const tier = gradeTier(level);

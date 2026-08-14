@@ -50,15 +50,16 @@ function memberStats(p) {
 }
 
 /* ---------- 등급 / 무기 ---------- */
+// 점진적 등급 경계: 일반0~15, 희귀16~25, 에픽26~49, 전설50~69, 초월70~99
 const GRADES = [
-  { min: 80, name: '초월', emoji: '🌈', color: '#c471ed' },
-  { min: 60, name: '전설', emoji: '🟠', color: '#f7971e' },
-  { min: 40, name: '에픽', emoji: '🟣', color: '#a770ef' },
-  { min: 20, name: '희귀', emoji: '🔵', color: '#4facfe' },
+  { min: 70, name: '초월', emoji: '🌈', color: '#c471ed' },
+  { min: 50, name: '전설', emoji: '🟠', color: '#f7971e' },
+  { min: 26, name: '에픽', emoji: '🟣', color: '#a770ef' },
+  { min: 16, name: '희귀', emoji: '🔵', color: '#4facfe' },
   { min: 0,  name: '일반', emoji: '⚪', color: '#9aa0b0' },
 ];
 function grade(level) { for (const g of GRADES) { if (level >= g.min) return g; } return GRADES[GRADES.length - 1]; }
-function bandFloor(level) { return level >= 80 ? 80 : level >= 60 ? 60 : level >= 40 ? 40 : level >= 20 ? 20 : 0; }
+function bandFloor(level) { return level >= 70 ? 70 : level >= 50 ? 50 : level >= 26 ? 26 : level >= 16 ? 16 : 0; }
 function weaponName(level, cls) {
   const g = grade(level);
   const base = (CLASSES[cls] || CLASSES.warrior).weapon;
@@ -68,11 +69,11 @@ function weaponName(level, cls) {
 /* ---------- 강화 확률 / 비용 ---------- */
 function odds(level) {
   let s, d;
-  if (level <= 19)      { s = 0.96; d = 0.005; } // 일반
-  else if (level <= 39) { s = 0.90; d = 0.015; } // 희귀
-  else if (level <= 59) { s = 0.80; d = 0.03; }  // 에픽
-  else if (level <= 79) { s = 0.68; d = 0.04; }  // 전설
-  else                  { s = 0.55; d = 0.06; }  // 초월
+  if (level <= 15)      { s = 0.97; d = 0.004; } // 일반
+  else if (level <= 25) { s = 0.93; d = 0.008; } // 희귀
+  else if (level <= 49) { s = 0.85; d = 0.018; } // 에픽
+  else if (level <= 69) { s = 0.72; d = 0.03; }  // 전설
+  else                  { s = 0.60; d = 0.05; }  // 초월
   return { success: s, destroy: d, fail: 1 - s - d };
 }
 function enhanceCost(level) { return 20 + level * 10; }
