@@ -61,10 +61,11 @@ function serveStatic(res, urlPath) {
   });
 }
 
-/* ---------- 인증된 액션 공통 처리 ---------- */
-function authNick(req) {
+/* ---------- 인증된 액션 공통 처리 (세션 → accountId) ---------- */
+function authId(req) {
   const token = req.headers['x-token'];
-  return token && sessions.get(token);
+  const id = token && sessions.get(token);
+  return id && db.players[id] ? id : null;
 }
 
 /* ---------- 라우팅 ---------- */
@@ -80,11 +81,10 @@ const server = http.createServer(async (req, res) => {
     const body = await readBody(req);
     const r = game.login(db, body.nick, body.pin);
     if (!r.ok) return sendJson(res, 400, r);
-    const nick = body.nick.trim();
     const token = newToken();
-    sessions.set(token, nick);
+    sessions.set(token, r.id); // 세션은 accountId(pinKey)를 저장
     save();
-    return sendJson(res, 200, { ok: true, isNew: r.isNew, needClass: r.needClass, token, me: game.publicView(db, nick) });
+    return sendJson(res, 200, { ok: true, isNew: r.isNew, needClass: r.needClass, token, me: game.publicView(db, r.id) });
   }
 
   // 공개 조회 (토큰 불필요)
@@ -101,29 +101,30 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && p === '/api/parties') return sendJson(res, 200, { ok: true, list: game.partyList(db) });
 
   // 인증 필요
-  const nick = authNick(req);
+  const id = authId(req);
   if (p.startsWith('/api/')) {
-    if (!nick) return sendJson(res, 401, { ok: false, error: '로그인이 필요합니다.' });
+    if (!id) return sendJson(res, 401, { ok: false, error: '로그인이 필요합니다.' });
 
-    if (req.method === 'GET' && p === '/api/me') return sendJson(res, 200, { ok: true, me: game.publicView(db, nick) });
+    if (req.method === 'GET' && p === '/api/me') return sendJson(res, 200, { ok: true, me: game.publicView(db, id) });
 
     if (req.method === 'POST') {
       let r;
-      if (p === '/api/setclass') { const b = await readBody(req); r = game.setClass(db, nick, b.class); }
-      else if (p === '/api/enhance') r = game.enhance(db, nick);
-      else if (p === '/api/attend') r = game.attend(db, nick);
-      else if (p === '/api/mine') r = game.mine(db, nick);
-      else if (p === '/api/hunt') r = game.hunt(db, nick);
-      else if (p === '/api/protect') { const b = await readBody(req); r = game.buyProtect(db, nick, b.qty); }
-      else if (p === '/api/fight') { const b = await readBody(req); r = game.fight(db, nick, b.target); }
-      else if (p === '/api/party/create') r = game.partyCreate(db, nick);
-      else if (p === '/api/party/join') { const b = await readBody(req); r = game.partyJoin(db, nick, b.id); }
-      else if (p === '/api/party/leave') r = game.partyLeave(db, nick);
-      else if (p === '/api/raid') { const b = await readBody(req); r = game.raidStart(db, nick, b.boss); }
+      if (p === '/api/setclass') { const b = await readBody(req); r = game.setClass(db, id, b.class); }
+      else if (p === '/api/rename') { const b = await readBody(req); r = game.rename(db, id, b.nick); }
+      else if (p === '/api/enhance') r = game.enhance(db, id);
+      else if (p === '/api/attend') r = game.attend(db, id);
+      else if (p === '/api/mine') r = game.mine(db, id);
+      else if (p === '/api/hunt') r = game.hunt(db, id);
+      else if (p === '/api/protect') { const b = await readBody(req); r = game.buyProtect(db, id, b.qty); }
+      else if (p === '/api/fight') { const b = await readBody(req); r = game.fight(db, id, b.target); }
+      else if (p === '/api/party/create') r = game.partyCreate(db, id);
+      else if (p === '/api/party/join') { const b = await readBody(req); r = game.partyJoin(db, id, b.id); }
+      else if (p === '/api/party/leave') r = game.partyLeave(db, id);
+      else if (p === '/api/raid') { const b = await readBody(req); r = game.raidStart(db, id, b.boss); }
       else return sendJson(res, 404, { ok: false, error: 'unknown action' });
 
       if (r.ok) save();
-      return sendJson(res, r.ok ? 200 : 400, Object.assign(r, { me: game.publicView(db, nick) }));
+      return sendJson(res, r.ok ? 200 : 400, Object.assign(r, { me: game.publicView(db, id) }));
     }
   }
 

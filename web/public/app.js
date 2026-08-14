@@ -16,12 +16,26 @@ async function api(pathName, method = 'GET', body) {
   return res.json();
 }
 
-/* ---------- 무기 SVG (직업별 모양 + 등급 색으로 빛남) ---------- */
+/* ---------- 무기 SVG (직업별 모양 + 등급별 장식 업그레이드) ---------- */
+function gradeTier(level) { return level >= 21 ? 4 : level >= 16 ? 3 : level >= 11 ? 2 : level >= 6 ? 1 : 0; }
+function sparkle(x, y, c) { return `<path d="M${x} ${y - 3.2} L${x + 1.8} ${y} L${x} ${y + 3.2} L${x - 1.8} ${y} Z" fill="${c}"/>`; }
 function weaponSVG(cls, level, color) {
-  const glow = Math.min(2 + level * 0.9, 26);
+  const tier = gradeTier(level);
+  const glow = 3 + tier * 6;
   const defs = `<defs><linearGradient id="bl" x1="0" y1="0" x2="1" y2="1">
     <stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="${color}"/><stop offset="1" stop-color="${color}"/>
   </linearGradient></defs>`;
+
+  // 등급별 장식: 오라(초월) → 날개(전설) → 룬(에픽) → 보석(희귀)
+  let back = '', front = '';
+  if (tier >= 4) back += `<circle cx="40" cy="55" r="46" fill="none" stroke="${color}" stroke-width="1.5" opacity=".4"/>
+    <circle cx="40" cy="55" r="40" fill="${color}" opacity=".06"/>`;
+  if (tier >= 3) back += `<path d="M27 74 Q6 66 12 84 Q22 82 27 80 Z" fill="${color}" opacity=".7"/>
+    <path d="M53 74 Q74 66 68 84 Q58 82 53 80 Z" fill="${color}" opacity=".7"/>`;
+  if (tier >= 2) front += sparkle(40, 30, '#fff') + sparkle(40, 46, '#fff');
+  if (tier >= 1) front += `<circle cx="40" cy="90" r="4" fill="#fff"/><circle cx="40" cy="90" r="2.4" fill="${color}"/>`;
+  if (tier >= 4) front += sparkle(14, 22, color) + sparkle(66, 26, color) + sparkle(16, 86, color) + sparkle(64, 90, color);
+
   let inner;
   if (cls === 'archer') {
     inner = `<path d="M56 8 Q18 55 56 102" fill="none" stroke="${color}" stroke-width="5"/>
@@ -43,7 +57,7 @@ function weaponSVG(cls, level, color) {
       <rect x="20" y="76" width="40" height="7" rx="3" fill="#c9a24a"/>
       <rect x="36" y="83" width="8" height="20" rx="3" fill="#7a5a2c"/><circle cx="40" cy="105" r="5" fill="#c9a24a"/>`;
   }
-  return `<svg viewBox="0 0 80 110" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 0 ${glow}px ${color})">${defs}${inner}</svg>`;
+  return `<svg viewBox="0 0 80 110" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 0 ${glow}px ${color})">${defs}${back}${inner}${front}</svg>`;
 }
 
 /* ---------- 화면 전환 ---------- */
@@ -188,11 +202,11 @@ async function renderRaid(panel) {
   if (me.party) {
     const { list } = await api('parties');
     const pt = list.find(x => x.id === me.party.id);
-    const amLeader = pt && pt.leader === me.nick;
+    const amLeader = pt && pt.leaderNick === me.nick;
     html += `<div style="margin-bottom:8px"><b>내 파티</b> <small>(${pt ? pt.count : 1}/${pt ? pt.max : 5}명)</small></div>`;
     if (pt) html += pt.members.map(m =>
       `<div class="party-member">${m.classEmoji} <b>${esc(m.nick)}</b> <small>+${m.level}</small>
-        ${m.nick === pt.leader ? '<span class="leader">👑파티장</span>' : ''}
+        ${m.isLeader ? '<span class="leader">👑파티장</span>' : ''}
         <span style="margin-left:auto" class="w">레이드 ${m.raidsLeft}회</span></div>`).join('');
     html += `<button class="btn ghost sm" id="leavePartyBtn" style="margin:10px 0">파티 나가기</button>`;
     if (amLeader) {
@@ -262,6 +276,7 @@ async function openProfile(nick) {
   const r = await api('profile?name=' + encodeURIComponent(nick));
   if (!r.ok) return toast(r.error, 'bad');
   const p = r.profile;
+  const isMe = me && p.nick === me.nick;
   el('modalBody').innerHTML =
     `<h3>${p.classEmoji || '📇'} ${esc(p.nick)} <small style="color:var(--muted)">${esc(p.className || '')}</small></h3>
      <div class="pf-line"><span>무기</span><b>${esc(p.weapon)}</b></div>
@@ -270,8 +285,19 @@ async function openProfile(nick) {
      <div class="pf-line"><span>전적</span><b>${p.wins}승 ${p.losses}패${p.winRate != null ? ' (' + p.winRate + '%)' : ''}</b></div>
      <div class="pf-line"><span>최고기록</span><b>+${p.best}</b></div>
      <div class="pf-line"><span>파괴</span><b>${p.breaks}회</b></div>
-     <div class="pf-line"><span>강화순위</span><b>${p.rank.rank ? p.rank.rank + '/' + p.rank.total + '위' : '-'}</b></div>`;
+     <div class="pf-line"><span>강화순위</span><b>${p.rank.rank ? p.rank.rank + '/' + p.rank.total + '위' : '-'}</b></div>` +
+    (isMe ? `<div style="margin-top:12px;display:flex;gap:6px">
+       <input id="renameInput" maxlength="12" value="${esc(p.nick)}" style="flex:1;padding:9px;border-radius:10px;border:1px solid var(--line);background:#0f131c;color:var(--text)">
+       <button id="renameBtn" class="btn primary sm">닉변경</button></div>` : '');
   el('modal').hidden = false;
+  if (isMe) el('renameBtn').onclick = doRename;
+}
+async function doRename() {
+  const v = el('renameInput').value.trim();
+  const r = await api('rename', 'POST', { nick: v });
+  if (!r.ok) return toast(r.error, 'bad');
+  me = r.me; el('modal').hidden = true; render(); loadTab();
+  toast('✏️ ' + r.msg, 'ok');
 }
 
 /* ---------- 이벤트 ---------- */
