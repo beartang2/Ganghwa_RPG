@@ -52,14 +52,29 @@ function memberStats(p) {
 /* ---------- 등급 / 무기 ---------- */
 // 점진적 등급 경계: 일반0~15, 희귀16~25, 에픽26~49, 전설50~69, 초월70~99
 const GRADES = [
-  { min: 70, name: '초월', emoji: '🌈', color: '#c471ed' },
-  { min: 50, name: '전설', emoji: '🟠', color: '#f7971e' },
-  { min: 26, name: '에픽', emoji: '🟣', color: '#a770ef' },
-  { min: 16, name: '희귀', emoji: '🔵', color: '#4facfe' },
-  { min: 0,  name: '일반', emoji: '⚪', color: '#9aa0b0' },
+  { min: 70, name: '초월', key: 'transcend', emoji: '🌈', color: '#c471ed' },
+  { min: 50, name: '전설', key: 'legend',    emoji: '🟠', color: '#f7971e' },
+  { min: 26, name: '에픽', key: 'epic',      emoji: '🟣', color: '#a770ef' },
+  { min: 16, name: '희귀', key: 'rare',      emoji: '🔵', color: '#4facfe' },
+  { min: 0,  name: '일반', key: 'common',    emoji: '⚪', color: '#9aa0b0' },
 ];
 function grade(level) { for (const g of GRADES) { if (level >= g.min) return g; } return GRADES[GRADES.length - 1]; }
 function bandFloor(level) { return level >= 70 ? 70 : level >= 50 ? 50 : level >= 26 ? 26 : level >= 16 ? 16 : 0; }
+
+/* ---------- 무기 속성(원소) ---------- */
+const ELEMENTS = [
+  { key: 'fire',    name: '불',   emoji: '🔥', color: '#ff6b4a' },
+  { key: 'water',   name: '물',   emoji: '💧', color: '#4facfe' },
+  { key: 'earth',   name: '대지', emoji: '⛰️', color: '#b08d57' },
+  { key: 'wind',    name: '바람', emoji: '🌪️', color: '#7ee8a2' },
+  { key: 'thunder', name: '번개', emoji: '⚡', color: '#ffd93d' },
+  { key: 'ice',     name: '얼음', emoji: '❄️', color: '#9fe6ff' },
+  { key: 'light',   name: '빛',   emoji: '✨', color: '#fff3b0' },
+  { key: 'dark',    name: '어둠', emoji: '🌑', color: '#9b6bd6' },
+  { key: 'poison',  name: '독',   emoji: '☠️', color: '#a3e635' },
+];
+function randomElementKey() { return ELEMENTS[randInt(0, ELEMENTS.length - 1)].key; }
+function elementOf(key) { return ELEMENTS.find(e => e.key === key) || ELEMENTS[0]; }
 function weaponName(level, cls) {
   const g = grade(level);
   const base = (CLASSES[cls] || CLASSES.warrior).weapon;
@@ -126,7 +141,7 @@ function bossById(id) { return BOSSES.find(b => b.id === id); }
 /* ---------- 플레이어 ---------- */
 function makePlayer(nick) {
   return {
-    nick, class: null,
+    nick, class: null, element: null,
     level: 0, best: 0, breaks: 0, wins: 0, losses: 0,
     gold: CONFIG.startGold, protects: 0,
     fightDay: '', fightsUsed: 0, huntDay: '', huntsUsed: 0, raidDay: '', raidsUsed: 0,
@@ -140,6 +155,7 @@ function norm(p) {
   if (p.lastMine == null) p.lastMine = Date.now();
   if (p.party === undefined) p.party = null;
   if (p.class === undefined) p.class = null;
+  if (!p.element && p.class) p.element = randomElementKey(); // 기존 데이터 보정
   return p;
 }
 function fightsLeft(p) { return p.fightDay !== today() ? CONFIG.dailyFights : Math.max(0, CONFIG.dailyFights - p.fightsUsed); }
@@ -152,6 +168,7 @@ function publicView(db, id) {
   const p = norm(db.players[id]);
   const g = grade(p.level);
   const c = classOf(p);
+  const em = elementOf(p.element);
   let party = null;
   if (p.party && db.parties[p.party]) {
     const pt = db.parties[p.party];
@@ -164,7 +181,8 @@ function publicView(db, id) {
     wins: p.wins, losses: p.losses, winRate: winRate(p),
     gold: p.gold, protects: p.protects,
     weapon: weaponName(p.level, p.class),
-    grade: { name: g.name, emoji: g.emoji, color: g.color },
+    grade: { name: g.name, key: g.key, emoji: g.emoji, color: g.color },
+    element: p.element, elementName: em.name, elementEmoji: em.emoji, elementColor: em.color,
     maxLevel: CONFIG.maxLevel,
     nextCost: p.level >= CONFIG.maxLevel ? null : enhanceCost(p.level),
     odds: odds(p.level),
@@ -209,8 +227,9 @@ function setClass(db, id, cls) {
   if (p.class) return { ok: false, error: '이미 직업을 선택했어요.' };
   if (!CLASSES[cls]) return { ok: false, error: '올바른 직업을 선택하세요.' };
   p.class = cls;
+  p.element = randomElementKey(); // 무기 탄생 시 속성 랜덤 부여
   p.lastMine = Date.now();
-  addLog(db, CLASSES[cls].emoji + ' ' + p.nick + ' 님이 ' + CLASSES[cls].name + '(으)로 모험 시작!');
+  addLog(db, CLASSES[cls].emoji + ' ' + p.nick + ' 님이 ' + CLASSES[cls].name + '(' + elementOf(p.element).name + '속성)으로 모험 시작!');
   return { ok: true };
 }
 function rename(db, id, newNick) {
@@ -251,11 +270,14 @@ function enhance(db, id) {
     } else {
       const floor = bandFloor(before);
       p.level = floor; p.breaks++;
+      const newElem = randomElementKey(); // 파괴 시 속성 재부여
+      p.element = newElem;
       if (p.destroyDay !== today()) { p.destroyDay = today(); p.destroysToday = 0; }
       p.destroysToday++;
       result = 'destroy';
-      msg = '💥 파괴!! +' + before + ' → +' + floor + (floor === 0 ? ' 처음부터 다시!' : ' (등급 바닥까지 하락)');
-      addLog(db, '💥 ' + p.nick + ' +' + before + '→+' + floor + ' 파괴');
+      msg = '💥 파괴!! +' + before + ' → +' + floor + (floor === 0 ? ' 처음부터 다시!' : ' (등급 바닥까지 하락)') +
+        '\n새 속성: ' + elementOf(newElem).emoji + ' ' + elementOf(newElem).name;
+      addLog(db, '💥 ' + p.nick + ' +' + before + '→+' + floor + ' 파괴 (새속성 ' + elementOf(newElem).name + ')');
     }
   } else {
     if (p.level >= 10) { p.level--; result = 'down'; msg = '❌ 실패... +' + before + ' → +' + p.level + ' (하락)'; }

@@ -106,6 +106,30 @@ async function showClassSelect() {
   });
 }
 
+/* ---------- 무기 이미지 로더 (있으면 이미지, 없으면 SVG 폴백) ----------
+ * 우선순위: /weapons/{class}_{element}_{grade}.png → {element}_{grade}.png → SVG */
+let lastWeaponKey = '';
+function setWeaponArt(m) {
+  const key = m.class + '|' + m.element + '|' + m.grade.key;
+  if (key === lastWeaponKey) return; // 같은 조합이면 재요청 안 함(404 반복 방지)
+  lastWeaponKey = key;
+  const art = el('weaponArt');
+  const candidates = [
+    '/weapons/' + m.class + '_' + m.element + '_' + m.grade.key + '.png',
+    '/weapons/' + m.element + '_' + m.grade.key + '.png',
+  ];
+  let i = 0;
+  const tryNext = () => {
+    if (i >= candidates.length) { art.innerHTML = weaponSVG(m.class, m.level, m.grade.color); return; }
+    const url = candidates[i++];
+    const img = new Image();
+    img.onload = () => { img.className = 'weapon-img'; img.style.filter = 'drop-shadow(0 0 10px ' + m.grade.color + ')'; art.innerHTML = ''; art.appendChild(img); };
+    img.onerror = tryNext;
+    img.src = url;
+  };
+  tryNext();
+}
+
 /* ---------- 렌더 ---------- */
 function render() {
   if (!me) return;
@@ -113,8 +137,10 @@ function render() {
   el('hGold').textContent = me.gold.toLocaleString();
   el('hProtect').textContent = me.protects;
 
-  el('weaponArt').innerHTML = weaponSVG(me.class, me.level, me.grade.color);
+  setWeaponArt(me);
   el('weaponName').textContent = me.weapon;
+  el('weaponElem').textContent = (me.elementEmoji || '') + ' ' + (me.elementName || '') + '속성';
+  el('weaponElem').style.color = me.elementColor || 'var(--muted)';
   el('oddsS').textContent = Math.round(me.odds.success * 100) + '%';
   el('oddsD').textContent = Math.round(me.odds.destroy * 100) + '%';
   el('nextCost').textContent = me.nextCost == null ? '🌈 만렙 달성!' : '다음 강화 비용 ' + me.nextCost.toLocaleString() + 'G';
@@ -344,6 +370,7 @@ async function openProfile(nick) {
   el('modalBody').innerHTML =
     `<h3>${p.classEmoji || '📇'} ${esc(p.nick)} <small style="color:var(--muted)">${esc(p.className || '')}</small></h3>
      <div class="pf-line"><span>무기</span><b>${esc(p.weapon)}</b></div>
+     <div class="pf-line"><span>속성</span><b>${p.elementEmoji || ''} ${esc(p.elementName || '-')}</b></div>
      <div class="pf-line"><span>골드</span><b>${p.gold.toLocaleString()}G</b></div>
      <div class="pf-line"><span>방지권</span><b>${p.protects}개</b></div>
      <div class="pf-line"><span>전적</span><b>${p.wins}승 ${p.losses}패${p.winRate != null ? ' (' + p.winRate + '%)' : ''}</b></div>

@@ -51,7 +51,9 @@ small{opacity:.75;font-weight:600}
 .weapon-panel{display:flex;flex-direction:column;align-items:center;gap:12px}
 .weapon-art{height:150px;display:flex;align-items:center;justify-content:center}
 .weapon-art svg{width:110px;height:150px;transition:.2s}
+.weapon-art .weapon-img{width:auto;max-width:140px;max-height:150px;object-fit:contain}
 .weapon-name{font-size:22px;font-weight:800;text-align:center}
+.weapon-elem{font-size:13px;font-weight:700;text-align:center;margin-top:2px}
 .odds-row{display:flex;gap:14px;justify-content:center;margin-top:6px;font-size:13px;color:var(--muted)}
 .odds.success b{color:var(--success)} .odds.destroy b{color:var(--danger)}
 .next-cost{color:var(--muted);font-size:13px;margin-top:2px}
