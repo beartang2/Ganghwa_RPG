@@ -16,6 +16,14 @@ const ok = (body) => ({ status: 200, body });
 const bad = (body, status = 400) => ({ status, body });
 function newToken() { return crypto.randomBytes(16).toString('hex'); }
 
+// 속도제한 파라미터 (상시서버 server.js 와 유사: 정상 플레이 450ms 쿨다운은 통과)
+const RL = {
+  action: { cap: 8, refill: 3 },     // 계정별 액션: 버스트 8 + 초당 3
+  loginNick: { cap: 6, refill: 0.1 }, // 닉별 로그인: 버스트 6 + 10초당 1 → PIN 무차별 대입 차단
+  loginIp: { cap: 20, refill: 0.5 },  // IP별 로그인: 사무실 NAT 고려해 넉넉하게(분당 30)
+};
+const tooFast = (msg) => bad({ ok: false, error: msg || '너무 빠릅니다. 잠시 후 다시 시도하세요.' }, 429);
+
 // 아직 서버리스로 이식되지 않은 액션 (관리자 API는 4단계). 없으면 아래 체크는 통과.
 const NOT_YET = new Set();
 
@@ -48,6 +56,12 @@ async function handle(method, pathname, ctx) {
   // ---- 로그인(토큰 발급) ----
   if (method === 'POST' && pathname === '/api/login') {
     const b = ctx.body || {};
+    if (ctx.rateLimit !== false) {
+      const nick = (b.nick || '').trim();
+      const okNick = await store.rateAllow(q, 'lnick:' + nick, RL.loginNick.cap, RL.loginNick.refill);
+      const okIp = await store.rateAllow(q, 'lip:' + (ctx.ip || '?'), RL.loginIp.cap, RL.loginIp.refill);
+      if (!okNick || !okIp) return tooFast('로그인 시도가 너무 잦아요. 잠시 후 다시 시도하세요.');
+    }
     const key = game.pinKey((b.pin || '').trim());
     const { r, db } = await store.runGame(q, { lockId: key }, (db) => game.login(db, b.nick, b.pin));
     if (!r.ok) return bad(r);
@@ -74,6 +88,7 @@ async function handle(method, pathname, ctx) {
   if (method === 'POST') {
     if (pathname === '/api/logout') { await store.deleteSession(q, ctx.token); return ok({ ok: true }); }
     if (!id) return bad({ ok: false, error: '로그인이 필요합니다.' }, 401);
+    if (ctx.rateLimit !== false && !await store.rateAllow(q, 'act:' + id, RL.action.cap, RL.action.refill)) return tooFast();
     if (NOT_YET.has(pathname)) return bad({ ok: false, error: '이 기능은 아직 서버리스 버전으로 이식 중이에요. (곧 지원)' }, 501);
 
     const b = ctx.body || {};

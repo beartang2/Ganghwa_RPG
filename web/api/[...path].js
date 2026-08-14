@@ -36,6 +36,8 @@ module.exports = async (req, res) => {
   const pathname = url.pathname;
   const method = req.method;
   const token = req.headers['x-token'] || url.searchParams.get('token') || '';
+  const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()
+    || (req.socket && req.socket.remoteAddress) || '';
   // Vercel 이 이미 JSON 파싱했으면 그걸 쓰고, 아니면 원본 스트림에서 읽는다
   const body = (req.body && typeof req.body === 'object') ? req.body
     : (method === 'POST' ? await readRawJson(req) : {});
@@ -44,7 +46,7 @@ module.exports = async (req, res) => {
   try {
     await client.query('BEGIN');
     const q = async (text, params) => (await client.query(text, params || [])).rows;
-    const out = await handle(method, pathname, { token, body, query: url.searchParams, q });
+    const out = await handle(method, pathname, { token, body, query: url.searchParams, q, ip });
     await client.query('COMMIT');
     res.statusCode = out.status;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');

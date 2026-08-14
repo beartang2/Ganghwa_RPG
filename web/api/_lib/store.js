@@ -139,4 +139,19 @@ async function putSession(q, token, id) {
 }
 async function deleteSession(q, token) { if (token) await q('DELETE FROM sessions WHERE token = $1', [token]); }
 
-module.exports = { loadAllDb, readDb, runGame, snapshot, persistDiff, lockPlayer, getSession, putSession, deleteSession, playerData };
+/* ---------- 속도제한 (Postgres 토큰버킷) ----------
+ * 같은 key 는 FOR UPDATE 로 직렬화(요청 트랜잭션 안에서 원자적 소모).
+ * cap=버스트 상한, refillPerSec=초당 토큰 회복. 통과 시 1 소모하고 true. */
+async function rateAllow(q, key, cap, refillPerSec) {
+  const now = Date.now();
+  const rows = await q('SELECT tokens, updated FROM rate_buckets WHERE key = $1 FOR UPDATE', [key]);
+  let tokens = cap;
+  if (rows.length) tokens = Math.min(cap, Number(rows[0].tokens) + (now - Number(rows[0].updated)) / 1000 * refillPerSec);
+  const allowed = tokens >= 1;
+  if (allowed) tokens -= 1;
+  await q('INSERT INTO rate_buckets (key, tokens, updated) VALUES ($1,$2,$3) ON CONFLICT (key) DO UPDATE SET tokens = $2, updated = $3', [key, tokens, now]);
+  if (Math.random() < 0.02) await q('DELETE FROM rate_buckets WHERE updated < $1', [now - 3600000]); // 오래된 버킷 정리
+  return allowed;
+}
+
+module.exports = { loadAllDb, readDb, runGame, snapshot, persistDiff, lockPlayer, getSession, putSession, deleteSession, playerData, rateAllow };

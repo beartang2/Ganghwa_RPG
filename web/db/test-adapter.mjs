@@ -5,7 +5,7 @@
  * Supabase 없이도 SQL·어댑터·라우팅이 맞는지 확인용.
  */
 import { PGlite } from '@electric-sql/pglite';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -20,17 +20,19 @@ const q = async (text, params) => (await pg.query(text, params || [])).rows;
 let pass = 0, fail = 0;
 function ok(cond, label) { if (cond) { pass++; console.log('  ✓ ' + label); } else { fail++; console.log('  ✗ ' + label); } }
 
-// 요청 시뮬레이터
-async function req(method, pathname, { token = '', body = {}, query = '' } = {}) {
+// 요청 시뮬레이터 (기능 테스트는 rateLimit:false 로 속도제한 우회, 전용 테스트만 켬)
+async function req(method, pathname, { token = '', body = {}, query = '', rateLimit = false, ip = '10.0.0.1' } = {}) {
   const usp = new URLSearchParams(query);
-  return handle(method, pathname, { token, body, query: usp, q });
+  return handle(method, pathname, { token, body, query: usp, q, rateLimit, ip });
 }
 
 async function main() {
-  // 단일 소스: Supabase 마이그레이션과 같은 스키마로 검증한다
-  const schemaPath = path.join(dir, '../../supabase/migrations/20260814000000_init.sql');
-  await pg.exec(readFileSync(schemaPath, 'utf8'));
-  console.log('스키마 생성 완료 (supabase/migrations)\n');
+  // 단일 소스: Supabase 마이그레이션 전체를 순서대로 적용해 검증한다
+  const migDir = path.join(dir, '../../supabase/migrations');
+  for (const f of readdirSync(migDir).filter(f => f.endsWith('.sql')).sort()) {
+    await pg.exec(readFileSync(path.join(migDir, f), 'utf8'));
+  }
+  console.log('스키마 생성 완료 (supabase/migrations 전체)\n');
 
   // 1) 로그인(신규)
   console.log('[로그인/직업]');
@@ -153,6 +155,19 @@ async function main() {
   const prow = (await q('SELECT data FROM parties WHERE id=$1', [pid2]))[0];
   const pdata = typeof prow.data === 'string' ? JSON.parse(prow.data) : prow.data;
   ok(pdata.raid && pdata.raid.timeline, 'parties.data.raid 영속화(늦게 접속해도 관전)');
+
+  // 12) 속도제한 — 전용 테스트만 rateLimit:true
+  console.log('[속도제한]');
+  const rt = (await req('POST', '/api/login', { body: { nick: '속도', pin: '10101010' }, rateLimit: true })).body.token;
+  await req('POST', '/api/setclass', { token: rt, body: { class: 'warrior' }, rateLimit: true });
+  await q("UPDATE players SET gold = 1000000 WHERE nick = '속도'");
+  let got429 = false;
+  for (let i = 0; i < 15; i++) { const rr = await req('POST', '/api/enhance', { token: rt, rateLimit: true }); if (rr.status === 429) { got429 = true; break; } }
+  ok(got429, '액션 연타 시 429(계정별 토큰버킷) 발동');
+  let loginBlocked = false;
+  for (let i = 0; i < 10; i++) { const rr = await req('POST', '/api/login', { body: { nick: '검사', pin: '00000000' }, rateLimit: true, ip: '9.9.9.9' }); if (rr.status === 429) { loginBlocked = true; break; } }
+  ok(loginBlocked, '로그인 무차별 대입 시 429(닉별 상한 → PIN 브루트포스 차단)');
+  // 정상 플레이(rateLimit 미적용)는 위 38개 테스트가 영향 없음을 이미 증명
 
   console.log('\n결과: ' + pass + ' pass, ' + fail + ' fail');
   process.exit(fail ? 1 : 0);
