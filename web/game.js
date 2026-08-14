@@ -367,7 +367,7 @@ function partyInvite(db, leaderId, targetNick) {
   if (pt.members.length >= CONFIG.partyMax) return { ok: false, error: '파티가 가득 찼어요.' };
   if (pt.pending.includes(tid)) return { ok: false, error: '이미 초대했어요.' };
   pt.pending.push(tid);
-  return { ok: true, msg: db.players[tid].nick + ' 님을 초대했어요.' };
+  return { ok: true, msg: db.players[tid].nick + ' 님을 초대했어요.', targetId: tid, targetNick: db.players[tid].nick, byNick: p.nick };
 }
 function myInvites(db, id) {
   const out = [];
@@ -534,5 +534,5 @@ module.exports = {
   login, setClass, rename, publicView, enhance, attend, mine, hunt, buyProtect, fight,
   partyCreate, partyJoin, partyLeave, partyList, partyView, raidStart,
   partyInvite, partyAccept, partyReject, myInvites, raidState,
-  profile, ranking, goldRanking, hogu, recentLog, playerList,
+  profile, ranking, goldRanking, hogu, recentLog, playerList, findByNick,
 };

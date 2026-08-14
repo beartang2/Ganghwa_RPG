@@ -64,7 +64,26 @@ function show(which) {
   ['login', 'classSelect', 'game'].forEach(s => { el(s).hidden = (s !== which); });
 }
 function maybeShowGuide() { if (!sessionStorage.getItem('guideSeen')) el('guide').hidden = false; }
-function enterGame() { show('game'); render(); loadTab(); maybeShowGuide(); }
+function enterGame() { show('game'); render(); loadTab(); maybeShowGuide(); openEvents(); }
+
+/* ---------- 실시간 이벤트 (SSE) ---------- */
+let es = null, refreshT = null;
+function onRefresh() {
+  if (!me || el('game').hidden || currentTab === 'raid') return; // 레이드 탭은 자체 루프가 담당
+  clearTimeout(refreshT);
+  refreshT = setTimeout(async () => {
+    try { const r = await api('me'); if (r.ok) { me = r.me; render(); } } catch (e) { /* 무시 */ }
+    if (['rank', 'goldrank', 'hogu', 'log', 'fight'].includes(currentTab)) loadTab();
+  }, 250);
+}
+function openEvents() {
+  closeEvents();
+  if (!token) return;
+  es = new EventSource('/api/events?token=' + encodeURIComponent(token));
+  es.addEventListener('refresh', onRefresh);
+  es.addEventListener('notify', e => { try { const d = JSON.parse(e.data); if (d.msg) toast(d.msg, 'info'); } catch (_) { } onRefresh(); });
+}
+function closeEvents() { if (es) { es.close(); es = null; } }
 
 /* ---------- 직업 선택 ---------- */
 async function showClassSelect() {
@@ -356,7 +375,7 @@ el('loginBtn').onclick = async () => {
   enterGame();
 };
 el('pin').addEventListener('keydown', e => { if (e.key === 'Enter') el('loginBtn').click(); });
-el('logoutBtn').onclick = () => { stopRaidLoop(); token = null; me = null; curRaid = null; localStorage.removeItem('token'); show('login'); };
+el('logoutBtn').onclick = () => { stopRaidLoop(); closeEvents(); token = null; me = null; curRaid = null; localStorage.removeItem('token'); show('login'); };
 
 // 버튼 연타 방지: 액션 사이 최소 간격
 const COOLDOWN = 450;

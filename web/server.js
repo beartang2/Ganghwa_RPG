@@ -64,8 +64,16 @@ function save() {
 }
 
 /* ---------- 세션 ---------- */
-const sessions = new Map(); // token -> nick
+const sessions = new Map(); // token -> accountId
 function newToken() { return crypto.randomBytes(16).toString('hex'); }
+
+/* ---------- 실시간 이벤트 (SSE) ---------- */
+const clients = new Map(); // accountId -> Set<res>
+function sseWrite(res, event, data) {
+  try { res.write('event: ' + event + '\ndata: ' + JSON.stringify(data || {}) + '\n\n'); } catch (e) { /* 끊긴 연결 무시 */ }
+}
+function sseSend(id, event, data) { const set = clients.get(id); if (set) for (const res of set) sseWrite(res, event, data); }
+function broadcast(event, data) { for (const set of clients.values()) for (const res of set) sseWrite(res, event, data); }
 
 /* ---------- HTTP 헬퍼 ---------- */
 function sendJson(res, code, obj) {
@@ -106,6 +114,19 @@ const server = http.createServer(async (req, res) => {
 
   // 정적 파일
   if (req.method === 'GET' && !p.startsWith('/api/')) return serveStatic(res, p);
+
+  // 실시간 이벤트 스트림 (SSE) — 토큰은 쿼리로 전달(EventSource는 헤더 불가)
+  if (req.method === 'GET' && p === '/api/events') {
+    const id = sessions.get(u.searchParams.get('token'));
+    if (!id || !db.players[id]) { res.writeHead(401); return res.end(); }
+    res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' });
+    res.write('retry: 3000\n\n');
+    if (!clients.has(id)) clients.set(id, new Set());
+    clients.get(id).add(res);
+    const ping = setInterval(() => sseWrite(res, 'ping', {}), 25000);
+    req.on('close', () => { clearInterval(ping); const set = clients.get(id); if (set) { set.delete(res); if (!set.size) clients.delete(id); } });
+    return;
+  }
 
   // 로그인 (토큰 불필요)
   if (req.method === 'POST' && p === '/api/login') {
@@ -158,7 +179,21 @@ const server = http.createServer(async (req, res) => {
       else if (p === '/api/raid') { const b = await readBody(req); r = game.raidStart(db, id, b.boss); }
       else return sendJson(res, 404, { ok: false, error: 'unknown action' });
 
-      if (r.ok) save();
+      if (r.ok) {
+        save();
+        broadcast('refresh'); // 모든 접속자에게 "상태 바뀜" 알림 → 각자 갱신
+        // 개인 알림(당사자에게 토스트)
+        if (p === '/api/fight') {
+          const tid = game.findByNick(db, r.def.nick);
+          if (tid) sseSend(tid, 'notify', {
+            msg: r.winner === r.def.nick
+              ? '🛡️ ' + r.atk.nick + '님의 도전을 막아냈어요! (+' + r.steal + 'G)'
+              : '⚔️ ' + r.atk.nick + '님에게 패해 ' + r.steal + 'G를 뺏겼어요' + (r.broke && r.broke.who === r.def.nick ? ' · 💢무기 손상' : '')
+          });
+        } else if (p === '/api/party/invite' && r.targetId) {
+          sseSend(r.targetId, 'notify', { msg: '📨 ' + r.byNick + '님이 파티에 초대했어요!' });
+        }
+      }
       return sendJson(res, r.ok ? 200 : 400, Object.assign(r, { me: game.publicView(db, id) }));
     }
   }
