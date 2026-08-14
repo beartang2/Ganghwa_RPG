@@ -130,6 +130,16 @@ function setWeaponArt(m) {
   tryNext();
 }
 
+// 낮은 확률도 보이게 (0% 대신 0.15% 등)
+function fmtPct(p) {
+  const v = p * 100;
+  if (v >= 10) return Math.round(v) + '%';
+  if (v >= 1) return v.toFixed(1) + '%';
+  if (v >= 0.1) return v.toFixed(2) + '%';
+  if (v > 0) return v.toFixed(3) + '%';
+  return '0%';
+}
+
 /* ---------- 렌더 ---------- */
 function render() {
   if (!me) return;
@@ -141,8 +151,11 @@ function render() {
   el('weaponName').textContent = me.weapon;
   el('weaponElem').textContent = (me.elementEmoji || '') + ' ' + (me.elementName || '') + '속성';
   el('weaponElem').style.color = me.elementColor || 'var(--muted)';
-  el('oddsS').textContent = Math.round(me.odds.success * 100) + '%';
-  el('oddsD').textContent = Math.round(me.odds.destroy * 100) + '%';
+  el('oddsS').textContent = fmtPct(me.odds.success);
+  el('oddsD').textContent = fmtPct(me.odds.destroy);
+  const pity = Math.round((me.pity || 0) * 100);
+  el('pityPct').textContent = pity + '%';
+  el('pityBar').style.width = pity + '%';
   el('nextCost').textContent = me.nextCost == null ? '🌈 만렙 달성!' : '다음 강화 비용 ' + me.nextCost.toLocaleString() + 'G';
   el('enhanceBtn').textContent = '⚒️ 강화' + (me.enhanceBoost > 0 ? ' 🍀' + me.enhanceBoost : '');
   el('enhanceBtn').disabled = me.nextCost == null || me.gold < me.nextCost;
@@ -180,7 +193,7 @@ async function doEnhance() {
   if (r.result === 'success') { toast(r.msg, 'ok'); flashWeapon('ok'); }
   else if (r.result === 'destroy') { toast(r.msg, 'bad'); flashWeapon('bad'); }
   else if (r.result === 'protected') { toast(r.msg, 'info'); flashWeapon('ok'); }
-  else { toast(r.msg, 'bad'); flashWeapon('bad'); }
+  else { toast(r.msg, ''); } // 실패는 흔한 결과 → 번쩍임 없이 담백하게
   if (['rank', 'log', 'hogu'].includes(currentTab)) loadTab();
 }
 async function doHunt() {
