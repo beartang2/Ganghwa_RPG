@@ -7,12 +7,15 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "build": "terser public/app.js -o public/app.min.js -c -m"
+    "build": "terser public/app.js -o public/app.min.js -c -m",
+    "test:adapter": "node db/test-adapter.mjs"
   },
   "dependencies": {
-    "better-sqlite3": "^11.8.0"
+    "better-sqlite3": "^11.8.0",
+    "pg": "^8.23.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.5",
     "nodemon": "^3.1.9",
     "terser": "^5.50.0"
   }

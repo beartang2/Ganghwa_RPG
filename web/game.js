@@ -829,4 +829,6 @@ module.exports = {
   profile, ranking, goldRanking, hogu, recentLog, playerList, findByNick,
   // 저장 계층(server.js)용 — 일일 카운터 / 유저별 상한
   today, normalizeDay, LIMIT_KEYS, DAILY_FIELDS, limitOf, setLimits, dailyUsage, applyDaily, norm,
+  // 서버리스(Vercel/Supabase) 어댑터용
+  makePlayer, validNick, pinKey, indexNick,
 };
