@@ -1,34 +1,65 @@
 'use strict';
 /*
- * 강화 RPG 웹 서버 (순수 Node.js, 의존성 없음)
+ * 강화 RPG 웹 서버 (Node.js + SQLite)
+ * 준비:  npm install       (better-sqlite3 설치, 최초 1회)
  * 실행:  node server.js
- * 접속:  같은 네트워크(회사 와이파이 등)에서  http://<맥 로컬IP>:3000
+ * 접속:  같은 네트워크(회사 와이파이 등)에서  http://<맥 로컬IP>:3088
  */
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const os = require('os');
+const Database = require('better-sqlite3');
 const game = require('./game');
 
 const PORT = process.env.PORT || 3088;
-const DATA_FILE = path.join(__dirname, 'data.json');
+const DB_FILE = path.join(__dirname, 'game.db');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
-/* ---------- 데이터 로드/저장 ---------- */
-let db = { players: {}, parties: {}, log: [] };
-try {
-  if (fs.existsSync(DATA_FILE)) db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-} catch (e) { console.error('데이터 로드 실패, 새로 시작:', e.message); }
-if (!db.players) db.players = {};
-if (!db.parties) db.parties = {};
-if (!db.log) db.log = [];
+/* ---------- SQLite 저장 계층 ----------
+ * 게임 로직은 인메모리 db 객체(players/parties/log)로 동작하고,
+ * 여기서 SQLite에 적재/영속화한다. (플레이어는 id별 행 + JSON 페이로드) */
+const sqlite = new Database(DB_FILE);
+sqlite.pragma('journal_mode = WAL');
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS players (
+    id TEXT PRIMARY KEY, nick TEXT, level INTEGER, gold INTEGER, data TEXT
+  );
+  CREATE TABLE IF NOT EXISTS parties (id TEXT PRIMARY KEY, data TEXT);
+  CREATE TABLE IF NOT EXISTS logs (seq INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER, text TEXT);
+`);
+
+function loadAll() {
+  const state = { players: {}, parties: {}, log: [] };
+  for (const r of sqlite.prepare('SELECT id, data FROM players').all()) state.players[r.id] = JSON.parse(r.data);
+  for (const r of sqlite.prepare('SELECT id, data FROM parties').all()) state.parties[r.id] = JSON.parse(r.data);
+  for (const r of sqlite.prepare('SELECT ts, text FROM logs ORDER BY seq ASC').all()) state.log.push({ t: r.ts, text: r.text });
+  return state;
+}
+let db = loadAll();
+
+const upsertPlayer = sqlite.prepare(
+  `INSERT INTO players (id, nick, level, gold, data) VALUES (@id, @nick, @level, @gold, @data)
+   ON CONFLICT(id) DO UPDATE SET nick=@nick, level=@level, gold=@gold, data=@data`);
+const insParty = sqlite.prepare('INSERT INTO parties (id, data) VALUES (?, ?)');
+const insLog = sqlite.prepare('INSERT INTO logs (ts, text) VALUES (?, ?)');
+const persist = sqlite.transaction(() => {
+  for (const id in db.players) {
+    const p = db.players[id];
+    upsertPlayer.run({ id, nick: p.nick || '', level: p.level || 0, gold: p.gold || 0, data: JSON.stringify(p) });
+  }
+  sqlite.prepare('DELETE FROM parties').run();
+  for (const id in db.parties) insParty.run(id, JSON.stringify(db.parties[id]));
+  sqlite.prepare('DELETE FROM logs').run();
+  for (const l of db.log) insLog.run(l.t, l.text);
+});
 
 let saveTimer = null;
 function save() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    fs.writeFile(DATA_FILE, JSON.stringify(db), err => { if (err) console.error('저장 실패:', err.message); });
+    try { persist(); } catch (e) { console.error('저장 실패:', e.message); }
   }, 300);
 }
 

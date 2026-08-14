@@ -1,0 +1,13 @@
+{
+  "name": "ganghwa-rpg",
+  "version": "1.0.0",
+  "private": true,
+  "description": "강화 RPG 웹 서버 (SQLite)",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.0"
+  }
+}

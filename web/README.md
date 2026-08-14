@@ -14,17 +14,21 @@
 
 1. **Node.js 설치** (한 번만): https://nodejs.org 에서 LTS 버전 설치
    - 확인: 터미널에서 `node -v` → 버전이 뜨면 OK
-2. **서버 실행**:
+2. **패키지 설치** (최초 1회 — SQLite 드라이버):
    ```bash
    cd web
+   npm install
+   ```
+3. **서버 실행**:
+   ```bash
    node server.js
    ```
-3. 터미널에 뜨는 **`같은 네트워크: http://192.168.x.x:3088`** 주소를 동료에게 공유
+4. 터미널에 뜨는 **`같은 네트워크: http://192.168.x.x:3088`** 주소를 동료에게 공유
    - 본인은 `http://localhost:3088` 으로도 접속 가능
-4. 브라우저에서 접속 → 닉네임 + PIN 입력 → 플레이!
+5. 브라우저에서 접속 → 닉네임 + PIN 입력 → 플레이!
 
 > 💡 맥을 켜두는 동안만 게임이 열립니다. 끄면 접속이 끊기지만, 기록은
-> `web/data.json` 에 저장되어 다시 켜면 그대로 이어집니다.
+> **SQLite DB(`web/game.db`)** 에 저장되어 다시 켜면 그대로 이어집니다.
 
 ## 접속 범위 (회사 망에서만)
 
@@ -47,13 +51,16 @@
 | 랭킹/부자/오늘의호구/로그 | 공유 세계의 순위·기록 |
 | 프로필 | 목록에서 이름을 누르면 상대 정보 조회 |
 
-## 데이터 백업/초기화
+## 데이터 (SQLite)
 
-- 저장 파일: `web/data.json`
-- 백업: 이 파일을 복사해 두면 됩니다.
-- 초기화: 서버를 끄고 `web/data.json` 을 삭제 후 다시 실행.
+- 저장: **`web/game.db`** (SQLite). 테이블: `players`(id=PIN해시, nick·level·gold·data),
+  `parties`, `logs`
+- 조회(예): `sqlite3 web/game.db "SELECT nick, level, gold FROM players ORDER BY level DESC;"`
+  (또는 `node -e "const D=require('better-sqlite3');new D('game.db',{readonly:true}).prepare('SELECT nick,level,gold FROM players').all().forEach(r=>console.log(r))"`)
+- 백업: `cp web/game.db web/game.backup.db`
+- 초기화: 서버를 끄고 `rm web/game.db web/game.db-wal web/game.db-shm` 후 다시 실행
 
 ## 밸런스 튜닝
 
-`web/game.js` 상단 `CONFIG` 와 `odds()` / `enhanceCost()` / `MONSTERS` 를
-수정하면 됩니다. (카톡봇 버전 `../main.js` 와 규칙 동일)
+`web/game.js` 상단 `CONFIG` 와 `odds()` / `enhanceCost()` / `RARITIES` / `BOSSES` 를
+수정하면 됩니다.
