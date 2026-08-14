@@ -5,7 +5,13 @@ node_modules/
 .vscode/
 .idea/
 
-# 메신저봇R 개인 설정/데이터 (혹시 백업 시)
+# 🔐 비밀정보 — 절대 커밋 금지 (DATABASE_URL·비번·토큰은 환경변수로만!)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
 *.local.js
 secrets.js
 
