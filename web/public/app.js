@@ -405,7 +405,10 @@ el('guideClose').onclick = () => { el('guide').hidden = true; sessionStorage.set
   } else { token = null; localStorage.removeItem('token'); }
 })();
 
-/* 주기적으로 공용 목록 갱신 (레이드 탭은 자체 폴링 루프가 담당) */
-setInterval(() => {
-  if (me && !el('game').hidden && ['rank', 'log', 'hogu', 'goldrank'].includes(currentTab)) loadTab();
-}, 8000);
+/* 주기적으로 내 상태(채굴 누적·골드·횟수) + 공용 목록 갱신
+   (레이드 탭은 자체 폴링 루프가 담당) */
+setInterval(async () => {
+  if (!me || el('game').hidden || currentTab === 'raid') return;
+  try { const r = await api('me'); if (r.ok) { me = r.me; render(); } } catch (e) { /* 무시 */ }
+  if (['rank', 'log', 'hogu', 'goldrank'].includes(currentTab)) loadTab();
+}, 5000);
