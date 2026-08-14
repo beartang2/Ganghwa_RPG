@@ -19,3 +19,6 @@ web/game.db-shm
 
 # 빌드 산출물(난독화) - npm run build 로 로컬 생성
 web/public/app.min.js
+
+# 무기 원본 소스 시트(크롭 전) - 로컬 참고용, 저장소에는 크롭된 PNG만 관리
+web/public/weapons/_raw/
