@@ -46,6 +46,17 @@ small{opacity:.75;font-weight:600}
 .chip{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:6px 11px;font-size:14px}
 .chip.gold b{color:var(--gold)}
 .wrap{display:flex;flex-direction:column;gap:12px}
+.col-left,.col-right{display:flex;flex-direction:column;gap:12px}
+
+/* 넓은 화면: 2단 레이아웃 (왼쪽 캐릭터/액션 · 오른쪽 탭+내용) */
+@media (min-width:880px){
+  #game.screen{max-width:1060px}
+  #game .topbar{max-width:1060px}
+  .wrap{display:grid;grid-template-columns:380px 1fr;align-items:start;gap:18px}
+  .tabs{flex-wrap:wrap}
+  .panel{min-height:70vh}
+  .col-left{position:sticky;top:16px}
+}
 
 /* 무기 패널 */
 .weapon-panel{display:flex;flex-direction:column;align-items:center;gap:12px}

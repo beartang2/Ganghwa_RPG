@@ -42,49 +42,53 @@
   </header>
 
   <main class="wrap">
-    <section class="card weapon-panel">
-      <div id="weaponArt" class="weapon-art"></div>
-      <div class="weapon-info">
-        <div id="weaponName" class="weapon-name">+0 ⚪ 일반</div>
-        <div id="weaponElem" class="weapon-elem"></div>
-        <div class="odds-row">
-          <span class="odds success">성공 <b id="oddsS">-</b></span>
-          <span class="odds destroy">파괴 <b id="oddsD">-</b></span>
+    <div class="col-left">
+      <section class="card weapon-panel">
+        <div id="weaponArt" class="weapon-art"></div>
+        <div class="weapon-info">
+          <div id="weaponName" class="weapon-name">+0 ⚪ 일반</div>
+          <div id="weaponElem" class="weapon-elem"></div>
+          <div class="odds-row">
+            <span class="odds success">성공 <b id="oddsS">-</b></span>
+            <span class="odds destroy">파괴 <b id="oddsD">-</b></span>
+          </div>
+          <div id="nextCost" class="next-cost">다음 강화 비용 20G</div>
         </div>
-        <div id="nextCost" class="next-cost">다음 강화 비용 20G</div>
-      </div>
-      <button id="enhanceBtn" class="btn primary big enhance">⚒️ 강화</button>
-    </section>
+        <button id="enhanceBtn" class="btn primary big enhance">⚒️ 강화</button>
+      </section>
 
-    <div id="toast" class="toast" hidden></div>
+      <section class="actions">
+        <button id="huntBtn" class="btn action">🗡️ 사냥 <small id="huntLeft"></small></button>
+        <button id="mineBtn" class="btn action">⛏️ 채굴 <small id="mineAmt"></small></button>
+      </section>
+      <section class="actions">
+        <button id="attendBtn" class="btn action">📅 출석</button>
+        <button id="protectBtn" class="btn action">🛡️ 방지권 구매</button>
+      </section>
 
-    <section class="actions">
-      <button id="huntBtn" class="btn action">🗡️ 사냥 <small id="huntLeft"></small></button>
-      <button id="mineBtn" class="btn action">⛏️ 채굴 <small id="mineAmt"></small></button>
-    </section>
-    <section class="actions">
-      <button id="attendBtn" class="btn action">📅 출석</button>
-      <button id="protectBtn" class="btn action">🛡️ 방지권 구매</button>
-    </section>
+      <section class="card stats">
+        <div><span>최고기록</span><b id="sBest">+0</b></div>
+        <div><span>파괴</span><b id="sBreaks">0</b></div>
+        <div><span>전적</span><b id="sRecord">0승 0패</b></div>
+        <div><span>강화순위</span><b id="sRank">-</b></div>
+      </section>
+    </div>
 
-    <section class="card stats">
-      <div><span>최고기록</span><b id="sBest">+0</b></div>
-      <div><span>파괴</span><b id="sBreaks">0</b></div>
-      <div><span>전적</span><b id="sRecord">0승 0패</b></div>
-      <div><span>강화순위</span><b id="sRank">-</b></div>
-    </section>
-
-    <nav class="tabs">
-      <button class="tab active" data-tab="rank">🏅 랭킹</button>
-      <button class="tab" data-tab="goldrank">💰 부자</button>
-      <button class="tab" data-tab="shop">🛒 상점</button>
-      <button class="tab" data-tab="raid">🐉 레이드</button>
-      <button class="tab" data-tab="fight">⚔️ 싸움</button>
-      <button class="tab" data-tab="hogu">🤡 호구</button>
-      <button class="tab" data-tab="log">📜 로그</button>
-    </nav>
-    <section id="panel" class="card panel"></section>
+    <div class="col-right">
+      <nav class="tabs">
+        <button class="tab active" data-tab="rank">🏅 랭킹</button>
+        <button class="tab" data-tab="goldrank">💰 부자</button>
+        <button class="tab" data-tab="shop">🛒 상점</button>
+        <button class="tab" data-tab="raid">🐉 레이드</button>
+        <button class="tab" data-tab="fight">⚔️ 싸움</button>
+        <button class="tab" data-tab="hogu">🤡 호구</button>
+        <button class="tab" data-tab="log">📜 로그</button>
+      </nav>
+      <section id="panel" class="card panel"></section>
+    </div>
   </main>
+
+  <div id="toast" class="toast" hidden></div>
 </div>
 
 <!-- 플레이 안내 (세션당 1회) -->
