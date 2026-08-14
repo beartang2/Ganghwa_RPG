@@ -130,6 +130,13 @@ small{opacity:.75;font-weight:600}
 .toast.bad{background:rgba(255,93,108,.14);border-color:var(--danger);color:#ffd6da}
 .toast.info{background:rgba(79,172,254,.14);border-color:var(--info);color:#d3ecff}
 
+/* 닉네임 염색 */
+.nick-glow{text-shadow:0 0 7px currentColor}
+.nick-silver{background:linear-gradient(180deg,#f6f7f9,#9aa0a6);-webkit-background-clip:text;background-clip:text;color:transparent}
+.nick-gold{background:linear-gradient(180deg,#ffe9a0,#d4a017);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 0 5px rgba(212,160,23,.35)}
+.nick-rainbow{background:linear-gradient(90deg,#ff5d6c,#ff9f45,#ffd93d,#49d17a,#4facfe,#a770ef,#ff5d6c);background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent;animation:rainbow 3s linear infinite;font-weight:800}
+@keyframes rainbow{to{background-position:200% center}}
+
 /* 안내 모달 */
 .guide-card{max-width:430px;max-height:82vh;overflow:auto}
 .guide-list{list-style:none;padding:0;margin:.5em 0 0}

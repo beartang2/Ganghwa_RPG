@@ -16,6 +16,12 @@ const CONFIG = {
   mineRate: 12, mineCap: 3000, partyMax: 5,
   raidAtkBuffCap: 0.15,      // 힐러 아군 공격 버프 상한
   raidDRCap: 0.40,           // 탱커 아군 피해감소 상한
+  // 상점
+  boostAmount: 0.10,         // 강화 부스트권: 성공률 +10%p
+  boostCount: 10,            // 강화 부스트권: 지속 횟수
+  boostPrice: 8000,
+  classChangePrice: 30000,
+  dyePrice: 2000,
 };
 
 /* ---------- 유틸 ---------- */
@@ -75,6 +81,31 @@ const ELEMENTS = [
 ];
 function randomElementKey() { return ELEMENTS[randInt(0, ELEMENTS.length - 1)].key; }
 function elementOf(key) { return ELEMENTS.find(e => e.key === key) || ELEMENTS[0]; }
+
+/* ---------- 닉네임 염색(가챠) ---------- */
+const DYE_BASIC = [
+  { name: '빨강', hex: '#ff5d6c' }, { name: '주황', hex: '#ff9f45' }, { name: '노랑', hex: '#ffd93d' },
+  { name: '초록', hex: '#49d17a' }, { name: '파랑', hex: '#4facfe' }, { name: '남색', hex: '#6c8cff' },
+  { name: '보라', hex: '#a770ef' }, { name: '흰색', hex: '#ffffff' },
+];
+// 확률: 기본 60%(8색 균등) → glow 30%(8색 균등) → 은 6% → 금 3% → 무지개 1%
+function rollDye() {
+  const r = Math.random();
+  if (r < 0.01) return { kind: 'rainbow', name: '무지개', rarity: '무지개' };
+  if (r < 0.04) return { kind: 'gold', name: '금색', rarity: '금색' };
+  if (r < 0.10) return { kind: 'silver', name: '은색', rarity: '은색' };
+  const c = DYE_BASIC[randInt(0, DYE_BASIC.length - 1)];
+  if (r < 0.40) return { kind: 'glow', color: c.hex, name: c.name + ' 빛나는', rarity: 'glow' };
+  return { kind: 'solid', color: c.hex, name: c.name, rarity: '기본' };
+}
+function shopItems() {
+  return [
+    { id: 'protect', emoji: '🛡️', name: '파괴방지권', price: CONFIG.protectPrice, desc: '파괴를 1회 자동으로 막아줍니다' },
+    { id: 'boost', emoji: '🍀', name: '강화 부스트권', price: CONFIG.boostPrice, desc: '다음 ' + CONFIG.boostCount + '회 강화 성공률 +' + Math.round(CONFIG.boostAmount * 100) + '%p' },
+    { id: 'dye', emoji: '🎨', name: '염색약', price: CONFIG.dyePrice, desc: '닉네임 색상을 랜덤으로 뽑아요 (레어일수록 희귀)' },
+    { id: 'classchange', emoji: '🔄', name: '직업 변경권', price: CONFIG.classChangePrice, desc: '직업을 다시 선택합니다 (레벨·골드 유지)' },
+  ];
+}
 function weaponName(level, cls) {
   const g = grade(level);
   const base = (CLASSES[cls] || CLASSES.warrior).weapon;
@@ -141,9 +172,9 @@ function bossById(id) { return BOSSES.find(b => b.id === id); }
 /* ---------- 플레이어 ---------- */
 function makePlayer(nick) {
   return {
-    nick, class: null, element: null,
+    nick, class: null, element: null, nickColor: null,
     level: 0, best: 0, breaks: 0, wins: 0, losses: 0,
-    gold: CONFIG.startGold, protects: 0,
+    gold: CONFIG.startGold, protects: 0, enhanceBoost: 0,
     fightDay: '', fightsUsed: 0, huntDay: '', huntsUsed: 0, raidDay: '', raidsUsed: 0,
     attendDay: '', destroyDay: '', destroysToday: 0,
     lastMine: Date.now(), party: null, created: today(),
@@ -156,6 +187,8 @@ function norm(p) {
   if (p.party === undefined) p.party = null;
   if (p.class === undefined) p.class = null;
   if (!p.element && p.class) p.element = randomElementKey(); // 기존 데이터 보정
+  if (p.enhanceBoost == null) p.enhanceBoost = 0;
+  if (p.nickColor === undefined) p.nickColor = null;
   return p;
 }
 function fightsLeft(p) { return p.fightDay !== today() ? CONFIG.dailyFights : Math.max(0, CONFIG.dailyFights - p.fightsUsed); }
@@ -169,6 +202,8 @@ function publicView(db, id) {
   const g = grade(p.level);
   const c = classOf(p);
   const em = elementOf(p.element);
+  let od = odds(p.level);
+  if ((p.enhanceBoost || 0) > 0) { const s = Math.min(0.97, od.success + CONFIG.boostAmount); od = { success: s, destroy: od.destroy, fail: Math.max(0, 1 - s - od.destroy) }; }
   let party = null;
   if (p.party && db.parties[p.party]) {
     const pt = db.parties[p.party];
@@ -185,7 +220,7 @@ function publicView(db, id) {
     element: p.element, elementName: em.name, elementEmoji: em.emoji, elementColor: em.color,
     maxLevel: CONFIG.maxLevel,
     nextCost: p.level >= CONFIG.maxLevel ? null : enhanceCost(p.level),
-    odds: odds(p.level),
+    odds: od, enhanceBoost: p.enhanceBoost || 0, nickColor: p.nickColor || null,
     huntsLeft: huntsLeft(p), dailyHunts: CONFIG.dailyHunts,
     fightsLeft: fightsLeft(p), dailyFights: CONFIG.dailyFights,
     raidsLeft: raidsLeft(p), dailyRaids: CONFIG.dailyRaids,
@@ -226,10 +261,11 @@ function setClass(db, id, cls) {
   const p = norm(db.players[id]);
   if (p.class) return { ok: false, error: '이미 직업을 선택했어요.' };
   if (!CLASSES[cls]) return { ok: false, error: '올바른 직업을 선택하세요.' };
+  const first = !p.class;
   p.class = cls;
-  p.element = randomElementKey(); // 무기 탄생 시 속성 랜덤 부여
-  p.lastMine = Date.now();
-  addLog(db, CLASSES[cls].emoji + ' ' + p.nick + ' 님이 ' + CLASSES[cls].name + '(' + elementOf(p.element).name + '속성)으로 모험 시작!');
+  if (!p.element) p.element = randomElementKey(); // 최초 1회만 속성 부여(직업 변경 시 유지)
+  if (first) addLog(db, CLASSES[cls].emoji + ' ' + p.nick + ' 님이 ' + CLASSES[cls].name + '(' + elementOf(p.element).name + '속성)으로 모험 시작!');
+  else addLog(db, '🔄 ' + p.nick + ' 님이 ' + CLASSES[cls].name + '(으)로 직업 변경');
   return { ok: true };
 }
 function rename(db, id, newNick) {
@@ -253,7 +289,14 @@ function enhance(db, id) {
   if (p.gold < cost) return { ok: false, error: '골드 부족! (필요 ' + cost + ' / 보유 ' + p.gold + ')' };
   p.gold -= cost;
   const before = p.level;
-  const o = odds(before);
+  let o = odds(before);
+  let boosted = false;
+  if (p.enhanceBoost > 0) { // 강화 부스트권 적용
+    const s = Math.min(0.97, o.success + CONFIG.boostAmount);
+    o = { success: s, destroy: o.destroy, fail: Math.max(0, 1 - s - o.destroy) };
+    p.enhanceBoost--;
+    boosted = true;
+  }
   const r = Math.random();
   let result, msg;
   if (r < o.success) {
@@ -283,7 +326,7 @@ function enhance(db, id) {
     if (p.level >= 10) { p.level--; result = 'down'; msg = '❌ 실패... +' + before + ' → +' + p.level + ' (하락)'; }
     else { result = 'keep'; msg = '❌ 실패... +' + before + ' 유지'; }
   }
-  return { ok: true, result, msg, cost };
+  return { ok: true, result, msg, cost, boosted, boostLeft: p.enhanceBoost };
 }
 function attend(db, id) {
   const p = norm(db.players[id]);
@@ -328,6 +371,29 @@ function buyProtect(db, id, qty) {
   if (p.gold < total) return { ok: false, error: '골드 부족! (' + qty + '개 = ' + total + 'G / 보유 ' + p.gold + ')' };
   p.gold -= total; p.protects += qty;
   return { ok: true, qty, spent: total, msg: '파괴방지권 ' + qty + '개 구매!' };
+}
+function buyBoost(db, id) {
+  const p = norm(db.players[id]);
+  if (p.gold < CONFIG.boostPrice) return { ok: false, error: '골드 부족! (' + CONFIG.boostPrice + 'G)' };
+  p.gold -= CONFIG.boostPrice; p.enhanceBoost += CONFIG.boostCount;
+  return { ok: true, msg: '🍀 강화 부스트 ' + CONFIG.boostCount + '회 획득! (남은 부스트 ' + p.enhanceBoost + '회)' };
+}
+function buyDye(db, id) {
+  const p = norm(db.players[id]);
+  if (p.gold < CONFIG.dyePrice) return { ok: false, error: '골드 부족! (' + CONFIG.dyePrice + 'G)' };
+  p.gold -= CONFIG.dyePrice;
+  const dye = rollDye();
+  p.nickColor = dye;
+  addLog(db, '🎨 ' + p.nick + ' 염색: ' + dye.name + (dye.rarity !== '기본' ? ' [' + dye.rarity + ']' : ''));
+  return { ok: true, dye, msg: '🎨 염색 결과: ' + dye.name + ' [' + dye.rarity + ']' };
+}
+function buyClassChange(db, id) {
+  const p = norm(db.players[id]);
+  if (p.gold < CONFIG.classChangePrice) return { ok: false, error: '골드 부족! (' + CONFIG.classChangePrice + 'G)' };
+  p.gold -= CONFIG.classChangePrice;
+  p.class = null; // 재선택 필요
+  if (p.party) partyLeave(db, id); // 파티에 있으면 나가기(직업 재선택 중)
+  return { ok: true, needReselect: true, msg: '직업을 다시 선택하세요.' };
 }
 function fight(db, id, targetNick) {
   targetNick = (targetNick || '').trim();
@@ -539,10 +605,10 @@ function profile(db, nick) {
 function ranking(db) {
   return Object.values(db.players).map(p => p)
     .sort((a, b) => b.level - a.level || b.best - a.best).slice(0, 20)
-    .map(p => ({ nick: p.nick, level: p.level, weapon: weaponName(p.level, p.class), classEmoji: classOf(p).emoji, wins: p.wins, losses: p.losses }));
+    .map(p => ({ nick: p.nick, level: p.level, weapon: weaponName(p.level, p.class), classEmoji: classOf(p).emoji, wins: p.wins, losses: p.losses, nickColor: p.nickColor || null }));
 }
 function goldRanking(db) {
-  return Object.values(db.players).map(p => ({ nick: p.nick, gold: p.gold })).sort((a, b) => b.gold - a.gold).slice(0, 20);
+  return Object.values(db.players).map(p => ({ nick: p.nick, gold: p.gold, nickColor: p.nickColor || null })).sort((a, b) => b.gold - a.gold).slice(0, 20);
 }
 function hogu(db) {
   const t = today();
@@ -557,5 +623,6 @@ module.exports = {
   login, setClass, rename, publicView, enhance, attend, mine, hunt, buyProtect, fight,
   partyCreate, partyJoin, partyLeave, partyList, partyView, raidStart,
   partyInvite, partyAccept, partyReject, myInvites, raidState,
+  buyBoost, buyDye, buyClassChange, shopItems,
   profile, ranking, goldRanking, hogu, recentLog, playerList, findByNick,
 };

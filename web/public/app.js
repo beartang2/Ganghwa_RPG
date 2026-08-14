@@ -73,7 +73,7 @@ function onRefresh() {
   clearTimeout(refreshT);
   refreshT = setTimeout(async () => {
     try { const r = await api('me'); if (r.ok) { me = r.me; render(); } } catch (e) { /* 무시 */ }
-    if (['rank', 'goldrank', 'hogu', 'log', 'fight'].includes(currentTab)) loadTab();
+    if (['rank', 'goldrank', 'hogu', 'log', 'fight', 'shop'].includes(currentTab)) loadTab();
   }, 250);
 }
 function openEvents() {
@@ -133,7 +133,7 @@ function setWeaponArt(m) {
 /* ---------- 렌더 ---------- */
 function render() {
   if (!me) return;
-  el('hNick').textContent = (me.classEmoji || '') + ' ' + me.nick;
+  el('hNick').innerHTML = (me.classEmoji || '') + ' ' + nickSpan(me.nick, me.nickColor);
   el('hGold').textContent = me.gold.toLocaleString();
   el('hProtect').textContent = me.protects;
 
@@ -144,6 +144,7 @@ function render() {
   el('oddsS').textContent = Math.round(me.odds.success * 100) + '%';
   el('oddsD').textContent = Math.round(me.odds.destroy * 100) + '%';
   el('nextCost').textContent = me.nextCost == null ? '🌈 만렙 달성!' : '다음 강화 비용 ' + me.nextCost.toLocaleString() + 'G';
+  el('enhanceBtn').textContent = '⚒️ 강화' + (me.enhanceBoost > 0 ? ' 🍀' + me.enhanceBoost : '');
   el('enhanceBtn').disabled = me.nextCost == null || me.gold < me.nextCost;
 
   el('huntLeft').textContent = '(' + me.huntsLeft + '/' + me.dailyHunts + ')';
@@ -207,6 +208,17 @@ async function doProtect() {
   const r = await api('protect', 'POST', { qty });
   if (!r.ok) return toast(r.error, 'bad');
   me = r.me; render(); toast('🛡️ ' + r.msg, 'info');
+}
+async function doBuy(item) {
+  if (item === 'classchange' && !confirm('직업 변경권 30,000G — 직업을 다시 선택합니다(레벨·골드 유지). 구매할까요?')) return;
+  const r = await api('shop/buy', 'POST', { item });
+  if (!r.ok) return toast(r.error, 'bad');
+  me = r.me;
+  if (item === 'classchange' && r.needReselect) { showClassSelect(); return; }
+  render();
+  if (item === 'dye') toast('🎨 ' + r.dye.name + ' [' + r.dye.rarity + '] 뽑기 완료!', r.dye.rarity === '기본' ? 'ok' : 'info');
+  else toast(r.msg || '구매 완료', 'ok');
+  if (currentTab === 'shop') loadTab();
 }
 async function doFight(target) {
   const r = await api('fight', 'POST', { target });
@@ -331,14 +343,22 @@ async function loadTab() {
     const { list } = await api('rank');
     panel.innerHTML = list.length ? list.map((p, i) =>
       `<div class="row"><span class="rk">${medal(i)}</span>
-        <span class="nm" data-nick="${esc(p.nick)}">${p.classEmoji || ''} ${esc(p.nick)}</span>
+        <span class="nm" data-nick="${esc(p.nick)}">${p.classEmoji || ''} ${nickSpan(p.nick, p.nickColor)}</span>
         <span class="val">${esc(p.weapon)} · ${p.wins}승${p.losses}패</span></div>`).join('') : emptyMsg('아직 참가자가 없어요');
   } else if (currentTab === 'goldrank') {
     const { list } = await api('goldrank');
     panel.innerHTML = list.length ? list.map((p, i) =>
       `<div class="row"><span class="rk">${medal(i)}</span>
-        <span class="nm" data-nick="${esc(p.nick)}">${esc(p.nick)}</span>
+        <span class="nm" data-nick="${esc(p.nick)}">${nickSpan(p.nick, p.nickColor)}</span>
         <span class="val gold">${p.gold.toLocaleString()}G</span></div>`).join('') : emptyMsg('아직 참가자가 없어요');
+  } else if (currentTab === 'shop') {
+    const { items } = await api('shop');
+    panel.innerHTML = `<p class="hint" style="margin:0 0 10px">보유 💰${me.gold.toLocaleString()}G${me.enhanceBoost > 0 ? ' · 🍀 강화부스트 ' + me.enhanceBoost + '회' : ''}</p>` +
+      items.map(it =>
+        `<div class="raid-boss"><span class="bemoji">${it.emoji}</span>
+          <div class="binfo"><div class="bname">${esc(it.name)} <small>${it.price.toLocaleString()}G</small></div>
+            <div class="bstat">${esc(it.desc)}</div></div>
+          <button class="btn sm primary" data-buy="${it.id}" ${me.gold < it.price ? 'disabled' : ''}>구매</button></div>`).join('');
   } else if (currentTab === 'hogu') {
     const { list } = await api('hogu');
     panel.innerHTML = list.length ? list.map((p, i) =>
@@ -360,6 +380,17 @@ async function loadTab() {
 function medal(i) { return i < 3 ? ['🥇', '🥈', '🥉'][i] : (i + 1); }
 function emptyMsg(m) { return `<div class="empty">${m}</div>`; }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+// 닉네임 염색 렌더
+function nickSpan(nick, nc) {
+  const e = esc(nick);
+  if (!nc) return e;
+  if (nc.kind === 'solid') return '<span style="color:' + nc.color + '">' + e + '</span>';
+  if (nc.kind === 'glow') return '<span class="nick-glow" style="color:' + nc.color + '">' + e + '</span>';
+  if (nc.kind === 'silver') return '<span class="nick-silver">' + e + '</span>';
+  if (nc.kind === 'gold') return '<span class="nick-gold">' + e + '</span>';
+  if (nc.kind === 'rainbow') return '<span class="nick-rainbow">' + e + '</span>';
+  return e;
+}
 
 /* ---------- 프로필 모달 ---------- */
 async function openProfile(nick) {
@@ -368,7 +399,7 @@ async function openProfile(nick) {
   const p = r.profile;
   const isMe = me && p.nick === me.nick;
   el('modalBody').innerHTML =
-    `<h3>${p.classEmoji || '📇'} ${esc(p.nick)} <small style="color:var(--muted)">${esc(p.className || '')}</small></h3>
+    `<h3>${p.classEmoji || '📇'} ${nickSpan(p.nick, p.nickColor)} <small style="color:var(--muted)">${esc(p.className || '')}</small></h3>
      <div class="pf-line"><span>무기</span><b>${esc(p.weapon)}</b></div>
      <div class="pf-line"><span>속성</span><b>${p.elementEmoji || ''} ${esc(p.elementName || '-')}</b></div>
      <div class="pf-line"><span>골드</span><b>${p.gold.toLocaleString()}G</b></div>
@@ -429,6 +460,7 @@ el('panel').addEventListener('click', e => {
   const f = e.target.closest('[data-fight]'); if (f) return act(() => doFight(f.dataset.fight));
   const r = e.target.closest('[data-raid]'); if (r) return act(() => doRaid(r.dataset.raid));
   const j = e.target.closest('[data-join]'); if (j) return act(() => doPartyJoin(j.dataset.join));
+  const bu = e.target.closest('[data-buy]'); if (bu) return act(() => doBuy(bu.dataset.buy));
   const iv = e.target.closest('[data-invite]'); if (iv) return act(() => doInvite(iv.dataset.invite));
   const ac = e.target.closest('[data-accept]'); if (ac) return act(() => doAccept(ac.dataset.accept));
   const rj = e.target.closest('[data-reject]'); if (rj) return act(() => doReject(rj.dataset.reject));
@@ -457,5 +489,5 @@ el('guideClose').onclick = () => { el('guide').hidden = true; sessionStorage.set
 setInterval(async () => {
   if (!me || el('game').hidden || currentTab === 'raid') return;
   try { const r = await api('me'); if (r.ok) { me = r.me; render(); } } catch (e) { /* 무시 */ }
-  if (['rank', 'log', 'hogu', 'goldrank'].includes(currentTab)) loadTab();
+  if (['rank', 'log', 'hogu', 'goldrank', 'shop'].includes(currentTab)) loadTab();
 }, 5000);
