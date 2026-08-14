@@ -89,13 +89,48 @@ async function main() {
   console.log('[다중 유저]');
   r = await req('POST', '/api/login', { body: { nick: '궁수', pin: '99998888' } });
   ok(r.body.ok, '두 번째 유저 로그인');
+  const tok2 = r.body.token;
+  await req('POST', '/api/setclass', { token: tok2, body: { class: 'archer' } });
   r = await req('POST', '/api/login', { body: { nick: '검사', pin: '55556666' } });
   ok(!r.body.ok, '닉네임 중복 신규가입 거부');
   ok((await q('SELECT count(*)::int AS c FROM players'))[0].c === 2, 'players 2명');
 
-  // 9) 미이식 액션은 501 로 명확히
+  // 9) 싸움 — 두 플레이어 골드/전적 변동이 함께 영속화
+  console.log('[싸움]');
+  await q('UPDATE players SET gold = 10000 WHERE nick IN ($1,$2)', ['검사', '궁수']);
+  const sumBefore = Number((await q('SELECT sum(gold)::bigint AS s FROM players'))[0].s);
   r = await req('POST', '/api/fight', { token: tok, body: { target: '궁수' } });
-  ok(r.status === 501, '싸움은 501(이식 예정)로 안내');
+  ok(r.body.ok && (r.body.winner === '검사' || r.body.winner === '궁수'), '싸움 성사(승자: ' + r.body.winner + ')');
+  const rec = (nick) => q("SELECT (data->>'wins')::int AS wins, (data->>'losses')::int AS losses, gold FROM players WHERE nick=$1", [nick]).then(r => r[0]);
+  const rowA = await rec('검사'), rowB = await rec('궁수');
+  ok(rowA.wins + rowA.losses === 1 && rowB.wins + rowB.losses === 1, '양쪽 전적 +1 영속화(data JSONB)');
+  const sumAfter = Number((await q('SELECT sum(gold)::bigint AS s FROM players'))[0].s);
+  ok(sumBefore === sumAfter, '골드 약탈은 제로섬(총합 보존 ' + sumAfter + ')');
+  let d2 = (await q('SELECT fights_used FROM player_daily WHERE player_id=(SELECT id FROM players WHERE nick=$1) AND day=(SELECT max(day) FROM player_daily)', ['검사']))[0];
+  ok(d2 && d2.fights_used === 1, 'player_daily.fights_used=1 영속화');
+
+  // 10) 파티 — 생성 → 초대 → 수락 → 2인 → 탈퇴
+  console.log('[파티]');
+  r = await req('POST', '/api/party/create', { token: tok });
+  ok(r.body.ok && r.body.party && r.body.party.count === 1, '파티 생성(리더)');
+  const pid = r.body.party.id;
+  r = await req('POST', '/api/party/invite', { token: tok, body: { nick: '궁수' } });
+  ok(r.body.ok, '초대 발송');
+  let me2 = (await req('GET', '/api/me', { token: tok2 })).body.me;
+  ok(me2.invites && me2.invites.length === 1, '초대가 상대 me.invites 에 노출');
+  r = await req('POST', '/api/party/accept', { token: tok2, body: { id: pid } });
+  ok(r.body.ok && r.body.party.count === 2, '수락 → 파티 2인');
+  ok((await q('SELECT count(*)::int AS c FROM parties'))[0].c === 1, 'parties 1개 영속화');
+  r = await req('POST', '/api/party/leave', { token: tok2 });
+  ok(r.body.ok, '궁수 탈퇴');
+  r = await req('GET', '/api/parties');
+  ok(r.body.list[0].count === 1, '파티 인원 1로 갱신');
+  r = await req('POST', '/api/party/leave', { token: tok });
+  ok((await q('SELECT count(*)::int AS c FROM parties'))[0].c === 0, '리더 탈퇴 시 파티 해체(삭제 영속화)');
+
+  // 11) 레이드(POST)만 아직 501
+  r = await req('POST', '/api/raid', { token: tok, body: { boss: 'x' } });
+  ok(r.status === 501, '레이드는 501(3단계 이식 예정)');
 
   console.log('\n결과: ' + pass + ' pass, ' + fail + ' fail');
   process.exit(fail ? 1 : 0);

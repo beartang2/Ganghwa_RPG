@@ -55,8 +55,13 @@ async function loadAllDb(q, { withLogs = false } = {}) {
   return db;
 }
 
-// 액션 주체 행 잠금 — 같은 유저 동시 요청 직렬화 (없는 행이면 그냥 통과)
-async function lockPlayer(q, id) { if (id) await q('SELECT id FROM players WHERE id = $1 FOR UPDATE', [id]); }
+// 행 잠금 — 같은 대상 동시 요청 직렬화. 전역 일관 순서(정렬)로 잠가 데드락 방지.
+// table 은 내부 리터럴('players'|'parties')만 — 사용자 입력 아님.
+async function lockRows(q, table, ids) {
+  const uniq = [...new Set(ids.filter(Boolean))].sort();
+  for (const id of uniq) await q('SELECT id FROM ' + table + ' WHERE id = $1 FOR UPDATE', [id]);
+}
+async function lockPlayer(q, id) { await lockRows(q, 'players', [id]); }
 
 /* ---------- 스냅샷 & diff 저장 ---------- */
 function snapshot(db) {
@@ -103,9 +108,13 @@ async function persistDiff(q, db, before) {
 }
 
 /* ---------- 고수준 실행 ---------- */
-// 변경 액션: 주체 잠금 → 로드 → game 함수 실행 → 성공 시 diff 저장. { r, db } 반환.
-async function runGame(q, { lockId, withLogs = false }, fn) {
-  await lockPlayer(q, lockId);
+// 변경 액션: 대상 잠금 → 로드 → game 함수 실행 → 성공 시 diff 저장. { r, db } 반환.
+//   lockId          단일 주체(하위호환)
+//   lockPlayerIds   추가로 잠글 플레이어(예: 싸움 상대)
+//   lockPartyIds    잠글 파티(예: 참가/수락 대상 파티)
+async function runGame(q, { lockId, lockPlayerIds = [], lockPartyIds = [], withLogs = false }, fn) {
+  await lockRows(q, 'players', [lockId, ...lockPlayerIds]);   // 플레이어 먼저(정렬), 그 다음 파티 — 항상 같은 순서
+  await lockRows(q, 'parties', lockPartyIds);
   const db = await loadAllDb(q, { withLogs });
   const before = snapshot(db);
   const r = fn(db);
