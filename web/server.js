@@ -11,7 +11,7 @@ const crypto = require('crypto');
 const os = require('os');
 const game = require('./game');
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3088;
 const DATA_FILE = path.join(__dirname, 'data.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
