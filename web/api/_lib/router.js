@@ -24,6 +24,15 @@ async function handle(method, pathname, ctx) {
 
   // ---- 공개 GET ----
   if (method === 'GET') {
+    // 배포 직후 DB 연결 확인용 — /api/health 방문 시 Postgres 연결 + 스키마 존재 체크
+    if (pathname === '/api/health') {
+      try {
+        const c = await q('SELECT count(*)::int AS players FROM players', []);
+        return ok({ ok: true, db: true, players: c[0].players, ts: Date.now() });
+      } catch (e) {
+        return bad({ ok: false, db: false, error: String(e && e.message || e) }, 500);
+      }
+    }
     if (pathname === '/api/classes') return ok({ ok: true, classes: game.CLASSES });
     if (pathname === '/api/shop') return ok({ ok: true, items: game.shopItems() });
     if (pathname === '/api/bosses') return ok({ ok: true, bosses: game.BOSSES });
