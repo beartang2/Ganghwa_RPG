@@ -63,6 +63,8 @@ function weaponSVG(cls, level, color) {
 function show(which) {
   ['login', 'classSelect', 'game'].forEach(s => { el(s).hidden = (s !== which); });
 }
+function maybeShowGuide() { if (!sessionStorage.getItem('guideSeen')) el('guide').hidden = false; }
+function enterGame() { show('game'); render(); loadTab(); maybeShowGuide(); }
 
 /* ---------- 직업 선택 ---------- */
 async function showClassSelect() {
@@ -79,7 +81,7 @@ async function showClassSelect() {
     card.onclick = async () => {
       const r = await api('setclass', 'POST', { class: card.dataset.class });
       if (!r.ok) return toast(r.error, 'bad');
-      me = r.me; show('game'); render(); loadTab();
+      me = r.me; enterGame();
       toast('모험을 시작합니다! "출석"·"채굴"·"사냥"으로 골드를 모으세요 🎉', 'info');
     };
   });
@@ -139,7 +141,7 @@ async function doHunt() {
   const r = await api('hunt', 'POST');
   if (!r.ok) return toast(r.error, 'bad');
   me = r.me; render();
-  let msg = r.monster.emoji + ' ' + r.monster.name + '에게 ' + r.dealt + ' 데미지' + (r.slain ? ' 처치!' : '') + '  💰+' + r.gold;
+  let msg = (r.crit ? '💥치명타! ' : '') + r.monster.emoji + ' ' + r.monster.name + '(' + r.monster.rarity + ')에게 ' + r.dealt + ' 데미지' + (r.slain ? ' 처치!' : '') + '  💰+' + r.gold;
   if (r.drop) msg += '  🎁' + r.drop.text;
   toast(msg, r.drop ? 'info' : 'ok');
   if (['log', 'goldrank'].includes(currentTab)) loadTab();
@@ -350,7 +352,7 @@ el('loginBtn').onclick = async () => {
   if (!r.ok) { el('loginErr').textContent = r.error; return; }
   token = r.token; localStorage.setItem('token', token); me = r.me;
   if (r.needClass) return showClassSelect();
-  show('game'); render(); loadTab();
+  enterGame();
 };
 el('pin').addEventListener('keydown', e => { if (e.key === 'Enter') el('loginBtn').click(); });
 el('logoutBtn').onclick = () => { stopRaidLoop(); token = null; me = null; curRaid = null; localStorage.removeItem('token'); show('login'); };
@@ -382,6 +384,7 @@ el('panel').addEventListener('click', e => {
 });
 el('modalClose').onclick = () => { el('modal').hidden = true; };
 el('modal').addEventListener('click', e => { if (e.target === el('modal')) el('modal').hidden = true; });
+el('guideClose').onclick = () => { el('guide').hidden = true; sessionStorage.setItem('guideSeen', '1'); };
 
 /* ---------- 자동 로그인 ---------- */
 (async function init() {
@@ -390,7 +393,7 @@ el('modal').addEventListener('click', e => { if (e.target === el('modal')) el('m
   if (r.ok) {
     me = r.me;
     if (!me.class) return showClassSelect();
-    show('game'); render(); loadTab();
+    enterGame();
   } else { token = null; localStorage.removeItem('token'); }
 })();
 

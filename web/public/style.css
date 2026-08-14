@@ -125,6 +125,13 @@ small{opacity:.75;font-weight:600}
 .toast.bad{background:rgba(255,93,108,.14);border-color:var(--danger);color:#ffd6da}
 .toast.info{background:rgba(79,172,254,.14);border-color:var(--info);color:#d3ecff}
 
+/* 안내 모달 */
+.guide-card{max-width:430px;max-height:82vh;overflow:auto}
+.guide-list{list-style:none;padding:0;margin:.5em 0 0}
+.guide-list li{padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px;line-height:1.5;color:#d5dbea}
+.guide-list li:last-child{border-bottom:0}
+.guide-list b{color:var(--text)}
+
 /* 모달 */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
 .modal-card{position:relative;max-width:360px;width:100%}

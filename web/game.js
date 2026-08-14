@@ -80,16 +80,35 @@ function successGain(level) {
   return 1;
 }
 
-/* ---------- 몬스터 (사냥) ---------- */
+/* ---------- 몬스터 (사냥) ----------
+ * tier: 등급(0~7). 무기 강화 수치가 높을수록 높은 tier(희귀·강한) 몬스터가
+ * 점점 자주 출몰한다. 희귀할수록 체력·골드효율(gpp)·드랍이 높다. */
 const MONSTERS = [
-  { name: '들쥐',   emoji: '🐀', hp: 50,   gpp: 1.0 },
-  { name: '멧돼지', emoji: '🐗', hp: 120,  gpp: 1.3 },
-  { name: '늑대',   emoji: '🐺', hp: 200,  gpp: 1.6 },
-  { name: '곰',     emoji: '🐻', hp: 350,  gpp: 2.0 },
-  { name: '드래곤', emoji: '🐉', hp: 600,  gpp: 3.0 },
-  { name: '마왕',   emoji: '👹', hp: 1000, gpp: 4.0 },
+  { name: '들쥐',     emoji: '🐀', hp: 20,  gpp: 1.0, tier: 0, rarity: '일반' },
+  { name: '슬라임',   emoji: '🟩', hp: 40,  gpp: 1.2, tier: 1, rarity: '일반' },
+  { name: '멧돼지',   emoji: '🐗', hp: 70,  gpp: 1.5, tier: 2, rarity: '일반' },
+  { name: '늑대',     emoji: '🐺', hp: 110, gpp: 1.9, tier: 3, rarity: '희귀' },
+  { name: '오크전사', emoji: '👹', hp: 155, gpp: 2.4, tier: 4, rarity: '희귀' },
+  { name: '스톤골렘', emoji: '🗿', hp: 205, gpp: 3.0, tier: 5, rarity: '에픽' },
+  { name: '와이번',   emoji: '🐉', hp: 260, gpp: 3.8, tier: 6, rarity: '에픽' },
+  { name: '고대괴수', emoji: '🦖', hp: 320, gpp: 4.8, tier: 7, rarity: '전설' },
 ];
+const MAXTIER = 7;
 function huntDamage(level) { return randInt(10, 30) + level * 8; }
+// 무기 단계에 따라 몬스터를 가중 추첨 (레벨↑ → 높은 tier 출몰 확률↑, 약한 몬스터는 희박)
+function huntSpawn(level) {
+  const et = level * MAXTIER / CONFIG.maxLevel; // 기대 tier
+  const w = MONSTERS.map(m => {
+    let x = Math.max(0.03, 1 - Math.abs(m.tier - et) * 0.5);
+    if (m.tier < et - 2) x *= 0.12;  // 너무 약한 몬스터는 고레벨에서 거의 안 나옴
+    if (m.tier > et + 1) x *= 0.5;   // 아주 높은 tier는 희귀하게 등장
+    return x;
+  });
+  const total = w.reduce((a, b) => a + b, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < MONSTERS.length; i++) { r -= w[i]; if (r <= 0) return MONSTERS[i]; }
+  return MONSTERS[MONSTERS.length - 1];
+}
 
 /* ---------- 보스 (레이드) ---------- */
 const BOSSES = [
@@ -256,18 +275,23 @@ function hunt(db, id) {
   if (p.huntDay !== today()) { p.huntDay = today(); p.huntsUsed = 0; }
   if (p.huntsUsed >= CONFIG.dailyHunts) return { ok: false, error: '오늘 사냥을 다 했어요! 내일 다시.' };
   p.huntsUsed++;
-  const m = MONSTERS[randInt(0, MONSTERS.length - 1)];
-  const dmg = huntDamage(p.level);
+  const m = huntSpawn(p.level);
+  let dmg = huntDamage(p.level);
+  const crit = Math.random() < 0.15;      // 치명타: 데미지 2배
+  if (crit) dmg *= 2;
   const dealt = Math.min(dmg, m.hp);
   const slain = dmg >= m.hp;
   let gold = Math.round(dealt * m.gpp);
   if (slain) gold = Math.round(gold * 1.5);
   p.gold += gold;
+  // 희귀할수록(=tier↑) 드랍 확률 상승
   let drop = null;
-  if (Math.random() < CONFIG.dropProtectChance) { p.protects++; drop = { type: 'protect', text: '🛡️ 파괴방지권 1개!' }; addLog(db, '🎁 ' + p.nick + ' 방지권 드랍!'); }
-  else if (Math.random() < CONFIG.dropGoldChance) { const bonus = Math.round(randInt(200, 600) * m.gpp); p.gold += bonus; drop = { type: 'gold', amount: bonus, text: '💰 골드뭉치 +' + bonus }; }
-  addLog(db, '🗡️ ' + p.nick + ' ' + m.emoji + m.name + ' ' + (slain ? '처치' : '사냥') + ' +' + gold + 'G');
-  return { ok: true, monster: { name: m.name, emoji: m.emoji, hp: m.hp }, dmg, dealt, slain, gold, drop };
+  const pc = CONFIG.dropProtectChance * (1 + m.tier * 0.35);
+  const gc = CONFIG.dropGoldChance * (1 + m.tier * 0.2);
+  if (Math.random() < pc) { p.protects++; drop = { type: 'protect', text: '🛡️ 파괴방지권 1개!' }; addLog(db, '🎁 ' + p.nick + ' ' + m.name + '에게서 방지권 드랍!'); }
+  else if (Math.random() < gc) { const bonus = Math.round(randInt(200, 600) * m.gpp); p.gold += bonus; drop = { type: 'gold', amount: bonus, text: '💰 골드뭉치 +' + bonus }; }
+  addLog(db, '🗡️ ' + p.nick + ' ' + m.emoji + m.name + '(' + m.rarity + ') ' + (slain ? '처치' : '사냥') + ' +' + gold + 'G');
+  return { ok: true, monster: { name: m.name, emoji: m.emoji, hp: m.hp, rarity: m.rarity, tier: m.tier }, dmg, dealt, slain, crit, gold, drop };
 }
 function buyProtect(db, id, qty) {
   const p = norm(db.players[id]);
