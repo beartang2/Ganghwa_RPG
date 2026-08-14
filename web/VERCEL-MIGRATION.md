@@ -23,7 +23,7 @@
 | `../supabase/migrations/*.sql` | Supabase(Postgres) 스키마 — GitHub 연동이 자동 적용(단일 소스) |
 | `api/_lib/store.js` | 로드/스냅샷/ diff 저장 / 세션 (DB 접근은 `q(text,params)` 로 추상화) |
 | `api/_lib/router.js` | 요청 라우팅 — `server.js` 로직을 DB 비의존으로 이식 |
-| `api/[...path].js` | Vercel 진입점 — pg 트랜잭션 열고 라우터 호출 |
+| `index.js` | Vercel 진입점(Node 서버 모드) — public/ 정적 서빙 + /api/* 를 pg 트랜잭션으로 라우터에 위임 |
 | `vercel.json` | 함수/리라이트 설정 |
 | `db/test-adapter.mjs` | **pglite(인메모리 PG)로 로컬 검증** — Supabase 없이 전체 파이프라인 테스트 |
 
