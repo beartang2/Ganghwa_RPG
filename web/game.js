@@ -150,6 +150,7 @@ function publicView(db, id) {
     raidsLeft: raidsLeft(p), dailyRaids: CONFIG.dailyRaids,
     mine: pendingMine(p), mineCap: CONFIG.mineCap,
     party,
+    invites: myInvites(db, id),
     rank: enhanceRank(db, id),
   };
 }
@@ -320,9 +321,56 @@ function partyCreate(db, id) {
   const p = norm(db.players[id]);
   if (p.party) return { ok: false, error: '이미 파티에 속해 있어요.' };
   const pid = crypto.randomBytes(3).toString('hex');
-  db.parties[pid] = { id: pid, leader: id, members: [id], created: Date.now() };
+  db.parties[pid] = { id: pid, leader: id, members: [id], pending: [], raid: null, created: Date.now() };
   p.party = pid;
   return { ok: true, party: partyView(db, pid) };
+}
+// 파티장이 특정 유저를 초대
+function partyInvite(db, leaderId, targetNick) {
+  const p = norm(db.players[leaderId]);
+  if (!p.party) return { ok: false, error: '파티가 없어요.' };
+  const pt = db.parties[p.party];
+  if (!pt || pt.leader !== leaderId) return { ok: false, error: '파티장만 초대할 수 있어요.' };
+  if (!pt.pending) pt.pending = [];
+  const tid = findByNick(db, (targetNick || '').trim());
+  if (!tid) return { ok: false, error: '"' + targetNick + '" 님을 찾을 수 없어요.' };
+  if (pt.members.includes(tid)) return { ok: false, error: '이미 파티원이에요.' };
+  if (pt.members.length >= CONFIG.partyMax) return { ok: false, error: '파티가 가득 찼어요.' };
+  if (pt.pending.includes(tid)) return { ok: false, error: '이미 초대했어요.' };
+  pt.pending.push(tid);
+  return { ok: true, msg: db.players[tid].nick + ' 님을 초대했어요.' };
+}
+function myInvites(db, id) {
+  const out = [];
+  for (const pid in db.parties) {
+    const pt = db.parties[pid];
+    if (pt.pending && pt.pending.includes(id)) {
+      out.push({ partyId: pid, leaderNick: db.players[pt.leader] ? db.players[pt.leader].nick : '?', count: pt.members.length, max: CONFIG.partyMax });
+    }
+  }
+  return out;
+}
+function partyAccept(db, id, pid) {
+  const p = norm(db.players[id]);
+  if (p.party) return { ok: false, error: '이미 파티에 속해 있어요.' };
+  const pt = db.parties[pid];
+  if (!pt || !pt.pending || !pt.pending.includes(id)) return { ok: false, error: '초대가 만료되었어요.' };
+  if (pt.members.length >= CONFIG.partyMax) return { ok: false, error: '파티가 가득 찼어요.' };
+  // 다른 파티의 대기 초대 정리
+  for (const k in db.parties) { if (db.parties[k].pending) db.parties[k].pending = db.parties[k].pending.filter(x => x !== id); }
+  pt.members.push(id); p.party = pid;
+  addLog(db, '🤝 ' + p.nick + ' 님이 ' + (db.players[pt.leader] ? db.players[pt.leader].nick : '?') + ' 파티 초대를 수락');
+  return { ok: true, party: partyView(db, pid) };
+}
+function partyReject(db, id, pid) {
+  const pt = db.parties[pid];
+  if (pt && pt.pending) pt.pending = pt.pending.filter(x => x !== id);
+  return { ok: true };
+}
+function raidState(db, id) {
+  const p = norm(db.players[id]);
+  if (!p.party || !db.parties[p.party]) return { ok: true, raid: null };
+  return { ok: true, raid: db.parties[p.party].raid || null };
 }
 function partyJoin(db, id, pid) {
   const p = norm(db.players[id]);
@@ -414,11 +462,19 @@ function raidStart(db, id, bossId) {
     addLog(db, '☠️ ' + (db.players[pt.leader] ? db.players[pt.leader].nick : '?') + ' 파티가 ' + boss.emoji + boss.name + ' 레이드 실패...');
   }
   const topNick = Object.keys(sim.contrib).sort((a, b) => sim.contrib[b] - sim.contrib[a])[0];
+  // 라이브 관전용 상태를 파티에 저장 (전원이 폴링해서 함께 관전)
+  pt.raid = {
+    startTs: Date.now(),
+    boss: { name: boss.name, emoji: boss.emoji, hp: boss.hp, atk: boss.atk },
+    maxHP: sim.maxHP, rounds: sim.rounds, win: sim.win, timeline: sim.timeline,
+    rewards, topContributor: topNick,
+    participants: parts.map(x => ({ nick: x.nick, classEmoji: (CLASSES[x.class] || CLASSES.warrior).emoji })),
+  };
   return {
     ok: true, win: sim.win,
     boss: { name: boss.name, emoji: boss.emoji, hp: boss.hp, atk: boss.atk },
     sim: { rounds: sim.rounds, maxHP: sim.maxHP, remainHP: sim.remainHP, bossRemain: sim.bossRemain, dps: sim.dps, heal: sim.heal, armor: sim.armor, dr: sim.dr, atkBuff: sim.atkBuff, timeline: sim.timeline },
-    participants: parts, rewards, topContributor: topNick,
+    participants: parts, rewards, topContributor: topNick, raid: pt.raid,
   };
 }
 
@@ -448,5 +504,6 @@ module.exports = {
   CONFIG, GRADES, MONSTERS, CLASSES, BOSSES, odds, enhanceCost, weaponName, grade,
   login, setClass, rename, publicView, enhance, attend, mine, hunt, buyProtect, fight,
   partyCreate, partyJoin, partyLeave, partyList, partyView, raidStart,
+  partyInvite, partyAccept, partyReject, myInvites, raidState,
   profile, ranking, goldRanking, hogu, recentLog, playerList,
 };

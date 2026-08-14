@@ -106,6 +106,7 @@ const server = http.createServer(async (req, res) => {
     if (!id) return sendJson(res, 401, { ok: false, error: '로그인이 필요합니다.' });
 
     if (req.method === 'GET' && p === '/api/me') return sendJson(res, 200, { ok: true, me: game.publicView(db, id) });
+    if (req.method === 'GET' && p === '/api/party/raid') return sendJson(res, 200, game.raidState(db, id));
 
     if (req.method === 'POST') {
       let r;
@@ -120,6 +121,9 @@ const server = http.createServer(async (req, res) => {
       else if (p === '/api/party/create') r = game.partyCreate(db, id);
       else if (p === '/api/party/join') { const b = await readBody(req); r = game.partyJoin(db, id, b.id); }
       else if (p === '/api/party/leave') r = game.partyLeave(db, id);
+      else if (p === '/api/party/invite') { const b = await readBody(req); r = game.partyInvite(db, id, b.nick); }
+      else if (p === '/api/party/accept') { const b = await readBody(req); r = game.partyAccept(db, id, b.id); }
+      else if (p === '/api/party/reject') { const b = await readBody(req); r = game.partyReject(db, id, b.id); }
       else if (p === '/api/raid') { const b = await readBody(req); r = game.raidStart(db, id, b.boss); }
       else return sendJson(res, 404, { ok: false, error: 'unknown action' });
 
