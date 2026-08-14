@@ -28,6 +28,18 @@ const CONFIG = {
   pityScale: 0.34,      // + 성공률 비례분(성공률 높을수록 살짝 더 빨리 참)
   // 사냥
   huntOvertimeMult: 0.4, // 일일 사냥 소진 후 '무한 사냥' 골드 배율(희귀 드랍·처치보너스 없음)
+  // 채굴장(능동) — 기력을 써서 곡괭이질, 채굴 레벨이 오를수록 수익↑
+  staminaMax: 100,          // 기력 최대치
+  staminaRegenPerMin: 1.5,  // 분당 기력 회복(가득 차는 데 ~67분)
+  staminaPerSwing: 8,       // 곡괭이질 1회 소모 기력(가득이면 ~12회 연속)
+  mineOreMin: 45, mineOreMax: 85,  // 곡괭이질 1회 기본 골드 범위(기력 있을 때)
+  mineLevelBonus: 0.05,     // 채굴 레벨당 수익 배수(+5%/레벨)
+  mineTiredMult: 0.25,      // 기력 0일 때 '지친 곡괭이질' 배율(무한 가능·보상↓)
+  mineJackpotChance: 0.08,  // 노다지! 확률(골드 x3)
+  mineJackpotMult: 3,
+  mineGemChance: 0.03,      // 원석(보너스 골드) 확률 — 기력 있을 때만
+  mineProtectChance: 0.006, // 보석 원석 → 방지권 확률 — 기력 있을 때만
+  mineLevelCap: 50,
 };
 
 /* ---------- 유틸 ---------- */
@@ -209,8 +221,18 @@ function norm(p) {
   if (p.enhanceBoost == null) p.enhanceBoost = 0;
   if (p.nickColor === undefined) p.nickColor = null;
   if (p.pity == null) p.pity = 0;
+  if (p.stamina == null) p.stamina = CONFIG.staminaMax;
+  if (p.lastStamina == null) p.lastStamina = Date.now();
+  if (p.mineLevel == null) p.mineLevel = 1;
+  if (p.mineXp == null) p.mineXp = 0;
   return p;
 }
+// 채굴장(능동): 기력 회복 계산 + 채굴 레벨 진행
+function currentStamina(p) {
+  const regen = (Date.now() - (p.lastStamina || Date.now())) / 60000 * CONFIG.staminaRegenPerMin;
+  return Math.min(CONFIG.staminaMax, (p.stamina || 0) + regen);
+}
+function mineXpNext(level) { return 50 + level * 45; }
 function fightsLeft(p) { return p.fightDay !== today() ? CONFIG.dailyFights : Math.max(0, CONFIG.dailyFights - p.fightsUsed); }
 function huntsLeft(p) { return p.huntDay !== today() ? CONFIG.dailyHunts : Math.max(0, CONFIG.dailyHunts - p.huntsUsed); }
 function raidsLeft(p) { return p.raidDay !== today() ? CONFIG.dailyRaids : Math.max(0, CONFIG.dailyRaids - p.raidsUsed); }
@@ -245,6 +267,8 @@ function publicView(db, id) {
     fightsLeft: fightsLeft(p), dailyFights: CONFIG.dailyFights,
     raidsLeft: raidsLeft(p), dailyRaids: CONFIG.dailyRaids,
     mine: pendingMine(p), mineCap: CONFIG.mineCap,
+    stamina: Math.floor(currentStamina(p)), staminaMax: CONFIG.staminaMax,
+    mineLevel: p.mineLevel, mineXp: p.mineXp, mineXpNext: mineXpNext(p.mineLevel),
     party,
     invites: myInvites(db, id),
     rank: enhanceRank(db, id),
@@ -377,6 +401,45 @@ function mine(db, id) {
   if (amount <= 0) return { ok: false, error: '아직 채굴된 골드가 없어요. 시간이 지나면 쌓여요.' };
   p.gold += amount; p.lastMine = Date.now();
   return { ok: true, amount, msg: '⛏️ 채굴 +' + amount + 'G' };
+}
+// 채굴장 곡괭이질: 기력을 소모해 골드 채굴. 기력 0이면 '지친' 상태로 소량이나마 계속 가능.
+function mineSwing(db, id) {
+  const p = norm(db.players[id]);
+  const st = currentStamina(p);
+  const tired = st < CONFIG.staminaPerSwing;
+  // 회복분 반영 후 소모(지쳤으면 소모 없이 유지)
+  p.stamina = tired ? st : st - CONFIG.staminaPerSwing;
+  p.lastStamina = Date.now();
+
+  const mult = 1 + (p.mineLevel - 1) * CONFIG.mineLevelBonus;
+  let gold = Math.round(randInt(CONFIG.mineOreMin, CONFIG.mineOreMax) * mult * (tired ? CONFIG.mineTiredMult : 1));
+  gold = Math.max(1, gold);
+  let jackpot = false, gem = null, leveledTo = 0;
+  if (!tired) {
+    if (Math.random() < CONFIG.mineJackpotChance) { gold *= CONFIG.mineJackpotMult; jackpot = true; }
+    if (Math.random() < CONFIG.mineProtectChance) {
+      p.protects++; gem = { type: 'protect', text: '💎 보석 원석 발견 → 🛡️ 방지권 1개!' };
+      addLog(db, '💎 ' + p.nick + ' 채굴장에서 방지권 원석 발견!');
+    } else if (Math.random() < CONFIG.mineGemChance) {
+      const bonus = Math.round(randInt(200, 500) * mult); gold += bonus;
+      gem = { type: 'gold', amount: bonus, text: '💎 원석 +' + bonus + 'G' };
+    }
+  }
+  // 채굴 숙련도 — 지친 곡괭이질도 소량 경험치(노가다 보상)
+  p.mineXp += tired ? 1 : 2;
+  if (p.mineLevel < CONFIG.mineLevelCap && p.mineXp >= mineXpNext(p.mineLevel)) {
+    p.mineXp -= mineXpNext(p.mineLevel); p.mineLevel++; leveledTo = p.mineLevel;
+    addLog(db, '⛏️ ' + p.nick + ' 채굴 레벨 ' + p.mineLevel + ' 달성!');
+  }
+  p.gold += gold;
+  let msg = (tired ? '💤 지친 곡괭이질' : jackpot ? '💥 노다지!!' : '⛏️ 채굴') + ' +' + gold + 'G';
+  if (gem) msg += '  ' + gem.text;
+  if (leveledTo) msg += '  🎉 채굴Lv.' + leveledTo;
+  return {
+    ok: true, silent: true, gold, tired, jackpot, gem, leveledTo,
+    stamina: Math.floor(p.stamina), staminaMax: CONFIG.staminaMax,
+    mineLevel: p.mineLevel, mineXp: p.mineXp, mineXpNext: mineXpNext(p.mineLevel), msg,
+  };
 }
 function hunt(db, id) {
   const p = norm(db.players[id]);
@@ -662,7 +725,7 @@ function playerList(db) { return Object.values(db.players).filter(p => p.class).
 
 module.exports = {
   CONFIG, GRADES, RARITIES, CLASSES, BOSSES, odds, enhanceCost, weaponName, grade,
-  login, setClass, rename, publicView, enhance, attend, mine, hunt, buyProtect, fight,
+  login, setClass, rename, publicView, enhance, attend, mine, mineSwing, hunt, buyProtect, fight,
   partyCreate, partyJoin, partyLeave, partyList, partyView, raidStart,
   partyInvite, partyAccept, partyReject, myInvites, raidState,
   buyBoost, buyDye, buyClassChange, shopItems,

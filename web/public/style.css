@@ -160,6 +160,31 @@ small{opacity:.75;font-weight:600}
 .guide-list li:last-child{border-bottom:0}
 .guide-list b{color:var(--text)}
 
+/* 채굴장 */
+.mine-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
+.mine-lv{font-size:16px;font-weight:800}
+.mine-lv b{color:var(--gold)}
+.mine-xptxt{font-size:12px;color:var(--muted)}
+.mine-bar{height:8px;background:#0f131c;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.mine-bar.xp{margin-bottom:12px}
+.mine-fill{height:100%;width:0;transition:width .3s}
+.mine-fill.xp{background:linear-gradient(90deg,#7ee8a2,#49d17a)}
+.mine-fill.stam{background:linear-gradient(90deg,#4facfe,#6c8cff)}
+.mine-fill.stam.low{background:linear-gradient(90deg,#ff8a5d,#ff5d6c)}
+.mine-stamlabel{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin:2px 0 4px}
+.mine-stamlabel span{color:#9fc7ff;font-weight:800}
+.mine-fb{min-height:34px;border-radius:10px;padding:9px 11px;font-size:13px;font-weight:600;
+  background:var(--card2);border:1px solid var(--line);color:#cfd6e6;text-align:center}
+.mine-fb.ok{background:rgba(73,209,122,.14);border-color:var(--success);color:#c9f7d8}
+.mine-fb.info{background:rgba(79,172,254,.14);border-color:var(--info);color:#d3ecff}
+.mine-fb.tired{background:rgba(255,138,93,.12);border-color:#ff8a5d;color:#ffd9c6}
+.mine-auto{display:flex;align-items:center;gap:10px;margin-top:12px;padding:10px 12px;
+  border:1px solid var(--line);border-radius:12px;background:var(--card2);font-size:13px}
+.mine-auto span{flex:1}
+.mine-auto b{color:var(--gold)}
+.mine-session{text-align:center;color:var(--muted);font-size:12px;margin-top:10px}
+.mine-session b{color:var(--gold)}
+
 /* 모달 */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
 .modal-card{position:relative;max-width:360px;width:100%}

@@ -73,7 +73,7 @@ function onRefresh() {
   clearTimeout(refreshT);
   refreshT = setTimeout(async () => {
     try { const r = await api('me'); if (r.ok) { me = r.me; render(); } } catch (e) { /* 무시 */ }
-    if (['rank', 'goldrank', 'hogu', 'log', 'fight', 'shop'].includes(currentTab)) loadTab();
+    if (['rank', 'goldrank', 'hogu', 'log', 'fight', 'shop', 'mine'].includes(currentTab)) loadTab();
   }, 250);
 }
 function openEvents() {
@@ -209,6 +209,48 @@ async function doMine() {
   const r = await api('mine', 'POST');
   if (!r.ok) return toast(r.error, 'bad');
   me = r.me; render(); toast('⛏️ 채굴 완료! +' + r.amount.toLocaleString() + 'G', 'ok');
+  if (currentTab === 'mine') renderMinePanel();
+}
+/* ---------- 채굴장(능동) ---------- */
+let mineSession = 0, lastMineFb;
+function renderMinePanel(fb) {
+  if (currentTab !== 'mine' || !me) return;
+  if (fb !== undefined) lastMineFb = fb;
+  const f = lastMineFb;
+  const stPct = Math.round(me.stamina / me.staminaMax * 100);
+  const xpPct = Math.round(me.mineXp / me.mineXpNext * 100);
+  const tired = me.stamina < 8;
+  el('panel').innerHTML =
+    `<div class="mine-top">
+       <span class="mine-lv">⛏️ 채굴 <b>Lv.${me.mineLevel}</b></span>
+       <span class="mine-xptxt">${me.mineXp}/${me.mineXpNext} XP</span>
+     </div>
+     <div class="mine-bar xp"><div class="mine-fill xp" style="width:${xpPct}%"></div></div>
+     <div class="mine-stamlabel">💪 기력 <span>${me.stamina}/${me.staminaMax}</span></div>
+     <div class="mine-bar stam"><div class="mine-fill stam${tired ? ' low' : ''}" style="width:${stPct}%"></div></div>
+     <button class="btn primary big" data-mineswing style="margin:14px 0 6px">⛏️ 곡괭이질</button>
+     <div class="mine-fb ${f ? f.kind : ''}">${f ? f.text : (tired
+        ? '💤 기력이 바닥이라 지친 곡괭이질(보상↓)만 돼요. 시간당 회복!'
+        : '곡괭이질로 골드를 캐고 숙련도를 올려요. 기력이 있으면 💥노다지·💎원석 찬스!')}</div>
+     <div class="mine-auto">
+       <span>🕳️ 자동 채굴 누적 <b>+${me.mine.toLocaleString()}G</b></span>
+       <button class="btn sm primary" data-minecollect ${me.mine <= 0 ? 'disabled' : ''}>수령</button>
+     </div>
+     <div class="mine-session">이번 세션 획득 💰 <b>+${mineSession.toLocaleString()}G</b></div>`;
+}
+async function doMineSwing() {
+  const r = await api('mine/swing', 'POST');
+  if (!r.ok) return toast(r.error, 'bad');
+  me = r.me; mineSession += r.gold; render();
+  renderMinePanel({ text: r.msg, kind: r.jackpot ? 'ok' : r.gem ? 'info' : r.tired ? 'tired' : '' });
+  if (r.leveledTo) toast('🎉 채굴 레벨 ' + r.leveledTo + ' 달성! 채굴 수익 증가', 'ok');
+  else if (r.gem && r.gem.type === 'protect') toast(r.gem.text, 'info');
+}
+async function doMineCollect() {
+  const r = await api('mine', 'POST');
+  if (!r.ok) return toast(r.error, 'bad');
+  me = r.me; mineSession += r.amount; render();
+  renderMinePanel({ text: '🕳️ 자동 채굴 수령 +' + r.amount.toLocaleString() + 'G', kind: 'ok' });
 }
 async function doAttend() {
   const r = await api('attend', 'POST');
@@ -358,6 +400,8 @@ async function loadTab() {
       `<div class="row"><span class="rk">${medal(i)}</span>
         <span class="nm" data-nick="${esc(p.nick)}">${p.classEmoji || ''} ${nickSpan(p.nick, p.nickColor)}</span>
         <span class="val">${esc(p.weapon)} · ${p.wins}승${p.losses}패</span></div>`).join('') : emptyMsg('아직 참가자가 없어요');
+  } else if (currentTab === 'mine') {
+    renderMinePanel();
   } else if (currentTab === 'goldrank') {
     const { list } = await api('goldrank');
     panel.innerHTML = list.length ? list.map((p, i) =>
@@ -465,7 +509,9 @@ el('protectBtn').onclick = () => act(doProtect);
 document.querySelectorAll('.tab').forEach(btn => {
   btn.onclick = () => {
     document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active'); currentTab = btn.dataset.tab; loadTab();
+    btn.classList.add('active'); currentTab = btn.dataset.tab;
+    if (currentTab === 'mine') { mineSession = 0; lastMineFb = null; }
+    loadTab();
   };
 });
 
@@ -474,6 +520,8 @@ el('panel').addEventListener('click', e => {
   const r = e.target.closest('[data-raid]'); if (r) return act(() => doRaid(r.dataset.raid));
   const j = e.target.closest('[data-join]'); if (j) return act(() => doPartyJoin(j.dataset.join));
   const bu = e.target.closest('[data-buy]'); if (bu) return act(() => doBuy(bu.dataset.buy));
+  if (e.target.closest('[data-mineswing]')) return act(doMineSwing);
+  if (e.target.closest('[data-minecollect]')) return act(doMineCollect);
   const iv = e.target.closest('[data-invite]'); if (iv) return act(() => doInvite(iv.dataset.invite));
   const ac = e.target.closest('[data-accept]'); if (ac) return act(() => doAccept(ac.dataset.accept));
   const rj = e.target.closest('[data-reject]'); if (rj) return act(() => doReject(rj.dataset.reject));
@@ -502,5 +550,5 @@ el('guideClose').onclick = () => { el('guide').hidden = true; sessionStorage.set
 setInterval(async () => {
   if (!me || el('game').hidden || currentTab === 'raid') return;
   try { const r = await api('me'); if (r.ok) { me = r.me; render(); } } catch (e) { /* 무시 */ }
-  if (['rank', 'log', 'hogu', 'goldrank', 'shop'].includes(currentTab)) loadTab();
+  if (['rank', 'log', 'hogu', 'goldrank', 'shop', 'mine'].includes(currentTab)) loadTab();
 }, 5000);

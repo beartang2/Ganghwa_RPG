@@ -187,6 +187,7 @@ const server = http.createServer(async (req, res) => {
       else if (p === '/api/enhance') r = game.enhance(db, id);
       else if (p === '/api/attend') r = game.attend(db, id);
       else if (p === '/api/mine') r = game.mine(db, id);
+      else if (p === '/api/mine/swing') r = game.mineSwing(db, id);
       else if (p === '/api/hunt') r = game.hunt(db, id);
       else if (p === '/api/protect') { const b = await readBody(req); r = game.buyProtect(db, id, b.qty); }
       else if (p === '/api/shop/buy') {
@@ -209,7 +210,8 @@ const server = http.createServer(async (req, res) => {
 
       if (r.ok) {
         save();
-        broadcast('refresh'); // 모든 접속자에게 "상태 바뀜" 알림 → 각자 갱신
+        // silent 액션(예: 채굴장 곡괭이질 연타)은 전체 broadcast 생략 — 본인만 r.me로 갱신
+        if (!r.silent) broadcast('refresh'); // 모든 접속자에게 "상태 바뀜" 알림 → 각자 갱신
         // 개인 알림(당사자에게 토스트)
         if (p === '/api/fight') {
           const tid = game.findByNick(db, r.def.nick);
