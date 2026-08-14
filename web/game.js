@@ -13,7 +13,7 @@ const CONFIG = {
   stealPct: 0.2, protectPrice: 3000,
   fightBreakChance: 0.10,    // 싸움 패배 시 무기 1단계 하락 확률(진 사람만, 확률적)
   dropProtectChance: 0.03, dropGoldChance: 0.07,
-  mineRate: 12, mineCap: 3000, partyMax: 5,
+  mineRate: 12, mineCap: 3000, partyMax: 5, raidMinMembers: 2,
   raidAtkBuffCap: 0.15,      // 힐러 아군 공격 버프 상한
   raidDRCap: 0.40,           // 탱커 아군 피해감소 상한
   // 상점
@@ -563,6 +563,7 @@ function raidStart(db, id, bossId) {
     if (raidsLeft(mp) > 0) participants.push(k);
   }
   if (participants.length === 0) return { ok: false, error: '파티원 모두 오늘 레이드 횟수를 소진했어요.' };
+  if (participants.length < CONFIG.raidMinMembers) return { ok: false, error: '레이드는 최소 ' + CONFIG.raidMinMembers + '명이 필요해요. (혼자서는 불가 — 동료를 초대하세요)' };
   participants.forEach(k => { db.players[k].raidsUsed++; });
   const parts = participants.map(k => ({ nick: db.players[k].nick, class: db.players[k].class, level: db.players[k].level }));
   const sim = simulateRaid(parts, boss);

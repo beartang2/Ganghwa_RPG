@@ -75,6 +75,22 @@ function sseWrite(res, event, data) {
 function sseSend(id, event, data) { const set = clients.get(id); if (set) for (const res of set) sseWrite(res, event, data); }
 function broadcast(event, data) { for (const set of clients.values()) for (const res of set) sseWrite(res, event, data); }
 
+/* ---------- 액션 속도제한 (계정별 토큰버킷) ----------
+ * 정상 플레이(클라 450ms 쿨다운 ≈ 초당 2.2회)는 통과, 스크립트 연타는 차단. */
+const RL_CAP = 8;         // 최대 버스트
+const RL_REFILL = 3;      // 초당 토큰 회복
+const buckets = new Map(); // accountId -> { tokens, last }
+function allowAction(id) {
+  const now = Date.now();
+  let b = buckets.get(id);
+  if (!b) { b = { tokens: RL_CAP, last: now }; buckets.set(id, b); }
+  b.tokens = Math.min(RL_CAP, b.tokens + (now - b.last) / 1000 * RL_REFILL);
+  b.last = now;
+  if (b.tokens < 1) return false;
+  b.tokens -= 1;
+  return true;
+}
+
 /* ---------- HTTP 헬퍼 ---------- */
 function sendJson(res, code, obj) {
   const body = JSON.stringify(obj);
@@ -91,6 +107,8 @@ function readBody(req) {
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
 function serveStatic(res, urlPath) {
   let rel = urlPath === '/' ? '/index.html' : urlPath;
+  // 빌드된 난독화 파일이 있으면 app.js 대신 서빙 (npm run build 후)
+  if (rel === '/app.js' && fs.existsSync(path.join(PUBLIC_DIR, 'app.min.js'))) rel = '/app.min.js';
   const filePath = path.join(PUBLIC_DIR, path.normalize(rel));
   if (!filePath.startsWith(PUBLIC_DIR)) { res.writeHead(403); return res.end('forbidden'); }
   fs.readFile(filePath, (err, buf) => {
@@ -162,6 +180,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && p === '/api/party/raid') return sendJson(res, 200, game.raidState(db, id));
 
     if (req.method === 'POST') {
+      if (!allowAction(id)) return sendJson(res, 429, { ok: false, error: '너무 빠릅니다. 잠시 후 다시 시도하세요.' });
       let r;
       if (p === '/api/setclass') { const b = await readBody(req); r = game.setClass(db, id, b.class); }
       else if (p === '/api/rename') { const b = await readBody(req); r = game.rename(db, id, b.nick); }
