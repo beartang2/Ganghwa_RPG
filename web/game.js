@@ -24,7 +24,10 @@ const CONFIG = {
   dyePrice: 2000,
   // 강화(로스트아크식)
   destroyDrop: 6,       // 파괴 시 하락 칸수(등급 바닥 밑으론 안 내려감)
-  pityMinGain: 0.05,    // 장인의 기운 최소 상승폭(실패당) — 저확률에서도 결국 참
+  pityBase: 0.02,       // 장인의 기운 기본 상승폭(실패당) — 저확률에서도 결국 참
+  pityScale: 0.34,      // + 성공률 비례분(성공률 높을수록 살짝 더 빨리 참)
+  // 사냥
+  huntOvertimeMult: 0.4, // 일일 사냥 소진 후 '무한 사냥' 골드 배율(희귀 드랍·처치보너스 없음)
 };
 
 /* ---------- 유틸 ---------- */
@@ -137,7 +140,7 @@ function odds(level) {
   return { success: s, destroy: d, fail: Math.max(0, 1 - s - d) };
 }
 // 장인의 기운 상승폭(실패당): 저확률에서도 결국 100% 도달하도록 최소치 보장
-function pityGain(success) { return Math.max(CONFIG.pityMinGain, success * 2.15); }
+function pityGain(success) { return CONFIG.pityBase + success * CONFIG.pityScale; }
 function enhanceCost(level) { return 20 + level * 10; }
 function successGain(level) {
   if (level < 20) { const r = Math.random(); if (r < 0.60) return 1; if (r < 0.90) return 2; return 3; }
@@ -378,7 +381,8 @@ function mine(db, id) {
 function hunt(db, id) {
   const p = norm(db.players[id]);
   if (p.huntDay !== today()) { p.huntDay = today(); p.huntsUsed = 0; }
-  if (p.huntsUsed >= CONFIG.dailyHunts) return { ok: false, error: '오늘 사냥을 다 했어요! 내일 다시.' };
+  // 일일 사냥(20회)은 풀보상 + 희귀 드랍. 소진 후엔 '무한 사냥'(보상 축소·드랍 없음)으로 계속 가능
+  const overtime = p.huntsUsed >= CONFIG.dailyHunts;
   p.huntsUsed++;
   const m = huntSpawn(p.level);
   let dmg = huntDamage(p.level);
@@ -387,16 +391,19 @@ function hunt(db, id) {
   const dealt = Math.min(dmg, m.hp);
   const slain = dmg >= m.hp;
   let gold = Math.round(dealt * m.gpp);
-  if (slain) gold = Math.round(gold * 1.5);
+  if (slain && !overtime) gold = Math.round(gold * 1.5);   // 처치 보너스는 일일 사냥만
+  if (overtime) gold = Math.max(1, Math.round(gold * CONFIG.huntOvertimeMult));
   p.gold += gold;
-  // 희귀할수록(=tier↑) 드랍 확률 상승
+  // 희귀할수록(=tier↑) 드랍 확률 상승 — 무한 사냥에선 드랍 없음
   let drop = null;
-  const pc = CONFIG.dropProtectChance * (1 + m.tier * 0.35);
-  const gc = CONFIG.dropGoldChance * (1 + m.tier * 0.2);
-  if (Math.random() < pc) { p.protects++; drop = { type: 'protect', text: '🛡️ 파괴방지권 1개!' }; addLog(db, '🎁 ' + p.nick + ' ' + m.name + '에게서 방지권 드랍!'); }
-  else if (Math.random() < gc) { const bonus = Math.round(randInt(200, 600) * m.gpp); p.gold += bonus; drop = { type: 'gold', amount: bonus, text: '💰 골드뭉치 +' + bonus }; }
-  addLog(db, '🗡️ ' + p.nick + ' ' + m.emoji + m.name + '(' + m.rarity + ') ' + (slain ? '처치' : '사냥') + ' +' + gold + 'G');
-  return { ok: true, monster: { name: m.name, emoji: m.emoji, hp: m.hp, rarity: m.rarity, tier: m.tier }, dmg, dealt, slain, crit, gold, drop };
+  if (!overtime) {
+    const pc = CONFIG.dropProtectChance * (1 + m.tier * 0.35);
+    const gc = CONFIG.dropGoldChance * (1 + m.tier * 0.2);
+    if (Math.random() < pc) { p.protects++; drop = { type: 'protect', text: '🛡️ 파괴방지권 1개!' }; addLog(db, '🎁 ' + p.nick + ' ' + m.name + '에게서 방지권 드랍!'); }
+    else if (Math.random() < gc) { const bonus = Math.round(randInt(200, 600) * m.gpp); p.gold += bonus; drop = { type: 'gold', amount: bonus, text: '💰 골드뭉치 +' + bonus }; }
+    addLog(db, '🗡️ ' + p.nick + ' ' + m.emoji + m.name + '(' + m.rarity + ') ' + (slain ? '처치' : '사냥') + ' +' + gold + 'G');
+  }
+  return { ok: true, monster: { name: m.name, emoji: m.emoji, hp: m.hp, rarity: m.rarity, tier: m.tier }, dmg, dealt, slain, crit, gold, drop, overtime };
 }
 function buyProtect(db, id, qty) {
   const p = norm(db.players[id]);

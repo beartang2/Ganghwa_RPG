@@ -160,8 +160,8 @@ function render() {
   el('enhanceBtn').textContent = '⚒️ 강화' + (me.enhanceBoost > 0 ? ' 🍀' + me.enhanceBoost : '');
   el('enhanceBtn').disabled = me.nextCost == null || me.gold < me.nextCost;
 
-  el('huntLeft').textContent = '(' + me.huntsLeft + '/' + me.dailyHunts + ')';
-  el('huntBtn').disabled = me.huntsLeft <= 0;
+  el('huntLeft').textContent = me.huntsLeft > 0 ? '(' + me.huntsLeft + '/' + me.dailyHunts + ')' : '♾️';
+  el('huntBtn').disabled = false;   // 무한 사냥: 항상 가능(소진 후엔 보상 축소)
   el('mineAmt').textContent = me.mine > 0 ? '(+' + me.mine.toLocaleString() + ')' : '';
   el('mineBtn').disabled = me.mine <= 0;
 
@@ -200,7 +200,7 @@ async function doHunt() {
   const r = await api('hunt', 'POST');
   if (!r.ok) return toast(r.error, 'bad');
   me = r.me; render();
-  let msg = (r.crit ? '💥치명타! ' : '') + r.monster.emoji + ' ' + r.monster.name + '(' + r.monster.rarity + ')에게 ' + r.dealt + ' 데미지' + (r.slain ? ' 처치!' : '') + '  💰+' + r.gold;
+  let msg = (r.overtime ? '♾️ ' : '') + (r.crit ? '💥치명타! ' : '') + r.monster.emoji + ' ' + r.monster.name + '(' + r.monster.rarity + ')에게 ' + r.dealt + ' 데미지' + (r.slain ? ' 처치!' : '') + '  💰+' + r.gold;
   if (r.drop) msg += '  🎁' + r.drop.text;
   toast(msg, r.drop ? 'info' : 'ok');
   if (['log', 'goldrank'].includes(currentTab)) loadTab();
