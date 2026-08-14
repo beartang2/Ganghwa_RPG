@@ -119,8 +119,11 @@ small{opacity:.75;font-weight:600}
 .fightrow .nm{flex:1;font-weight:700}
 .fightrow .w{color:var(--muted);font-size:12px}
 
-/* 토스트 */
-.toast{border-radius:12px;padding:12px 14px;font-weight:700;text-align:center;border:1px solid var(--line);background:var(--card2)}
+/* 토스트 — 화면 하단 고정 오버레이(레이아웃을 밀지 않음) */
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);
+  width:calc(100% - 32px);max-width:488px;z-index:60;
+  border-radius:12px;padding:12px 14px;font-weight:700;text-align:center;
+  border:1px solid var(--line);background:var(--card2);box-shadow:0 10px 34px rgba(0,0,0,.45)}
 .toast.ok{background:rgba(73,209,122,.14);border-color:var(--success);color:#c9f7d8}
 .toast.bad{background:rgba(255,93,108,.14);border-color:var(--danger);color:#ffd6da}
 .toast.info{background:rgba(79,172,254,.14);border-color:var(--info);color:#d3ecff}

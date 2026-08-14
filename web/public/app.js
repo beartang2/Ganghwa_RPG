@@ -16,7 +16,7 @@ async function api(pathName, method = 'GET', body) {
 }
 
 /* ---------- 무기 SVG (직업별 모양 + 등급별 장식 업그레이드) ---------- */
-function gradeTier(level) { return level >= 21 ? 4 : level >= 16 ? 3 : level >= 11 ? 2 : level >= 6 ? 1 : 0; }
+function gradeTier(level) { return level >= 80 ? 4 : level >= 60 ? 3 : level >= 40 ? 2 : level >= 20 ? 1 : 0; }
 function sparkle(x, y, c) { return `<path d="M${x} ${y - 3.2} L${x + 1.8} ${y} L${x} ${y + 3.2} L${x - 1.8} ${y} Z" fill="${c}"/>`; }
 function weaponSVG(cls, level, color) {
   const tier = gradeTier(level);
@@ -357,11 +357,19 @@ el('loginBtn').onclick = async () => {
 el('pin').addEventListener('keydown', e => { if (e.key === 'Enter') el('loginBtn').click(); });
 el('logoutBtn').onclick = () => { stopRaidLoop(); token = null; me = null; curRaid = null; localStorage.removeItem('token'); show('login'); };
 
-el('enhanceBtn').onclick = doEnhance;
-el('huntBtn').onclick = doHunt;
-el('mineBtn').onclick = doMine;
-el('attendBtn').onclick = doAttend;
-el('protectBtn').onclick = doProtect;
+// 버튼 연타 방지: 액션 사이 최소 간격
+const COOLDOWN = 450;
+let busy = false;
+async function act(fn) {
+  if (busy) return;
+  busy = true;
+  try { await fn(); } finally { setTimeout(() => { busy = false; }, COOLDOWN); }
+}
+el('enhanceBtn').onclick = () => act(doEnhance);
+el('huntBtn').onclick = () => act(doHunt);
+el('mineBtn').onclick = () => act(doMine);
+el('attendBtn').onclick = () => act(doAttend);
+el('protectBtn').onclick = () => act(doProtect);
 
 document.querySelectorAll('.tab').forEach(btn => {
   btn.onclick = () => {
@@ -371,14 +379,14 @@ document.querySelectorAll('.tab').forEach(btn => {
 });
 
 el('panel').addEventListener('click', e => {
-  const f = e.target.closest('[data-fight]'); if (f) return doFight(f.dataset.fight);
-  const r = e.target.closest('[data-raid]'); if (r) return doRaid(r.dataset.raid);
-  const j = e.target.closest('[data-join]'); if (j) return doPartyJoin(j.dataset.join);
-  const iv = e.target.closest('[data-invite]'); if (iv) return doInvite(iv.dataset.invite);
-  const ac = e.target.closest('[data-accept]'); if (ac) return doAccept(ac.dataset.accept);
-  const rj = e.target.closest('[data-reject]'); if (rj) return doReject(rj.dataset.reject);
-  if (e.target.closest('#createPartyBtn')) return doPartyCreate();
-  if (e.target.closest('#leavePartyBtn')) return doPartyLeave();
+  const f = e.target.closest('[data-fight]'); if (f) return act(() => doFight(f.dataset.fight));
+  const r = e.target.closest('[data-raid]'); if (r) return act(() => doRaid(r.dataset.raid));
+  const j = e.target.closest('[data-join]'); if (j) return act(() => doPartyJoin(j.dataset.join));
+  const iv = e.target.closest('[data-invite]'); if (iv) return act(() => doInvite(iv.dataset.invite));
+  const ac = e.target.closest('[data-accept]'); if (ac) return act(() => doAccept(ac.dataset.accept));
+  const rj = e.target.closest('[data-reject]'); if (rj) return act(() => doReject(rj.dataset.reject));
+  if (e.target.closest('#createPartyBtn')) return act(doPartyCreate);
+  if (e.target.closest('#leavePartyBtn')) return act(doPartyLeave);
   if (e.target.closest('#closeRaidBtn')) return closeRaid();
   const nm = e.target.closest('[data-nick]'); if (nm) return openProfile(nm.dataset.nick);
 });

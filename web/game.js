@@ -9,7 +9,7 @@ const crypto = require('crypto');
 
 const CONFIG = {
   dailyFights: 5, dailyHunts: 20, dailyRaids: 3,
-  maxLevel: 25, startGold: 1000, attendGold: 1000,
+  maxLevel: 99, startGold: 1000, attendGold: 1000,
   stealPct: 0.2, protectPrice: 3000,
   fightBreakChance: 0.10,    // 싸움 패배 시 무기 1단계 하락 확률(진 사람만, 확률적)
   dropProtectChance: 0.03, dropGoldChance: 0.07,
@@ -51,13 +51,14 @@ function memberStats(p) {
 
 /* ---------- 등급 / 무기 ---------- */
 const GRADES = [
-  { min: 21, name: '초월', emoji: '🌈', color: '#c471ed' },
-  { min: 16, name: '전설', emoji: '🟠', color: '#f7971e' },
-  { min: 11, name: '에픽', emoji: '🟣', color: '#a770ef' },
-  { min: 6,  name: '희귀', emoji: '🔵', color: '#4facfe' },
+  { min: 80, name: '초월', emoji: '🌈', color: '#c471ed' },
+  { min: 60, name: '전설', emoji: '🟠', color: '#f7971e' },
+  { min: 40, name: '에픽', emoji: '🟣', color: '#a770ef' },
+  { min: 20, name: '희귀', emoji: '🔵', color: '#4facfe' },
   { min: 0,  name: '일반', emoji: '⚪', color: '#9aa0b0' },
 ];
 function grade(level) { for (const g of GRADES) { if (level >= g.min) return g; } return GRADES[GRADES.length - 1]; }
+function bandFloor(level) { return level >= 80 ? 80 : level >= 60 ? 60 : level >= 40 ? 40 : level >= 20 ? 20 : 0; }
 function weaponName(level, cls) {
   const g = grade(level);
   const base = (CLASSES[cls] || CLASSES.warrior).weapon;
@@ -67,47 +68,49 @@ function weaponName(level, cls) {
 /* ---------- 강화 확률 / 비용 ---------- */
 function odds(level) {
   let s, d;
-  if (level <= 4)       { s = 0.95;  d = 0.00; }
-  else if (level <= 9)  { s = 0.85;  d = 0.02; }
-  else if (level <= 14) { s = 0.72;  d = 0.04; }
-  else if (level <= 19) { s = 0.58;  d = 0.06; }
-  else                  { s = 0.445; d = 0.09; }
+  if (level <= 19)      { s = 0.96; d = 0.005; } // 일반
+  else if (level <= 39) { s = 0.90; d = 0.015; } // 희귀
+  else if (level <= 59) { s = 0.80; d = 0.03; }  // 에픽
+  else if (level <= 79) { s = 0.68; d = 0.04; }  // 전설
+  else                  { s = 0.55; d = 0.06; }  // 초월
   return { success: s, destroy: d, fail: 1 - s - d };
 }
 function enhanceCost(level) { return 20 + level * 10; }
 function successGain(level) {
-  if (level < 10) { const r = Math.random(); if (r < 0.60) return 1; if (r < 0.90) return 2; return 3; }
+  if (level < 20) { const r = Math.random(); if (r < 0.60) return 1; if (r < 0.90) return 2; return 3; }
   return 1;
 }
 
 /* ---------- 몬스터 (사냥) ----------
- * tier: 등급(0~7). 무기 강화 수치가 높을수록 높은 tier(희귀·강한) 몬스터가
- * 점점 자주 출몰한다. 희귀할수록 체력·골드효율(gpp)·드랍이 높다. */
-const MONSTERS = [
-  { name: '들쥐',     emoji: '🐀', hp: 20,  gpp: 1.0, tier: 0, rarity: '일반' },
-  { name: '슬라임',   emoji: '🟩', hp: 40,  gpp: 1.2, tier: 1, rarity: '일반' },
-  { name: '멧돼지',   emoji: '🐗', hp: 70,  gpp: 1.5, tier: 2, rarity: '일반' },
-  { name: '늑대',     emoji: '🐺', hp: 110, gpp: 1.9, tier: 3, rarity: '희귀' },
-  { name: '오크전사', emoji: '👹', hp: 155, gpp: 2.4, tier: 4, rarity: '희귀' },
-  { name: '스톤골렘', emoji: '🗿', hp: 205, gpp: 3.0, tier: 5, rarity: '에픽' },
-  { name: '와이번',   emoji: '🐉', hp: 260, gpp: 3.8, tier: 6, rarity: '에픽' },
-  { name: '고대괴수', emoji: '🦖', hp: 320, gpp: 4.8, tier: 7, rarity: '전설' },
+ * 희귀도(일반~신화)가 난이도를 결정한다. 몬스터 체력은 내 레벨(=예상 데미지)에
+ * 비례하므로, 무기 강화 수치와 무관하게 "희귀할수록 어렵다"가 유지된다.
+ * 무기가 강해질수록 희귀 몬스터가 점점 자주 출몰한다. */
+const RARITIES = [
+  { name: '일반', hpMult: 0.55, gpp: 1.2, mons: [['🐀', '들쥐'], ['🟩', '슬라임'], ['🦇', '박쥐']] },
+  { name: '희귀', hpMult: 1.00, gpp: 1.8, mons: [['🐺', '늑대'], ['🐗', '멧돼지'], ['👹', '오크']] },
+  { name: '에픽', hpMult: 1.35, gpp: 2.6, mons: [['🗿', '골렘'], ['🧌', '트롤'], ['🐂', '미노타우로스']] },
+  { name: '전설', hpMult: 1.80, gpp: 3.6, mons: [['🐉', '와이번'], ['🐍', '히드라']] },
+  { name: '신화', hpMult: 2.35, gpp: 5.0, mons: [['🦖', '고대괴수'], ['🐲', '마룡']] },
 ];
-const MAXTIER = 7;
 function huntDamage(level) { return randInt(10, 30) + level * 8; }
-// 무기 단계에 따라 몬스터를 가중 추첨 (레벨↑ → 높은 tier 출몰 확률↑, 약한 몬스터는 희박)
+// 무기 강화 수치에 따라 희귀도를 가중 추첨 (레벨↑ → 희귀 몬스터 출몰↑)
 function huntSpawn(level) {
-  const et = level * MAXTIER / CONFIG.maxLevel; // 기대 tier
-  const w = MONSTERS.map(m => {
-    let x = Math.max(0.03, 1 - Math.abs(m.tier - et) * 0.5);
-    if (m.tier < et - 2) x *= 0.12;  // 너무 약한 몬스터는 고레벨에서 거의 안 나옴
-    if (m.tier > et + 1) x *= 0.5;   // 아주 높은 tier는 희귀하게 등장
+  const nr = RARITIES.length;
+  const et = level / CONFIG.maxLevel * (nr - 1); // 기대 희귀도 인덱스
+  const w = RARITIES.map((r, i) => {
+    let x = Math.max(0.03, 1 - Math.abs(i - et) * 0.7);
+    if (i < et - 1.5) x *= 0.15;  // 너무 낮은 등급은 고레벨에서 희박
+    if (i > et + 1) x *= 0.5;     // 아주 높은 등급은 희귀하게 등장
     return x;
   });
   const total = w.reduce((a, b) => a + b, 0);
-  let r = Math.random() * total;
-  for (let i = 0; i < MONSTERS.length; i++) { r -= w[i]; if (r <= 0) return MONSTERS[i]; }
-  return MONSTERS[MONSTERS.length - 1];
+  let r = Math.random() * total, ri = nr - 1;
+  for (let i = 0; i < nr; i++) { r -= w[i]; if (r <= 0) { ri = i; break; } }
+  const R = RARITIES[ri];
+  const m = R.mons[randInt(0, R.mons.length - 1)];
+  const base = 20 + level * 8; // 대략적인 기대 데미지
+  const hp = Math.max(10, Math.round(base * R.hpMult * (0.85 + Math.random() * 0.3)));
+  return { emoji: m[0], name: m[1], rarity: R.name, tier: ri, gpp: R.gpp, hp };
 }
 
 /* ---------- 보스 (레이드) ---------- */
@@ -245,11 +248,13 @@ function enhance(db, id) {
       p.protects--; result = 'protected'; msg = '🛡️ 파괴 방지 발동! +' + before + ' 유지 (남은 방지권 ' + p.protects + ')';
       addLog(db, '🛡️ ' + p.nick + ' +' + before + ' 파괴방지');
     } else {
-      p.level = 0; p.breaks++;
+      const floor = bandFloor(before);
+      p.level = floor; p.breaks++;
       if (p.destroyDay !== today()) { p.destroyDay = today(); p.destroysToday = 0; }
       p.destroysToday++;
-      result = 'destroy'; msg = '💥 파괴!! +' + before + ' 무기가 산산조각... 처음부터 다시!';
-      addLog(db, '💥 ' + p.nick + ' +' + before + '→0 파괴');
+      result = 'destroy';
+      msg = '💥 파괴!! +' + before + ' → +' + floor + (floor === 0 ? ' 처음부터 다시!' : ' (등급 바닥까지 하락)');
+      addLog(db, '💥 ' + p.nick + ' +' + before + '→+' + floor + ' 파괴');
     }
   } else {
     if (p.level >= 10) { p.level--; result = 'down'; msg = '❌ 실패... +' + before + ' → +' + p.level + ' (하락)'; }
@@ -525,7 +530,7 @@ function recentLog(db) { return db.log.slice(-20).reverse(); }
 function playerList(db) { return Object.values(db.players).filter(p => p.class).map(p => p.nick).sort(); }
 
 module.exports = {
-  CONFIG, GRADES, MONSTERS, CLASSES, BOSSES, odds, enhanceCost, weaponName, grade,
+  CONFIG, GRADES, RARITIES, CLASSES, BOSSES, odds, enhanceCost, weaponName, grade,
   login, setClass, rename, publicView, enhance, attend, mine, hunt, buyProtect, fight,
   partyCreate, partyJoin, partyLeave, partyList, partyView, raidStart,
   partyInvite, partyAccept, partyReject, myInvites, raidState,
