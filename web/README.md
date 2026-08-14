@@ -55,6 +55,96 @@
 > ⚠️ 참고: 브라우저 특성상 **API 엔드포인트 주소 자체는 네트워크 탭에 노출**됩니다(숨김 불가).
 > 그래서 방어는 "클라 숨김"이 아니라 **서버 검증·속도제한·한도**로 합니다. 위 조치들이 그 역할을 합니다.
 
+## 부하 관련 설계 메모
+
+유저가 늘 때 제곱으로 커지던 지점들을 정리해둔 상태입니다.
+
+| 항목 | 예전 | 지금 |
+| --- | --- | --- |
+| SSE `refresh` | 액션마다 전원에게 → `접속자 × 액션수` 만큼 `/api/me` 재요청 | 남의 화면이 바뀌는 액션만, 최대 1초에 1회로 코얼레싱 |
+| 공개 조회(`/api/rank` 등) | 호출마다 전체 정렬 `O(P log P)`, 인증·속도제한 없음 | 2초 TTL 캐시 → 접속자 수와 무관하게 상수 |
+| `enhanceRank` | `/api/me` 마다 전체 정렬 | 캐시 + 레벨 변동 시 무효화 (2초 TTL 백스톱) |
+| `persist()` | 액션마다 전체 플레이어 upsert, parties·logs 전체 삭제 후 재삽입 | 직렬화 결과 비교 후 **바뀐 행만** 쓰기. 로그는 append-only + 주기적 프루닝 |
+| `findByNick` | 싸움·초대마다 `O(P)` 선형 탐색 | `nick → id` Map 인덱스 |
+| 세션 / 속도제한 버킷 | 만료 없이 무한 증가 | 7일 TTL, 10분마다 정리 |
+
+쓰기 증폭이 실제로 잡혔는지 확인하려면:
+
+```bash
+PERSIST_DEBUG=1 node server.js
+# [persist] rows=3 players=3   ← 사냥 1회 = 플레이어 1행 + 일일 1행 + 로그 1행
+# [persist] rows=1 players=3   ← 채굴 1회 = 플레이어 1행
+# [persist] rows=0 players=3   ← 변경 없음 = 쓰기 없음
+```
+
+> 골드 랭킹처럼 본인만 바뀌는 액션의 결과는 최대 2초(캐시) + 클라 5초 폴링만큼 늦게 보입니다.
+> 즉시 반영이 필요하면 해당 액션을 `server.js` 의 `SHARED_ACTIONS` 에 추가하세요.
+
+## 유저별 일일 한도 · 사용량 관리 (DB)
+
+일일 카운터와 상한은 `players.data` JSON 안이 아니라 **전용 테이블**로 분리되어 있어
+SQL로 직접 조회·수정할 수 있습니다.
+
+| 테이블 | 내용 |
+| --- | --- |
+| `player_daily(player_id, day, hunts_used, fights_used, raids_used, destroys, attended)` | 유저×날짜 사용량. 날짜별 이력이 계속 쌓임 |
+| `player_limits(player_id, daily_hunts, daily_fights, daily_raids, note, updated_at)` | 유저별 상한 오버라이드. `NULL` = `CONFIG` 기본값 사용 |
+
+기본 상한은 `game.js` 의 `CONFIG.dailyHunts / dailyFights / dailyRaids`,
+유저별 예외만 `player_limits` 에 넣습니다. 일일 리셋은 크론 없이
+`day` 값이 오늘과 다르면 자동으로 초기화되는 방식입니다.
+
+> 최초 실행 시 기존 `players.data` 안의 카운터를 `player_daily` 로 한 번 옮기고
+> `game.db.premigrate-<타임스탬프>.bak` 백업을 남깁니다. 이후엔 재실행돼도 다시 마이그레이션하지 않습니다.
+
+### 조회 (SQL)
+
+```sql
+-- 오늘 누가 얼마나 썼나
+SELECT p.nick, d.hunts_used, d.fights_used, d.raids_used, d.destroys
+  FROM player_daily d JOIN players p ON p.id = d.player_id
+ WHERE d.day = date('now','localtime')
+ ORDER BY d.hunts_used DESC;
+
+-- 최근 7일 사냥 추이
+SELECT day, sum(hunts_used) AS hunts, count(*) AS active_users
+  FROM player_daily GROUP BY day ORDER BY day DESC LIMIT 7;
+```
+
+### 관리자 API
+
+`ADMIN_TOKEN` 환경변수를 준 채로 서버를 띄우면 활성화됩니다. **설정하지 않으면 관리자 API는 완전히 닫힙니다.**
+
+```bash
+ADMIN_TOKEN=원하는긴토큰 node server.js
+```
+
+| 메서드 | 경로 | 설명 |
+| --- | --- | --- |
+| `GET` | `/api/admin/limits` | 상한 오버라이드 목록 + 기본값 |
+| `POST` | `/api/admin/limits` | `{nick, dailyHunts?, dailyFights?, dailyRaids?, note?}` — 값이 `null`이면 해제 |
+| `GET` | `/api/admin/daily?day=YYYY-MM-DD` | 해당 날짜 사용량 (기본: 오늘) |
+| `POST` | `/api/admin/daily` | `{nick, hunts?, fights?, raids?}` — 오늘 사용량 강제 설정 |
+| `POST` | `/api/admin/reload` | DB를 SQL로 직접 고친 뒤 메모리에 다시 읽어들이기 |
+
+```bash
+# 특정 유저만 사냥 50회 / 레이드 9회
+curl -H "x-admin-token: $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+     -X POST http://localhost:3088/api/admin/limits \
+     -d '{"nick":"다히","dailyHunts":50,"dailyRaids":9,"note":"이벤트 보상"}'
+
+# 오늘 사냥 횟수만 리셋
+curl -H "x-admin-token: $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+     -X POST http://localhost:3088/api/admin/daily -d '{"nick":"다히","hunts":0}'
+
+# 상한 해제(기본값 복귀)
+curl -H "x-admin-token: $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+     -X POST http://localhost:3088/api/admin/limits -d '{"nick":"다히","dailyHunts":null,"dailyRaids":null}'
+```
+
+> 서버는 상한을 메모리에 캐시합니다. `sqlite3` 로 `player_limits` 를 직접 고쳤다면
+> `POST /api/admin/reload` 를 호출하거나 서버를 재시작해야 반영됩니다.
+
 ## 명령/기능
 
 | 기능 | 설명 |

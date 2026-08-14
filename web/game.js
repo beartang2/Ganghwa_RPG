@@ -43,9 +43,30 @@ const CONFIG = {
 
 /* ---------- 유틸 ---------- */
 function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
-function today() { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
+function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+// 'YYYY-MM-DD' (제로패딩 — player_daily.day 의 정렬/범위조회 키로도 쓰인다)
+function today() { const d = new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+// 구버전 비패딩 날짜('2026-8-1')를 패딩 형식으로 보정
+function normalizeDay(s) {
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(s || ''));
+  return m ? m[1] + '-' + pad2(+m[2]) + '-' + pad2(+m[3]) : String(s || '');
+}
 function pinKey(pin) { return crypto.createHash('sha256').update('pin:' + pin).digest('hex'); }
-function findByNick(db, nick) { for (const k in db.players) { if (db.players[k].nick === nick) return k; } return null; }
+/* nick → accountId 인덱스. 매 싸움/초대마다 전체 스캔하지 않도록 캐시한다.
+ * db 에 붙는 `_` 접두 필드는 파생 데이터라 영속화되지 않는다. */
+function nickIndex(db) {
+  if (!db._nickIdx) {
+    db._nickIdx = new Map();
+    for (const k in db.players) db._nickIdx.set(db.players[k].nick, k);
+  }
+  return db._nickIdx;
+}
+function indexNick(db, nick, id) { nickIndex(db).set(nick, id); }
+function unindexNick(db, nick) { if (db._nickIdx) db._nickIdx.delete(nick); }
+function findByNick(db, nick) {
+  const id = nickIndex(db).get(nick);
+  return id && db.players[id] && db.players[id].nick === nick ? id : null;
+}
 
 /* ---------- 직업 ---------- */
 const CLASSES = {
@@ -224,17 +245,74 @@ function norm(p) {
   if (p.lastStamina == null) p.lastStamina = Date.now();
   if (p.mineLevel == null) p.mineLevel = 1;
   if (p.mineXp == null) p.mineXp = 0;
+  if (p._lim === undefined) p._lim = null; // player_limits 오버라이드 (없으면 CONFIG 기본값)
   return p;
 }
+
 // 채굴장(능동): 기력 회복 계산 + 채굴 레벨 진행
 function currentStamina(p) {
   const regen = (Date.now() - (p.lastStamina || Date.now())) / 60000 * CONFIG.staminaRegenPerMin;
   return Math.min(CONFIG.staminaMax, (p.stamina || 0) + regen);
 }
 function mineXpNext(level) { return 50 + level * 45; }
-function fightsLeft(p) { return p.fightDay !== today() ? CONFIG.dailyFights : Math.max(0, CONFIG.dailyFights - p.fightsUsed); }
-function huntsLeft(p) { return p.huntDay !== today() ? CONFIG.dailyHunts : Math.max(0, CONFIG.dailyHunts - p.huntsUsed); }
-function raidsLeft(p) { return p.raidDay !== today() ? CONFIG.dailyRaids : Math.max(0, CONFIG.dailyRaids - p.raidsUsed); }
+
+/* ---------- 유저별 일일 상한 ----------
+ * 기본값은 CONFIG, 유저별 예외는 player_limits 테이블 → p._lim 으로 주입된다.
+ * p._lim 은 파생 데이터라 players.data JSON 에는 저장하지 않는다. */
+const LIMIT_KEYS = ['dailyFights', 'dailyHunts', 'dailyRaids'];
+function limitOf(p, key) {
+  const v = p && p._lim ? p._lim[key] : null;
+  return v == null ? CONFIG[key] : v;
+}
+// patch 의 값이 null/'' 이면 해당 상한 해제(=CONFIG 기본값으로 복귀). 적용된 오버라이드를 반환.
+function setLimits(p, patch) {
+  const lim = Object.assign({}, p._lim || {});
+  for (const k of LIMIT_KEYS) {
+    if (!(k in patch)) continue;
+    const v = patch[k];
+    if (v == null || v === '') { delete lim[k]; continue; }
+    const n = parseInt(v, 10);
+    if (isNaN(n) || n < 0) return { ok: false, error: k + ' 은(는) 0 이상의 정수여야 합니다.' };
+    lim[k] = n;
+  }
+  p._lim = Object.keys(lim).length ? lim : null;
+  return { ok: true, limits: p._lim };
+}
+
+/* ---------- 일일 카운터 ----------
+ * 저장 계층이 player_daily 테이블로 분리 영속화한다. players.data JSON 에는 넣지 않는다. */
+const DAILY_FIELDS = ['fightDay', 'fightsUsed', 'huntDay', 'huntsUsed', 'raidDay', 'raidsUsed', 'attendDay', 'destroyDay', 'destroysToday'];
+// 메모리 플레이어 → 오늘자 사용량 (날짜가 어제면 0 으로 떨어뜨린다)
+function dailyUsage(p) {
+  const t = today();
+  return {
+    hunts:    p.huntDay    === t ? (p.huntsUsed     || 0) : 0,
+    fights:   p.fightDay   === t ? (p.fightsUsed    || 0) : 0,
+    raids:    p.raidDay    === t ? (p.raidsUsed     || 0) : 0,
+    destroys: p.destroyDay === t ? (p.destroysToday || 0) : 0,
+    attended: p.attendDay  === t ? 1 : 0,
+  };
+}
+// player_daily 오늘자 행 → 메모리 플레이어 (행이 없으면 전부 리셋 상태)
+function applyDaily(p, row) {
+  const t = today();
+  p.huntDay = ''; p.huntsUsed = 0;
+  p.fightDay = ''; p.fightsUsed = 0;
+  p.raidDay = ''; p.raidsUsed = 0;
+  p.destroyDay = ''; p.destroysToday = 0;
+  p.attendDay = '';
+  if (!row) return p;
+  if (row.hunts_used > 0) { p.huntDay = t; p.huntsUsed = row.hunts_used; }
+  if (row.fights_used > 0) { p.fightDay = t; p.fightsUsed = row.fights_used; }
+  if (row.raids_used > 0) { p.raidDay = t; p.raidsUsed = row.raids_used; }
+  if (row.destroys > 0) { p.destroyDay = t; p.destroysToday = row.destroys; }
+  if (row.attended) p.attendDay = t;
+  return p;
+}
+
+function fightsLeft(p) { const L = limitOf(p, 'dailyFights'); return p.fightDay !== today() ? L : Math.max(0, L - p.fightsUsed); }
+function huntsLeft(p) { const L = limitOf(p, 'dailyHunts'); return p.huntDay !== today() ? L : Math.max(0, L - p.huntsUsed); }
+function raidsLeft(p) { const L = limitOf(p, 'dailyRaids'); return p.raidDay !== today() ? L : Math.max(0, L - p.raidsUsed); }
 function winRate(p) { const t = p.wins + p.losses; return t === 0 ? null : Math.round(p.wins / t * 100); }
 function pendingMine(p) { return Math.min(CONFIG.mineCap, Math.floor((Date.now() - p.lastMine) / 60000 * CONFIG.mineRate)); }
 
@@ -262,9 +340,10 @@ function publicView(db, id) {
     maxLevel: CONFIG.maxLevel,
     nextCost: p.level >= CONFIG.maxLevel ? null : enhanceCost(p.level),
     odds: od, enhanceBoost: p.enhanceBoost || 0, pity: p.pity || 0, nickColor: p.nickColor || null,
-    huntsLeft: huntsLeft(p), dailyHunts: CONFIG.dailyHunts,
-    fightsLeft: fightsLeft(p), dailyFights: CONFIG.dailyFights,
-    raidsLeft: raidsLeft(p), dailyRaids: CONFIG.dailyRaids,
+    huntsLeft: huntsLeft(p), dailyHunts: limitOf(p, 'dailyHunts'),
+    fightsLeft: fightsLeft(p), dailyFights: limitOf(p, 'dailyFights'),
+    raidsLeft: raidsLeft(p), dailyRaids: limitOf(p, 'dailyRaids'),
+    limitOverride: p._lim || null,
     mine: pendingMine(p), mineCap: CONFIG.mineCap,
     stamina: Math.floor(currentStamina(p)), staminaMax: CONFIG.staminaMax,
     mineLevel: p.mineLevel, mineXp: p.mineXp, mineXpNext: mineXpNext(p.mineLevel),
@@ -274,12 +353,25 @@ function publicView(db, id) {
   };
 }
 
-function addLog(db, text) { db.log.push({ t: Date.now(), text }); if (db.log.length > 60) db.log.shift(); }
+// n = 단조 증가 시퀀스. 저장 계층이 '아직 기록하지 않은 로그'만 append 하는 데 쓴다.
+function addLog(db, text) {
+  db.logSeq = (db.logSeq || 0) + 1;
+  db.log.push({ t: Date.now(), n: db.logSeq, text });
+  if (db.log.length > 60) db.log.shift();
+}
+
+/* 강화 랭킹은 /api/me 마다 호출된다 — 매번 전체 정렬하면 O(P log P) × 요청수.
+ * 결과를 캐시하고, 레벨이 바뀌는 지점에서만 무효화한다(TTL 은 누락 대비 백스톱). */
+const RANK_TTL = 2000;
+function bumpRank(db) { db._rank = null; }
 function enhanceRank(db, id) {
-  const arr = Object.keys(db.players).map(k => ({ k, lv: db.players[k].level, best: db.players[k].best }));
-  arr.sort((a, b) => b.lv - a.lv || b.best - a.best);
-  const i = arr.findIndex(x => x.k === id);
-  return { rank: i < 0 ? null : i + 1, total: arr.length };
+  let c = db._rank;
+  if (!c || Date.now() - c.t > RANK_TTL) {
+    const ks = Object.keys(db.players);
+    ks.sort((a, b) => db.players[b].level - db.players[a].level || db.players[b].best - db.players[a].best);
+    c = db._rank = { t: Date.now(), map: new Map(ks.map((k, i) => [k, i + 1])) };
+  }
+  return { rank: c.map.get(id) || null, total: c.map.size };
 }
 
 /* ---------- 인증 / 계정 ---------- */
@@ -298,6 +390,8 @@ function login(db, nick, pin) {
   // 신규: 닉네임 중복 방지
   if (findByNick(db, nick)) return { ok: false, error: '이미 사용 중인 닉네임이에요. 다른 닉네임을 쓰세요.' };
   db.players[key] = makePlayer(nick);
+  indexNick(db, nick, key);
+  bumpRank(db); // 총원 변동
   return { ok: true, id: key, isNew: true, needClass: true };
 }
 function setClass(db, id, cls) {
@@ -320,6 +414,7 @@ function rename(db, id, newNick) {
   if (other && other !== id) return { ok: false, error: '이미 사용 중인 닉네임이에요.' };
   const old = p.nick;
   p.nick = newNick;
+  unindexNick(db, old); indexNick(db, newNick, id);
   addLog(db, '✏️ ' + old + ' → ' + newNick + ' 닉네임 변경');
   return { ok: true, msg: '닉네임을 ' + newNick + '(으)로 변경했어요.' };
 }
@@ -340,6 +435,7 @@ function enhance(db, id) {
     p.level = Math.min(CONFIG.maxLevel, before + gain);
     if (p.level > p.best) p.best = p.level;
     p.pity = 0;
+    bumpRank(db);
     addLog(db, '🔨 ' + p.nick + ' 장인의 기운 확정성공 +' + before + '→+' + p.level);
     return { ok: true, result: 'success', guaranteed: true, cost, boosted: false, boostLeft: p.enhanceBoost, pity: 0, msg: '🔨 장인의 기운 100%! 확정 성공!  +' + before + ' → +' + p.level };
   }
@@ -360,6 +456,7 @@ function enhance(db, id) {
     p.level = Math.min(CONFIG.maxLevel, before + gain);
     if (p.level > p.best) p.best = p.level;
     p.pity = 0;
+    bumpRank(db);
     result = 'success';
     msg = (gain > 1 ? '💫 대성공! +' + gain + '  ' : '강화 성공! ') + '+' + before + ' → +' + p.level;
     addLog(db, '✅ ' + p.nick + ' +' + before + '→+' + p.level + (gain > 1 ? ' (+' + gain + ')' : ''));
@@ -371,6 +468,7 @@ function enhance(db, id) {
       addLog(db, '🛡️ ' + p.nick + ' +' + before + ' 파괴방지');
     } else {
       p.level = 0; p.breaks++; p.pity = 0; // 파괴 = 완전 초기화(+0) · 장인의 기운 초기화
+      bumpRank(db);                         // 레벨이 바뀌었으니 랭킹 캐시 무효화
       const newElem = randomElementKey(); p.element = newElem; // 속성 재부여
       if (p.destroyDay !== today()) { p.destroyDay = today(); p.destroysToday = 0; }
       p.destroysToday++;
@@ -443,7 +541,7 @@ function hunt(db, id) {
   const p = norm(db.players[id]);
   if (p.huntDay !== today()) { p.huntDay = today(); p.huntsUsed = 0; }
   // 일일 사냥(20회)은 풀보상 + 희귀 드랍. 소진 후엔 '무한 사냥'(보상 축소·드랍 없음)으로 계속 가능
-  const overtime = p.huntsUsed >= CONFIG.dailyHunts;
+  const overtime = p.huntsUsed >= limitOf(p, 'dailyHunts');
   p.huntsUsed++;
   const m = huntSpawn(p.level);
   let dmg = huntDamage(p.level);
@@ -505,7 +603,7 @@ function fight(db, id, targetNick) {
   const atk = norm(db.players[id]);
   const def = norm(db.players[targetId]);
   if (atk.fightDay !== today()) { atk.fightDay = today(); atk.fightsUsed = 0; }
-  if (atk.fightsUsed >= CONFIG.dailyFights) return { ok: false, error: '오늘 싸움 횟수를 다 썼어요!' };
+  if (atk.fightsUsed >= limitOf(atk, 'dailyFights')) return { ok: false, error: '오늘 싸움 횟수를 다 썼어요!' };
   atk.fightsUsed++;
   let pWin = 0.5 + (atk.level - def.level) * 0.05;
   pWin = Math.max(0.1, Math.min(0.9, pWin));
@@ -518,6 +616,7 @@ function fight(db, id, targetNick) {
   let broke = null;
   if (loseP.level > 0 && Math.random() < CONFIG.fightBreakChance) {
     const b = loseP.level; loseP.level--; broke = { who: loser, from: b, to: loseP.level };
+    bumpRank(db);
     addLog(db, '💢 ' + loser + ' 무기 손상 +' + b + '→+' + loseP.level);
   }
   addLog(db, '⚔️ ' + winner + ' 승 vs ' + loser + ' (' + steal + 'G 약탈)');
@@ -728,4 +827,6 @@ module.exports = {
   partyInvite, partyAccept, partyReject, myInvites, raidState,
   buyBoost, buyDye, buyClassChange, shopItems,
   profile, ranking, goldRanking, hogu, recentLog, playerList, findByNick,
+  // 저장 계층(server.js)용 — 일일 카운터 / 유저별 상한
+  today, normalizeDay, LIMIT_KEYS, DAILY_FIELDS, limitOf, setLimits, dailyUsage, applyDaily, norm,
 };

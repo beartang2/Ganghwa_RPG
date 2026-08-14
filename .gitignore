@@ -16,6 +16,7 @@ web/data.json
 web/game.db
 web/game.db-wal
 web/game.db-shm
+web/game.db.premigrate-*.bak
 
 # 빌드 산출물(난독화) - npm run build 로 로컬 생성
 web/public/app.min.js
