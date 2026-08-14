@@ -1,0 +1,10 @@
+# Vercel 배포에서 제외 — 상시서버(SQLite)는 서버리스에서 실행 불가.
+# 이게 없으면 Vercel 이 server.js 의 server.listen() 을 'Node 서버'로 감지해
+# 통째로 실행 → SQLite 파일 열기 실패(SQLITE_CANTOPEN)로 전 요청이 크래시.
+# 서버리스는 api/ 함수 + public/ 정적만 쓴다. game.js/public 은 함수가 참조하므로 유지.
+server.js
+db/
+game.db
+game.db-wal
+game.db-shm
+game.db.premigrate-*.bak
