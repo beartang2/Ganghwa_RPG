@@ -22,6 +22,9 @@ const CONFIG = {
   boostPrice: 8000,
   classChangePrice: 30000,
   dyePrice: 2000,
+  // 강화(로스트아크식)
+  destroyDrop: 6,       // 파괴 시 하락 칸수(등급 바닥 밑으론 안 내려감)
+  pityMinGain: 0.05,    // 장인의 기운 최소 상승폭(실패당) — 저확률에서도 결국 참
 };
 
 /* ---------- 유틸 ---------- */
@@ -113,15 +116,28 @@ function weaponName(level, cls) {
 }
 
 /* ---------- 강화 확률 / 비용 ---------- */
-function odds(level) {
-  let s, d;
-  if (level <= 15)      { s = 0.97; d = 0.004; } // 일반
-  else if (level <= 25) { s = 0.93; d = 0.008; } // 희귀
-  else if (level <= 49) { s = 0.85; d = 0.018; } // 에픽
-  else if (level <= 69) { s = 0.72; d = 0.03; }  // 전설
-  else                  { s = 0.60; d = 0.05; }  // 초월
-  return { success: s, destroy: d, fail: 1 - s - d };
+// 로스트아크식: 성공률은 초반 높고 매끄럽게 급감(초월 0.n~0.0n%),
+// 파괴는 낮고 산 모양(전설 근처 피크→초월 완화), 나머지는 전부 실패.
+const SUCC_ANCHORS = [[0, .97], [15, .90], [25, .62], [40, .20], [50, .08], [60, .03], [70, .012], [85, .004], [99, .0015]];
+const DESTROY_ANCHORS = [[15, 0], [30, .005], [50, .012], [60, .015], [70, .010], [85, .005], [99, .003]];
+function interpAnchor(A, L, log) {
+  if (L <= A[0][0]) return A[0][1];
+  for (let i = 1; i < A.length; i++) {
+    if (L <= A[i][0]) {
+      const [l0, v0] = A[i - 1], [l1, v1] = A[i], t = (L - l0) / (l1 - l0);
+      return log ? v0 * Math.pow(v1 / v0, t) : v0 + (v1 - v0) * t;
+    }
+  }
+  return A[A.length - 1][1];
 }
+function successRate(level) { return interpAnchor(SUCC_ANCHORS, level, true); }
+function destroyRate(level) { return level <= 15 ? 0 : interpAnchor(DESTROY_ANCHORS, level, false); }
+function odds(level) {
+  const s = successRate(level), d = destroyRate(level);
+  return { success: s, destroy: d, fail: Math.max(0, 1 - s - d) };
+}
+// 장인의 기운 상승폭(실패당): 저확률에서도 결국 100% 도달하도록 최소치 보장
+function pityGain(success) { return Math.max(CONFIG.pityMinGain, success * 2.15); }
 function enhanceCost(level) { return 20 + level * 10; }
 function successGain(level) {
   if (level < 20) { const r = Math.random(); if (r < 0.60) return 1; if (r < 0.90) return 2; return 3; }
@@ -174,7 +190,7 @@ function makePlayer(nick) {
   return {
     nick, class: null, element: null, nickColor: null,
     level: 0, best: 0, breaks: 0, wins: 0, losses: 0,
-    gold: CONFIG.startGold, protects: 0, enhanceBoost: 0,
+    gold: CONFIG.startGold, protects: 0, enhanceBoost: 0, pity: 0,
     fightDay: '', fightsUsed: 0, huntDay: '', huntsUsed: 0, raidDay: '', raidsUsed: 0,
     attendDay: '', destroyDay: '', destroysToday: 0,
     lastMine: Date.now(), party: null, created: today(),
@@ -189,6 +205,7 @@ function norm(p) {
   if (!p.element && p.class) p.element = randomElementKey(); // 기존 데이터 보정
   if (p.enhanceBoost == null) p.enhanceBoost = 0;
   if (p.nickColor === undefined) p.nickColor = null;
+  if (p.pity == null) p.pity = 0;
   return p;
 }
 function fightsLeft(p) { return p.fightDay !== today() ? CONFIG.dailyFights : Math.max(0, CONFIG.dailyFights - p.fightsUsed); }
@@ -220,7 +237,7 @@ function publicView(db, id) {
     element: p.element, elementName: em.name, elementEmoji: em.emoji, elementColor: em.color,
     maxLevel: CONFIG.maxLevel,
     nextCost: p.level >= CONFIG.maxLevel ? null : enhanceCost(p.level),
-    odds: od, enhanceBoost: p.enhanceBoost || 0, nickColor: p.nickColor || null,
+    odds: od, enhanceBoost: p.enhanceBoost || 0, pity: p.pity || 0, nickColor: p.nickColor || null,
     huntsLeft: huntsLeft(p), dailyHunts: CONFIG.dailyHunts,
     fightsLeft: fightsLeft(p), dailyFights: CONFIG.dailyFights,
     raidsLeft: raidsLeft(p), dailyRaids: CONFIG.dailyRaids,
@@ -289,44 +306,61 @@ function enhance(db, id) {
   if (p.gold < cost) return { ok: false, error: '골드 부족! (필요 ' + cost + ' / 보유 ' + p.gold + ')' };
   p.gold -= cost;
   const before = p.level;
-  let o = odds(before);
-  let boosted = false;
-  if (p.enhanceBoost > 0) { // 강화 부스트권 적용
-    const s = Math.min(0.97, o.success + CONFIG.boostAmount);
-    o = { success: s, destroy: o.destroy, fail: Math.max(0, 1 - s - o.destroy) };
+  const base = odds(before);
+
+  // 장인의 기운 100% → 확정 성공 (부스트·확률 무시, 소모 없음)
+  if (p.pity >= 1) {
+    const gain = successGain(before);
+    p.level = Math.min(CONFIG.maxLevel, before + gain);
+    if (p.level > p.best) p.best = p.level;
+    p.pity = 0;
+    addLog(db, '🔨 ' + p.nick + ' 장인의 기운 확정성공 +' + before + '→+' + p.level);
+    return { ok: true, result: 'success', guaranteed: true, cost, boosted: false, boostLeft: p.enhanceBoost, pity: 0, msg: '🔨 장인의 기운 100%! 확정 성공!  +' + before + ' → +' + p.level };
+  }
+
+  // 강화 부스트권(성공률 +)
+  let o = base, boosted = false;
+  if (p.enhanceBoost > 0) {
+    const s = Math.min(0.97, base.success + CONFIG.boostAmount);
+    o = { success: s, destroy: base.destroy, fail: Math.max(0, 1 - s - base.destroy) };
     p.enhanceBoost--;
     boosted = true;
   }
+
   const r = Math.random();
   let result, msg;
   if (r < o.success) {
     const gain = successGain(before);
     p.level = Math.min(CONFIG.maxLevel, before + gain);
     if (p.level > p.best) p.best = p.level;
+    p.pity = 0;
     result = 'success';
     msg = (gain > 1 ? '💫 대성공! +' + gain + '  ' : '강화 성공! ') + '+' + before + ' → +' + p.level;
     addLog(db, '✅ ' + p.nick + ' +' + before + '→+' + p.level + (gain > 1 ? ' (+' + gain + ')' : ''));
   } else if (r < o.success + o.destroy) {
     if (p.protects > 0) {
-      p.protects--; result = 'protected'; msg = '🛡️ 파괴 방지 발동! +' + before + ' 유지 (남은 방지권 ' + p.protects + ')';
+      p.protects--; result = 'protected';
+      p.pity = Math.min(1, p.pity + pityGain(o.success)); // 방지도 시도로 치고 기운 상승
+      msg = '🛡️ 파괴 방지 발동! +' + before + ' 유지 (남은 방지권 ' + p.protects + ')';
       addLog(db, '🛡️ ' + p.nick + ' +' + before + ' 파괴방지');
     } else {
-      const floor = bandFloor(before);
-      p.level = floor; p.breaks++;
-      const newElem = randomElementKey(); // 파괴 시 속성 재부여
-      p.element = newElem;
+      const nl = Math.max(bandFloor(before), before - CONFIG.destroyDrop);
+      p.level = nl; p.breaks++; p.pity = 0; // 파괴 시 장인의 기운 초기화
+      const newElem = randomElementKey(); p.element = newElem; // 속성 재부여
       if (p.destroyDay !== today()) { p.destroyDay = today(); p.destroysToday = 0; }
       p.destroysToday++;
       result = 'destroy';
-      msg = '💥 파괴!! +' + before + ' → +' + floor + (floor === 0 ? ' 처음부터 다시!' : ' (등급 바닥까지 하락)') +
+      msg = '💥 파괴!! +' + before + ' → +' + nl + ' (' + CONFIG.destroyDrop + '칸 하락 · 장인의 기운 초기화)' +
         '\n새 속성: ' + elementOf(newElem).emoji + ' ' + elementOf(newElem).name;
-      addLog(db, '💥 ' + p.nick + ' +' + before + '→+' + floor + ' 파괴 (새속성 ' + elementOf(newElem).name + ')');
+      addLog(db, '💥 ' + p.nick + ' +' + before + '→+' + nl + ' 파괴 (새속성 ' + elementOf(newElem).name + ')');
     }
   } else {
-    if (p.level >= 10) { p.level--; result = 'down'; msg = '❌ 실패... +' + before + ' → +' + p.level + ' (하락)'; }
-    else { result = 'keep'; msg = '❌ 실패... +' + before + ' 유지'; }
+    // 실패 = 유지 + 장인의 기운 상승
+    p.pity = Math.min(1, p.pity + pityGain(o.success));
+    result = 'fail';
+    msg = '❌ 실패... +' + before + ' 유지 · 🔨 장인의 기운 ' + Math.round(p.pity * 100) + '%';
   }
-  return { ok: true, result, msg, cost, boosted, boostLeft: p.enhanceBoost };
+  return { ok: true, result, msg, cost, boosted, boostLeft: p.enhanceBoost, pity: p.pity };
 }
 function attend(db, id) {
   const p = norm(db.players[id]);
