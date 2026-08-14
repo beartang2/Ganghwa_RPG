@@ -197,6 +197,7 @@ async function refreshRaidData() {
 }
 function startRaidLoop() {
   stopRaidLoop();
+  lastPartyHtml = ''; // 탭 재진입 시 항상 다시 그리도록 캐시 리셋
   refreshRaidData().then(paintRaid);
   raidTimer = setInterval(async () => {
     if (currentTab !== 'raid') return;
