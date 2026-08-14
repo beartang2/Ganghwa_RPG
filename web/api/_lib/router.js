@@ -16,9 +16,8 @@ const ok = (body) => ({ status: 200, body });
 const bad = (body, status = 400) => ({ status, body });
 function newToken() { return crypto.randomBytes(16).toString('hex'); }
 
-// 아직 서버리스로 이식되지 않은 액션 — 명확히 알린다(조용한 오작동 방지)
-//   레이드(POST /api/raid)는 3단계(결과 즉시+턴 재생)에서 이식
-const NOT_YET = new Set(['/api/raid']);
+// 아직 서버리스로 이식되지 않은 액션 (관리자 API는 4단계). 없으면 아래 체크는 통과.
+const NOT_YET = new Set();
 
 async function handle(method, pathname, ctx) {
   const { q } = ctx;
@@ -88,6 +87,18 @@ async function handle(method, pathname, ctx) {
       else if (pathname === '/api/party/reject') pfn = (db) => game.partyReject(db, id, b.id);
       if (!pfn) return bad({ ok: false, error: 'unknown action' }, 404);
       const { r, db } = await store.runGame(q, { lockId: id, lockPartyIds: [partyId] }, pfn);
+      return { status: r.ok ? 200 : 400, body: Object.assign(r, { me: game.publicView(db, id) }) };
+    }
+    if (pathname === '/api/raid') {
+      // 레이드는 전원의 골드/방지권/횟수를 변경 → 파티원 전원 + 파티 행을 함께 잠근다.
+      const prow = await q("SELECT data->>'party' AS pid FROM players WHERE id = $1", [id]);
+      const pid = prow.length ? prow[0].pid : null;
+      let memberIds = [];
+      if (pid) {
+        const prt = await q('SELECT data FROM parties WHERE id = $1', [pid]);
+        if (prt.length) { const d = typeof prt[0].data === 'string' ? JSON.parse(prt[0].data) : prt[0].data; memberIds = (d && d.members) || []; }
+      }
+      const { r, db } = await store.runGame(q, { lockId: id, lockPlayerIds: memberIds, lockPartyIds: [pid], withLogs: false }, (db) => game.raidStart(db, id, b.boss));
       return { status: r.ok ? 200 : 400, body: Object.assign(r, { me: game.publicView(db, id) }) };
     }
     let fn = null;

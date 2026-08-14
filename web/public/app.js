@@ -76,14 +76,24 @@ function onRefresh() {
     if (['rank', 'goldrank', 'hogu', 'log', 'fight', 'shop', 'mine'].includes(currentTab)) loadTab();
   }, 250);
 }
+// SSE(상시서버)와 폴링(서버리스) 겸용:
+//   상시서버(server.js)에선 SSE 가 열려 실시간 갱신. 서버리스(Vercel)엔 /api/events 가
+//   없어 EventSource 가 열리지 못하는데, 그 경우 재시도 폭주 대신 SSE 를 끄고 폴링에 맡긴다.
+//   (한 번이라도 열린 뒤의 에러는 일시 끊김 → 브라우저 자동 재연결에 맡김)
+let sseOpened = false, sseFails = 0, sseDisabled = false;
 function openEvents() {
   closeEvents();
-  if (!token) return;
+  if (!token || sseDisabled) return;
   es = new EventSource('/api/events?token=' + encodeURIComponent(token));
+  es.onopen = () => { sseOpened = true; sseFails = 0; };
   es.addEventListener('refresh', onRefresh);
   es.addEventListener('notify', e => { try { const d = JSON.parse(e.data); if (d.msg) toast(d.msg, 'info'); } catch (_) { } onRefresh(); });
+  es.onerror = () => {
+    if (sseOpened) return;              // 열린 적 있으면 일시적 → 자동 재연결
+    if (++sseFails >= 2) { sseDisabled = true; closeEvents(); }  // 서버리스로 판단 → 폴링만
+  };
 }
-function closeEvents() { if (es) { es.close(); es = null; } }
+function closeEvents() { if (es) { es.onerror = null; es.close(); es = null; } }
 
 /* ---------- 직업 선택 ---------- */
 async function showClassSelect() {
