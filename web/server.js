@@ -16,11 +16,12 @@ const DATA_FILE = path.join(__dirname, 'data.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
 /* ---------- 데이터 로드/저장 ---------- */
-let db = { players: {}, log: [] };
+let db = { players: {}, parties: {}, log: [] };
 try {
   if (fs.existsSync(DATA_FILE)) db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
 } catch (e) { console.error('데이터 로드 실패, 새로 시작:', e.message); }
 if (!db.players) db.players = {};
+if (!db.parties) db.parties = {};
 if (!db.log) db.log = [];
 
 let saveTimer = null;
@@ -83,7 +84,7 @@ const server = http.createServer(async (req, res) => {
     const token = newToken();
     sessions.set(token, nick);
     save();
-    return sendJson(res, 200, { ok: true, isNew: r.isNew, token, me: game.publicView(db, nick) });
+    return sendJson(res, 200, { ok: true, isNew: r.isNew, needClass: r.needClass, token, me: game.publicView(db, nick) });
   }
 
   // 공개 조회 (토큰 불필요)
@@ -95,6 +96,9 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && p === '/api/profile') {
     return sendJson(res, 200, game.profile(db, (u.searchParams.get('name') || '').trim()));
   }
+  if (req.method === 'GET' && p === '/api/classes') return sendJson(res, 200, { ok: true, classes: game.CLASSES });
+  if (req.method === 'GET' && p === '/api/bosses') return sendJson(res, 200, { ok: true, bosses: game.BOSSES });
+  if (req.method === 'GET' && p === '/api/parties') return sendJson(res, 200, { ok: true, list: game.partyList(db) });
 
   // 인증 필요
   const nick = authNick(req);
@@ -105,11 +109,17 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST') {
       let r;
-      if (p === '/api/enhance') r = game.enhance(db, nick);
+      if (p === '/api/setclass') { const b = await readBody(req); r = game.setClass(db, nick, b.class); }
+      else if (p === '/api/enhance') r = game.enhance(db, nick);
       else if (p === '/api/attend') r = game.attend(db, nick);
+      else if (p === '/api/mine') r = game.mine(db, nick);
       else if (p === '/api/hunt') r = game.hunt(db, nick);
       else if (p === '/api/protect') { const b = await readBody(req); r = game.buyProtect(db, nick, b.qty); }
       else if (p === '/api/fight') { const b = await readBody(req); r = game.fight(db, nick, b.target); }
+      else if (p === '/api/party/create') r = game.partyCreate(db, nick);
+      else if (p === '/api/party/join') { const b = await readBody(req); r = game.partyJoin(db, nick, b.id); }
+      else if (p === '/api/party/leave') r = game.partyLeave(db, nick);
+      else if (p === '/api/raid') { const b = await readBody(req); r = game.raidStart(db, nick, b.boss); }
       else return sendJson(res, 404, { ok: false, error: 'unknown action' });
 
       if (r.ok) save();

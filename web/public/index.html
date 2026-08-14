@@ -21,6 +21,15 @@
   </div>
 </div>
 
+<!-- 직업 선택 -->
+<div id="classSelect" class="screen" hidden>
+  <div class="card">
+    <h2 style="text-align:center;margin:.2em 0 .1em">직업 선택</h2>
+    <p class="sub" style="text-align:center;color:var(--muted);margin:.2em 0 1em">역할에 따라 시작 무기와 레이드 능력이 달라져요 (변경 불가)</p>
+    <div id="classGrid" class="class-grid"></div>
+  </div>
+</div>
+
 <!-- 게임 -->
 <div id="game" class="screen" hidden>
   <header class="topbar">
@@ -50,6 +59,9 @@
 
     <section class="actions">
       <button id="huntBtn" class="btn action">🗡️ 사냥 <small id="huntLeft"></small></button>
+      <button id="mineBtn" class="btn action">⛏️ 채굴 <small id="mineAmt"></small></button>
+    </section>
+    <section class="actions">
       <button id="attendBtn" class="btn action">📅 출석</button>
       <button id="protectBtn" class="btn action">🛡️ 방지권 구매</button>
     </section>
@@ -59,14 +71,14 @@
       <div><span>파괴</span><b id="sBreaks">0</b></div>
       <div><span>전적</span><b id="sRecord">0승 0패</b></div>
       <div><span>강화순위</span><b id="sRank">-</b></div>
-      <div><span>남은 싸움</span><b id="sFights">-</b></div>
     </section>
 
     <nav class="tabs">
       <button class="tab active" data-tab="rank">🏅 랭킹</button>
       <button class="tab" data-tab="goldrank">💰 부자</button>
+      <button class="tab" data-tab="raid">🐉 레이드</button>
       <button class="tab" data-tab="fight">⚔️ 싸움</button>
-      <button class="tab" data-tab="hogu">🤡 오늘의호구</button>
+      <button class="tab" data-tab="hogu">🤡 호구</button>
       <button class="tab" data-tab="log">📜 로그</button>
     </nav>
     <section id="panel" class="card panel"></section>

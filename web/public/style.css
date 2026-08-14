@@ -66,8 +66,30 @@ small{opacity:.75;font-weight:600}
 /* 액션 */
 .actions{display:flex;gap:8px}
 
+/* 직업 선택 */
+.class-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.class-card{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:16px 12px;text-align:center;cursor:pointer;transition:.12s}
+.class-card:hover{border-color:var(--primary);transform:translateY(-2px)}
+.class-card .cemoji{font-size:34px}
+.class-card .cname{font-weight:800;margin:6px 0 2px}
+.class-card .cdesc{color:var(--muted);font-size:12px;line-height:1.4}
+.class-card .cweapon{margin-top:8px;font-size:12px;color:var(--primary);font-weight:700}
+
+/* 레이드 */
+.raid-boss{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px;background:var(--card2)}
+.raid-boss .bemoji{font-size:26px}
+.raid-boss .binfo{flex:1}
+.raid-boss .bname{font-weight:800}
+.raid-boss .bstat{color:var(--muted);font-size:12px}
+.party-member{display:flex;align-items:center;gap:8px;padding:7px 4px;border-bottom:1px solid var(--line);font-size:14px}
+.party-member:last-child{border-bottom:0}
+.party-member .leader{color:var(--gold);font-size:11px}
+.raid-result{border-radius:12px;padding:12px;margin-bottom:10px;border:1px solid var(--line)}
+.raid-result.win{background:rgba(73,209,122,.13);border-color:var(--success)}
+.raid-result.lose{background:rgba(255,93,108,.13);border-color:var(--danger)}
+
 /* 스탯 */
-.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;text-align:center}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
 .stats>div{display:flex;flex-direction:column;gap:3px}
 .stats span{color:var(--muted);font-size:11px}
 .stats b{font-size:14px}

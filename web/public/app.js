@@ -3,8 +3,8 @@
 let token = localStorage.getItem('token') || null;
 let me = null;
 let currentTab = 'rank';
+let lastRaid = null;
 
-const $ = s => document.querySelector(s);
 const el = id => document.getElementById(id);
 
 /* ---------- API ---------- */
@@ -16,43 +16,70 @@ async function api(pathName, method = 'GET', body) {
   return res.json();
 }
 
-/* ---------- 무기 SVG (등급 색으로 빛나는 검) ---------- */
-function weaponSVG(level, color) {
-  const glow = Math.min(2 + level * 0.9, 26); // 강화할수록 광채 ↑
-  return `
-  <svg viewBox="0 0 80 110" xmlns="http://www.w3.org/2000/svg"
-       style="filter:drop-shadow(0 0 ${glow}px ${color})">
-    <defs>
-      <linearGradient id="blade" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="#ffffff"/>
-        <stop offset=".45" stop-color="${color}"/>
-        <stop offset="1" stop-color="${color}"/>
-      </linearGradient>
-    </defs>
-    <!-- 칼날 -->
-    <polygon points="40,4 48,20 48,66 40,78 32,66 32,20" fill="url(#blade)" stroke="${color}" stroke-width="1"/>
-    <polygon points="40,4 40,78 32,66 32,20" fill="#ffffff" opacity=".18"/>
-    <!-- 가드 -->
-    <rect x="20" y="76" width="40" height="7" rx="3" fill="#c9a24a"/>
-    <!-- 손잡이 -->
-    <rect x="36" y="83" width="8" height="20" rx="3" fill="#7a5a2c"/>
-    <!-- 폼멜 -->
-    <circle cx="40" cy="105" r="5" fill="#c9a24a"/>
-  </svg>`;
+/* ---------- 무기 SVG (직업별 모양 + 등급 색으로 빛남) ---------- */
+function weaponSVG(cls, level, color) {
+  const glow = Math.min(2 + level * 0.9, 26);
+  const defs = `<defs><linearGradient id="bl" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="${color}"/><stop offset="1" stop-color="${color}"/>
+  </linearGradient></defs>`;
+  let inner;
+  if (cls === 'archer') {
+    inner = `<path d="M56 8 Q18 55 56 102" fill="none" stroke="${color}" stroke-width="5"/>
+      <line x1="56" y1="8" x2="56" y2="102" stroke="#c9a24a" stroke-width="2"/>
+      <line x1="26" y1="55" x2="64" y2="55" stroke="url(#bl)" stroke-width="4"/>
+      <polygon points="64,55 56,50 56,60" fill="${color}"/>`;
+  } else if (cls === 'healer') {
+    inner = `<rect x="37" y="26" width="6" height="80" rx="3" fill="#7a5a2c"/>
+      <circle cx="40" cy="20" r="13" fill="url(#bl)" stroke="${color}" stroke-width="2"/>
+      <circle cx="40" cy="20" r="5" fill="#fff" opacity=".7"/>`;
+  } else if (cls === 'tanker') {
+    inner = `<polygon points="40,2 53,22 53,64 40,82 27,64 27,22" fill="url(#bl)" stroke="${color}" stroke-width="1.5"/>
+      <polygon points="40,2 40,82 27,64 27,22" fill="#fff" opacity=".18"/>
+      <rect x="16" y="80" width="48" height="8" rx="3" fill="#c9a24a"/>
+      <rect x="35" y="88" width="10" height="17" rx="3" fill="#7a5a2c"/><circle cx="40" cy="107" r="5" fill="#c9a24a"/>`;
+  } else {
+    inner = `<polygon points="40,4 48,20 48,66 40,78 32,66 32,20" fill="url(#bl)" stroke="${color}" stroke-width="1"/>
+      <polygon points="40,4 40,78 32,66 32,20" fill="#fff" opacity=".18"/>
+      <rect x="20" y="76" width="40" height="7" rx="3" fill="#c9a24a"/>
+      <rect x="36" y="83" width="8" height="20" rx="3" fill="#7a5a2c"/><circle cx="40" cy="105" r="5" fill="#c9a24a"/>`;
+  }
+  return `<svg viewBox="0 0 80 110" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 0 ${glow}px ${color})">${defs}${inner}</svg>`;
 }
 
 /* ---------- 화면 전환 ---------- */
-function showGame() { el('login').hidden = true; el('game').hidden = false; }
-function showLogin() { el('login').hidden = false; el('game').hidden = true; }
+function show(which) {
+  ['login', 'classSelect', 'game'].forEach(s => { el(s).hidden = (s !== which); });
+}
+
+/* ---------- 직업 선택 ---------- */
+async function showClassSelect() {
+  show('classSelect');
+  const { classes } = await api('classes');
+  el('classGrid').innerHTML = Object.values(classes).map(c =>
+    `<div class="class-card" data-class="${c.id}">
+      <div class="cemoji">${c.emoji}</div>
+      <div class="cname">${esc(c.name)}</div>
+      <div class="cdesc">${esc(c.desc)}</div>
+      <div class="cweapon">무기: ${esc(c.weapon)}</div>
+    </div>`).join('');
+  el('classGrid').querySelectorAll('.class-card').forEach(card => {
+    card.onclick = async () => {
+      const r = await api('setclass', 'POST', { class: card.dataset.class });
+      if (!r.ok) return toast(r.error, 'bad');
+      me = r.me; show('game'); render(); loadTab();
+      toast('모험을 시작합니다! "출석"·"채굴"·"사냥"으로 골드를 모으세요 🎉', 'info');
+    };
+  });
+}
 
 /* ---------- 렌더 ---------- */
 function render() {
   if (!me) return;
-  el('hNick').textContent = me.nick;
+  el('hNick').textContent = (me.classEmoji || '') + ' ' + me.nick;
   el('hGold').textContent = me.gold.toLocaleString();
   el('hProtect').textContent = me.protects;
 
-  el('weaponArt').innerHTML = weaponSVG(me.level, me.grade.color);
+  el('weaponArt').innerHTML = weaponSVG(me.class, me.level, me.grade.color);
   el('weaponName').textContent = me.weapon;
   el('oddsS').textContent = Math.round(me.odds.success * 100) + '%';
   el('oddsD').textContent = Math.round(me.odds.destroy * 100) + '%';
@@ -61,32 +88,26 @@ function render() {
 
   el('huntLeft').textContent = '(' + me.huntsLeft + '/' + me.dailyHunts + ')';
   el('huntBtn').disabled = me.huntsLeft <= 0;
-  el('attendBtn').disabled = false;
+  el('mineAmt').textContent = me.mine > 0 ? '(+' + me.mine.toLocaleString() + ')' : '';
+  el('mineBtn').disabled = me.mine <= 0;
 
   el('sBest').textContent = '+' + me.best;
   el('sBreaks').textContent = me.breaks + '회';
   el('sRecord').textContent = me.wins + '승 ' + me.losses + '패';
   el('sRank').textContent = me.rank.rank ? me.rank.rank + '/' + me.rank.total + '위' : '-';
-  el('sFights').textContent = me.fightsLeft + '/' + me.dailyFights;
 }
 
 /* ---------- 토스트 ---------- */
 let toastTimer = null;
 function toast(msg, kind) {
   const t = el('toast');
-  t.textContent = msg;
-  t.className = 'toast ' + (kind || '');
-  t.hidden = false;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.hidden = true; }, 3500);
+  t.textContent = msg; t.className = 'toast ' + (kind || ''); t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 4000);
 }
 function flashWeapon(kind) {
-  const panel = $('.weapon-panel');
-  panel.classList.remove('ok', 'bad');
-  void panel.offsetWidth;
-  panel.classList.add(kind);
-  const art = el('weaponArt');
-  art.classList.remove('shake'); void art.offsetWidth;
+  const panel = document.querySelector('.weapon-panel');
+  panel.classList.remove('ok', 'bad'); void panel.offsetWidth; panel.classList.add(kind);
+  const art = el('weaponArt'); art.classList.remove('shake'); void art.offsetWidth;
   if (kind === 'bad') art.classList.add('shake');
 }
 
@@ -99,7 +120,7 @@ async function doEnhance() {
   else if (r.result === 'destroy') { toast(r.msg, 'bad'); flashWeapon('bad'); }
   else if (r.result === 'protected') { toast(r.msg, 'info'); flashWeapon('ok'); }
   else { toast(r.msg, 'bad'); flashWeapon('bad'); }
-  if (currentTab === 'rank' || currentTab === 'log' || currentTab === 'hogu') loadTab();
+  if (['rank', 'log', 'hogu'].includes(currentTab)) loadTab();
 }
 async function doHunt() {
   const r = await api('hunt', 'POST');
@@ -108,7 +129,12 @@ async function doHunt() {
   let msg = r.monster.emoji + ' ' + r.monster.name + '에게 ' + r.dealt + ' 데미지' + (r.slain ? ' 처치!' : '') + '  💰+' + r.gold;
   if (r.drop) msg += '  🎁' + r.drop.text;
   toast(msg, r.drop ? 'info' : 'ok');
-  if (currentTab === 'log' || currentTab === 'goldrank') loadTab();
+  if (['log', 'goldrank'].includes(currentTab)) loadTab();
+}
+async function doMine() {
+  const r = await api('mine', 'POST');
+  if (!r.ok) return toast(r.error, 'bad');
+  me = r.me; render(); toast('⛏️ 채굴 완료! +' + r.amount.toLocaleString() + 'G', 'ok');
 }
 async function doAttend() {
   const r = await api('attend', 'POST');
@@ -132,6 +158,66 @@ async function doFight(target) {
   loadTab();
 }
 
+/* ---------- 파티 / 레이드 ---------- */
+async function doPartyCreate() { const r = await api('party/create', 'POST'); if (!r.ok) return toast(r.error, 'bad'); me = r.me; loadTab(); }
+async function doPartyJoin(id) { const r = await api('party/join', 'POST', { id }); if (!r.ok) return toast(r.error, 'bad'); me = r.me; loadTab(); }
+async function doPartyLeave() { const r = await api('party/leave', 'POST'); if (!r.ok) return toast(r.error, 'bad'); me = r.me; loadTab(); }
+async function doRaid(boss) {
+  const r = await api('raid', 'POST', { boss });
+  if (!r.ok) return toast(r.error, 'bad');
+  me = r.me; lastRaid = r;
+  toast(r.win ? ('🏆 ' + r.boss.name + ' 레이드 성공!') : ('☠️ ' + r.boss.name + ' 레이드 실패...'), r.win ? 'ok' : 'bad');
+  render(); loadTab();
+}
+
+async function renderRaid(panel) {
+  const bossesRes = await api('bosses');
+  const bosses = bossesRes.bosses;
+  let html = '';
+
+  if (lastRaid) {
+    const lr = lastRaid;
+    html += `<div class="raid-result ${lr.win ? 'win' : 'lose'}">
+      <b>${lr.win ? '🏆 레이드 성공!' : '☠️ 레이드 실패'}</b> — ${lr.boss.emoji} ${esc(lr.boss.name)} (${lr.sim.rounds}라운드)<br>
+      <small>파티 HP ${lr.sim.remainHP}/${lr.sim.maxHP} · 보스 잔여 ${lr.sim.bossRemain}</small>` +
+      (lr.win ? '<br>' + lr.rewards.map(rw => `${esc(rw.nick)} 💰+${rw.gold.toLocaleString()}${rw.drop ? ' ' + rw.drop : ''}`).join('<br>') : '') +
+      `</div>`;
+    lastRaid = null;
+  }
+
+  if (me.party) {
+    const { list } = await api('parties');
+    const pt = list.find(x => x.id === me.party.id);
+    const amLeader = pt && pt.leader === me.nick;
+    html += `<div style="margin-bottom:8px"><b>내 파티</b> <small>(${pt ? pt.count : 1}/${pt ? pt.max : 5}명)</small></div>`;
+    if (pt) html += pt.members.map(m =>
+      `<div class="party-member">${m.classEmoji} <b>${esc(m.nick)}</b> <small>+${m.level}</small>
+        ${m.nick === pt.leader ? '<span class="leader">👑파티장</span>' : ''}
+        <span style="margin-left:auto" class="w">레이드 ${m.raidsLeft}회</span></div>`).join('');
+    html += `<button class="btn ghost sm" id="leavePartyBtn" style="margin:10px 0">파티 나가기</button>`;
+    if (amLeader) {
+      html += `<div style="margin:6px 0"><b>보스 선택</b> <small>(파티장이 시작 · 남은 레이드 ${me.raidsLeft}/${me.dailyRaids})</small></div>`;
+      html += bosses.map((b, i) =>
+        `<div class="raid-boss"><span class="bemoji">${b.emoji}</span>
+          <div class="binfo"><div class="bname">${esc(b.name)} <small>${['입문', '보통', '어려움', '지옥'][i] || ''}</small></div>
+            <div class="bstat">HP ${b.hp.toLocaleString()} · 공격 ${b.atk} · 보상 💰${b.reward.toLocaleString()}</div></div>
+          <button class="btn sm primary" data-raid="${b.id}">도전</button></div>`).join('');
+    } else {
+      html += `<p class="hint">파티장이 레이드를 시작할 수 있어요.</p>`;
+    }
+  } else {
+    html += `<p class="hint" style="margin:0 0 8px">파티를 만들거나 참가해서 보스 레이드에 도전하세요! (탱커·힐러 조합이 중요)</p>`;
+    html += `<button class="btn primary sm" id="createPartyBtn" style="margin-bottom:10px">➕ 파티 만들기</button>`;
+    const { list } = await api('parties');
+    html += `<div style="margin:6px 0"><b>파티 목록</b></div>`;
+    html += list.length ? list.map(pt =>
+      `<div class="party-member">👑 <b>${esc(pt.leader)}</b> <small>${pt.count}/${pt.max}명</small>
+        <button class="btn sm primary" data-join="${pt.id}" style="margin-left:auto" ${pt.count >= pt.max ? 'disabled' : ''}>참가</button></div>`).join('')
+      : emptyMsg('열린 파티가 없어요. 직접 만들어보세요!');
+  }
+  panel.innerHTML = html;
+}
+
 /* ---------- 탭 ---------- */
 async function loadTab() {
   const panel = el('panel');
@@ -139,35 +225,32 @@ async function loadTab() {
     const { list } = await api('rank');
     panel.innerHTML = list.length ? list.map((p, i) =>
       `<div class="row"><span class="rk">${medal(i)}</span>
-        <span class="nm" data-nick="${esc(p.nick)}">${esc(p.nick)}</span>
-        <span class="val">${esc(p.weapon)} · ${p.wins}승${p.losses}패</span></div>`).join('')
-      : emptyMsg('아직 참가자가 없어요');
+        <span class="nm" data-nick="${esc(p.nick)}">${p.classEmoji || ''} ${esc(p.nick)}</span>
+        <span class="val">${esc(p.weapon)} · ${p.wins}승${p.losses}패</span></div>`).join('') : emptyMsg('아직 참가자가 없어요');
   } else if (currentTab === 'goldrank') {
     const { list } = await api('goldrank');
     panel.innerHTML = list.length ? list.map((p, i) =>
       `<div class="row"><span class="rk">${medal(i)}</span>
         <span class="nm" data-nick="${esc(p.nick)}">${esc(p.nick)}</span>
-        <span class="val gold">${p.gold.toLocaleString()}G</span></div>`).join('')
-      : emptyMsg('아직 참가자가 없어요');
+        <span class="val gold">${p.gold.toLocaleString()}G</span></div>`).join('') : emptyMsg('아직 참가자가 없어요');
   } else if (currentTab === 'hogu') {
     const { list } = await api('hogu');
     panel.innerHTML = list.length ? list.map((p, i) =>
       `<div class="row"><span class="rk">${i < 3 ? ['👑', '🥈', '🥉'][i] : (i + 1)}</span>
         <span class="nm" data-nick="${esc(p.nick)}">${esc(p.nick)}</span>
-        <span class="val">${p.c}번 파괴 🤡</span></div>`).join('')
-      : emptyMsg('😌 오늘은 아직 아무도 안 깨졌어요');
+        <span class="val">${p.c}번 파괴 🤡</span></div>`).join('') : emptyMsg('😌 오늘은 아직 아무도 안 깨졌어요');
   } else if (currentTab === 'log') {
     const { list } = await api('log');
-    panel.innerHTML = list.length ? list.map(l => `<div class="logline">${esc(l.text)}</div>`).join('')
-      : emptyMsg('기록 없음');
+    panel.innerHTML = list.length ? list.map(l => `<div class="logline">${esc(l.text)}</div>`).join('') : emptyMsg('기록 없음');
   } else if (currentTab === 'fight') {
     const { list } = await api('players');
     const others = list.filter(n => n !== me.nick);
-    panel.innerHTML = `<p class="hint" style="margin:0 0 8px">상대를 골라 결투! 이기면 상대 골드 20% 획득. (남은 싸움 ${me.fightsLeft}/${me.dailyFights})</p>` +
+    panel.innerHTML = `<p class="hint" style="margin:0 0 8px">이기면 상대 골드 20% 획득. (남은 싸움 ${me.fightsLeft}/${me.dailyFights})</p>` +
       (others.length ? others.map(n =>
         `<div class="fightrow"><span class="nm" data-nick="${esc(n)}">${esc(n)}</span>
-          <button class="btn sm primary" data-fight="${esc(n)}" ${me.fightsLeft <= 0 ? 'disabled' : ''}>싸움</button></div>`).join('')
-        : emptyMsg('상대가 없어요'));
+          <button class="btn sm primary" data-fight="${esc(n)}" ${me.fightsLeft <= 0 ? 'disabled' : ''}>싸움</button></div>`).join('') : emptyMsg('상대가 없어요'));
+  } else if (currentTab === 'raid') {
+    await renderRaid(panel);
   }
 }
 function medal(i) { return i < 3 ? ['🥇', '🥈', '🥉'][i] : (i + 1); }
@@ -180,7 +263,7 @@ async function openProfile(nick) {
   if (!r.ok) return toast(r.error, 'bad');
   const p = r.profile;
   el('modalBody').innerHTML =
-    `<h3>📇 ${esc(p.nick)}</h3>
+    `<h3>${p.classEmoji || '📇'} ${esc(p.nick)} <small style="color:var(--muted)">${esc(p.className || '')}</small></h3>
      <div class="pf-line"><span>무기</span><b>${esc(p.weapon)}</b></div>
      <div class="pf-line"><span>골드</span><b>${p.gold.toLocaleString()}G</b></div>
      <div class="pf-line"><span>방지권</span><b>${p.protects}개</b></div>
@@ -193,49 +276,53 @@ async function openProfile(nick) {
 
 /* ---------- 이벤트 ---------- */
 el('loginBtn').onclick = async () => {
-  const nick = el('nick').value.trim();
-  const pin = el('pin').value.trim();
+  const nick = el('nick').value.trim(), pin = el('pin').value.trim();
   el('loginErr').textContent = '';
   const r = await api('login', 'POST', { nick, pin });
   if (!r.ok) { el('loginErr').textContent = r.error; return; }
-  token = r.token; localStorage.setItem('token', token);
-  me = r.me; showGame(); render(); loadTab();
-  if (r.isNew) toast('환영합니다! "출석"으로 골드를 받고 강화를 시작하세요 🎉', 'info');
+  token = r.token; localStorage.setItem('token', token); me = r.me;
+  if (r.needClass) return showClassSelect();
+  show('game'); render(); loadTab();
 };
 el('pin').addEventListener('keydown', e => { if (e.key === 'Enter') el('loginBtn').click(); });
-el('logoutBtn').onclick = () => { token = null; me = null; localStorage.removeItem('token'); showLogin(); };
+el('logoutBtn').onclick = () => { token = null; me = null; localStorage.removeItem('token'); show('login'); };
 
 el('enhanceBtn').onclick = doEnhance;
 el('huntBtn').onclick = doHunt;
+el('mineBtn').onclick = doMine;
 el('attendBtn').onclick = doAttend;
 el('protectBtn').onclick = doProtect;
 
 document.querySelectorAll('.tab').forEach(btn => {
   btn.onclick = () => {
     document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentTab = btn.dataset.tab;
-    loadTab();
+    btn.classList.add('active'); currentTab = btn.dataset.tab; loadTab();
   };
 });
 
-// 리스트/싸움 버튼 위임
 el('panel').addEventListener('click', e => {
-  const fightBtn = e.target.closest('[data-fight]');
-  if (fightBtn) return doFight(fightBtn.dataset.fight);
-  const nm = e.target.closest('[data-nick]');
-  if (nm) return openProfile(nm.dataset.nick);
+  const f = e.target.closest('[data-fight]'); if (f) return doFight(f.dataset.fight);
+  const r = e.target.closest('[data-raid]'); if (r) return doRaid(r.dataset.raid);
+  const j = e.target.closest('[data-join]'); if (j) return doPartyJoin(j.dataset.join);
+  if (e.target.closest('#createPartyBtn')) return doPartyCreate();
+  if (e.target.closest('#leavePartyBtn')) return doPartyLeave();
+  const nm = e.target.closest('[data-nick]'); if (nm) return openProfile(nm.dataset.nick);
 });
 el('modalClose').onclick = () => { el('modal').hidden = true; };
 el('modal').addEventListener('click', e => { if (e.target === el('modal')) el('modal').hidden = true; });
 
-/* ---------- 자동 로그인 시도 ---------- */
+/* ---------- 자동 로그인 ---------- */
 (async function init() {
   if (!token) return;
   const r = await api('me');
-  if (r.ok) { me = r.me; showGame(); render(); loadTab(); }
-  else { token = null; localStorage.removeItem('token'); }
+  if (r.ok) {
+    me = r.me;
+    if (!me.class) return showClassSelect();
+    show('game'); render(); loadTab();
+  } else { token = null; localStorage.removeItem('token'); }
 })();
 
-/* 주기적으로 랭킹/로그 갱신(다른 사람 활동 반영) */
-setInterval(() => { if (me && !el('game').hidden && (currentTab === 'rank' || currentTab === 'log' || currentTab === 'hogu' || currentTab === 'goldrank')) loadTab(); }, 8000);
+/* 주기적으로 공용 목록 갱신 */
+setInterval(() => {
+  if (me && !el('game').hidden && ['rank', 'log', 'hogu', 'goldrank', 'raid'].includes(currentTab)) loadTab();
+}, 8000);
