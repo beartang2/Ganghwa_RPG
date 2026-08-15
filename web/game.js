@@ -26,7 +26,9 @@ const CONFIG = {
   pityBase: 0.02,       // 장인의 기운 기본 상승폭(실패당) — 저확률에서도 결국 참
   pityScale: 0.34,      // + 성공률 비례분(성공률 높을수록 살짝 더 빨리 참)
   // 사냥
-  huntOvertimeMult: 0.4, // 일일 사냥 소진 후 '무한 사냥' 골드 배율(희귀 드랍·처치보너스 없음)
+  huntOvertimeMult: 0.15,   // 일일 사냥 소진 후 '무한 사냥' 골드 배율(채굴이 주 수급이라 낮게)
+  huntPotionChance: 0.06,   // 무한 사냥 시 '채광 물약' 드랍 확률 → 채굴 기력 회복
+  huntPotionStamina: 20,    // 채광 물약 1개가 채워주는 채굴 기력
   // 채굴장(능동) — 기력을 써서 곡괭이질, 채굴 레벨이 오를수록 수익↑
   staminaMax: 100,          // 기력 최대치
   staminaRegenPerMin: 1.5,  // 분당 기력 회복(가득 차는 데 ~67분)
@@ -653,7 +655,7 @@ function mineSwing(db, id) {
 function hunt(db, id) {
   const p = norm(db.players[id]);
   if (p.huntDay !== today()) { p.huntDay = today(); p.huntsUsed = 0; }
-  // 일일 사냥(20회)은 풀보상 + 희귀 드랍. 소진 후엔 '무한 사냥'(보상 축소·드랍 없음)으로 계속 가능
+  // 일일 사냥(20회)은 풀보상 + 희귀 드랍. 소진 후엔 '무한 사냥'(보상↓·가끔 채광 물약)으로 계속 가능
   const overtime = p.huntsUsed >= limitOf(p, 'dailyHunts');
   p.huntsUsed++;
   const m = huntSpawn(p.level);
@@ -668,7 +670,7 @@ function hunt(db, id) {
   p.gold += gold;
   p.goldEarned = (p.goldEarned || 0) + gold;
   if (slain) p.kills = (p.kills || 0) + 1;         // 도전과제: 처치 수
-  // 희귀할수록(=tier↑) 드랍 확률 상승 — 무한 사냥에선 드랍 없음
+  // 희귀할수록(=tier↑) 드랍 확률 상승. 무한 사냥은 아이템 대신 가끔 '채광 물약'(채굴 기력 회복)
   let drop = null;
   if (!overtime) {
     const pc = CONFIG.dropProtectChance * (1 + m.tier * 0.35);
@@ -676,6 +678,14 @@ function hunt(db, id) {
     if (Math.random() < pc) { p.protects++; drop = { type: 'protect', text: '🛡️ 파괴방지권 1개!' }; addLog(db, '🎁 ' + p.nick + ' [' + m.name + ']에게서 방지권 드랍!'); }
     else if (Math.random() < gc) { const bonus = Math.round(randInt(200, 600) * m.gpp); p.gold += bonus; p.goldEarned += bonus; drop = { type: 'gold', amount: bonus, text: '💰 골드뭉치 +' + bonus }; }
     addLog(db, '🗡️ ' + p.nick + ' ' + m.emoji + '[' + m.name + '](' + m.rarity + ') ' + (slain ? '처치' : '사냥') + ' +' + gold + 'G');
+  } else {
+    // 무한 사냥: 기력에 여유가 있을 때만 채광 물약(꽉 차 있으면 낭비 안 함)
+    const st = currentStamina(p);
+    if (st < CONFIG.staminaMax && Math.random() < CONFIG.huntPotionChance) {
+      const ns = Math.min(CONFIG.staminaMax, st + CONFIG.huntPotionStamina);
+      p.stamina = ns; p.lastStamina = Date.now();
+      drop = { type: 'potion', stamina: Math.round(ns - st), text: '⛏️ 채광 물약! 채굴 기력 +' + Math.round(ns - st) };
+    }
   }
   return { ok: true, monster: { name: m.name, emoji: m.emoji, hp: m.hp, rarity: m.rarity, tier: m.tier }, dmg, dealt, slain, crit, gold, drop, overtime };
 }

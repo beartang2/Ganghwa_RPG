@@ -68,7 +68,8 @@ function weaponSVG(cls, level, color) {
 function show(which) {
   ['login', 'classSelect', 'game'].forEach(s => { el(s).hidden = (s !== which); });
 }
-function maybeShowGuide() { if (!sessionStorage.getItem('guideSeen')) el('guide').hidden = false; }
+// 안내창은 한 번 닫으면 다시 안 뜬다(기기에 영구 저장). ❔ 버튼으로 다시 열 수 있음.
+function maybeShowGuide() { if (!localStorage.getItem('guideSeen')) el('guide').hidden = false; }
 function enterGame() { show('game'); render(); withLoad(loadTab); maybeShowGuide(); openEvents(); initRealtime(); }
 
 /* ---------- Supabase Realtime (선택) — logs INSERT 구독 → 즉시 갱신 ----------
@@ -268,9 +269,11 @@ async function doHunt() {
   if (!r.ok) return toast(r.error, 'bad');
   me = r.me; render();
   let msg = (r.overtime ? '♾️ ' : '') + (r.crit ? '💥치명타! ' : '') + r.monster.emoji + ' ' + r.monster.name + '(' + r.monster.rarity + ')에게 ' + r.dealt + ' 데미지' + (r.slain ? ' 처치!' : '') + '  💰+' + r.gold;
-  if (r.drop) msg += '  🎁' + r.drop.text;
+  if (r.drop) msg += r.drop.type === 'potion' ? '  ' + r.drop.text : '  🎁' + r.drop.text;
   toast(msg, r.drop ? 'info' : 'ok');
-  if (['log', 'goldrank'].includes(currentTab)) loadTab();
+  // 채광 물약으로 기력이 찼으면 채굴장 탭 갱신
+  if (currentTab === 'mine' && r.drop && r.drop.type === 'potion') renderMinePanel();
+  else if (['log', 'goldrank'].includes(currentTab)) loadTab();
 }
 async function doMine() {
   const r = await api('mine', 'POST');
@@ -721,7 +724,8 @@ el('panel').addEventListener('click', e => {
 });
 el('modalClose').onclick = () => { el('modal').hidden = true; };
 el('modal').addEventListener('click', e => { if (e.target === el('modal')) el('modal').hidden = true; });
-el('guideClose').onclick = () => { el('guide').hidden = true; sessionStorage.setItem('guideSeen', '1'); };
+el('guideClose').onclick = () => { el('guide').hidden = true; localStorage.setItem('guideSeen', '1'); };
+el('helpBtn').onclick = () => { el('guide').hidden = false; };
 
 /* ---------- 자동 로그인 ---------- */
 (async function init() {
