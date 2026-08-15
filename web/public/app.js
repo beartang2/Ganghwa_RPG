@@ -275,7 +275,8 @@ async function doHunt() {
 async function doMine() {
   const r = await api('mine', 'POST');
   if (!r.ok) return toast(r.error, 'bad');
-  me = r.me; render(); toast('⛏️ 채굴 완료! +' + r.amount.toLocaleString() + 'G', 'ok');
+  me = r.me; mineSession += r.amount; render();
+  toast('🕳️ 자동채굴 보상 +' + r.amount.toLocaleString() + 'G', 'ok');
   if (currentTab === 'mine') renderMinePanel();
 }
 /* ---------- 채굴장(능동): 돌 깨기 미니게임 ----------
@@ -310,10 +311,6 @@ function renderMinePanel(fb) {
      <div class="mine-fb ${f ? f.kind : ''}">${f ? f.text : (tired
         ? '기력이 바닥이라 지친 곡괭이질만 돼요.'
         : '돌을 깨면 골드·숙련도 획득.<br>기력이 있으면 💥노다지·💎원석 찬스!')}</div>
-     <div class="mine-auto">
-       <span>🕳️ 자동 채굴 누적 <b>+${me.mine.toLocaleString()}G</b></span>
-       <button class="btn sm primary" data-minecollect ${me.mine <= 0 ? 'disabled' : ''}>수령</button>
-     </div>
      <div class="mine-session">이번 세션 획득 💰 <b>+${mineSession.toLocaleString()}G</b></div>`;
   const rock = document.getElementById('rock');
   if (rock) rock.addEventListener('pointerdown', tapRock);
@@ -342,7 +339,7 @@ function tapRock(e) {
   }
 }
 async function breakRock() {
-  const r = await withLoad(() => api('mine/swing', 'POST'));
+  const r = await withLoad(() => api('mine-swing', 'POST'));
   if (!r.ok) {
     rockHits = 0; rockBusy = false; updateRockVisual();
     const rock = document.getElementById('rock'); if (rock) rock.classList.remove('breaking');
@@ -381,12 +378,6 @@ function spawnRockReward(r) {
     setTimeout(() => s.remove(), 550);
   }
 }
-async function doMineCollect() {
-  const r = await api('mine', 'POST');
-  if (!r.ok) return toast(r.error, 'bad');
-  me = r.me; mineSession += r.amount; render();
-  renderMinePanel({ text: '🕳️ 자동 채굴 수령 +' + r.amount.toLocaleString() + 'G', kind: 'ok' });
-}
 async function doAttend() {
   const r = await api('attend', 'POST');
   if (!r.ok) return toast(r.error, 'bad');
@@ -394,7 +385,7 @@ async function doAttend() {
 }
 async function doBuy(item) {
   if (item === 'classchange' && !confirm('직업 변경권 30,000G — 직업을 다시 선택합니다(레벨·골드 유지). 구매할까요?')) return;
-  const r = await api('shop/buy', 'POST', { item });
+  const r = await api('shop-buy', 'POST', { item });
   if (!r.ok) return toast(r.error, 'bad');
   me = r.me;
   if (item === 'classchange' && r.needReselect) { showClassSelect(); return; }
@@ -417,12 +408,12 @@ async function doFight(target) {
 let raidTimer = null, curRaid = null, cacheParties = [], cachePlayers = [], BOSS_CACHE = [];
 let lastFetch = 0, dismissedRaidTs = null, lastPartyHtml = '';
 
-async function doPartyCreate() { const r = await api('party/create', 'POST'); if (!r.ok) return toast(r.error, 'bad'); me = r.me; await refreshRaidData(); paintRaid(); }
-async function doPartyLeave() { const r = await api('party/leave', 'POST'); if (!r.ok) return toast(r.error, 'bad'); me = r.me; if (curRaid) dismissedRaidTs = curRaid.startTs; await refreshRaidData(); paintRaid(); }
-async function doPartyJoin(id) { const r = await api('party/join', 'POST', { id }); if (!r.ok) return toast(r.error, 'bad'); me = r.me; await refreshRaidData(); paintRaid(); }
-async function doInvite(nick) { const r = await api('party/invite', 'POST', { nick }); toast(r.ok ? ('📨 ' + r.msg) : r.error, r.ok ? 'info' : 'bad'); await refreshRaidData(); paintRaid(); }
-async function doAccept(id) { const r = await api('party/accept', 'POST', { id }); if (!r.ok) return toast(r.error, 'bad'); me = r.me; await refreshRaidData(); paintRaid(); }
-async function doReject(id) { await api('party/reject', 'POST', { id }); await refreshRaidData(); paintRaid(); }
+async function doPartyCreate() { const r = await api('party-create', 'POST'); if (!r.ok) return toast(r.error, 'bad'); me = r.me; await refreshRaidData(); paintRaid(); }
+async function doPartyLeave() { const r = await api('party-leave', 'POST'); if (!r.ok) return toast(r.error, 'bad'); me = r.me; if (curRaid) dismissedRaidTs = curRaid.startTs; await refreshRaidData(); paintRaid(); }
+async function doPartyJoin(id) { const r = await api('party-join', 'POST', { id }); if (!r.ok) return toast(r.error, 'bad'); me = r.me; await refreshRaidData(); paintRaid(); }
+async function doInvite(nick) { const r = await api('party-invite', 'POST', { nick }); toast(r.ok ? ('📨 ' + r.msg) : r.error, r.ok ? 'info' : 'bad'); await refreshRaidData(); paintRaid(); }
+async function doAccept(id) { const r = await api('party-accept', 'POST', { id }); if (!r.ok) return toast(r.error, 'bad'); me = r.me; await refreshRaidData(); paintRaid(); }
+async function doReject(id) { await api('party-reject', 'POST', { id }); await refreshRaidData(); paintRaid(); }
 async function doRaid(boss) { const r = await api('raid', 'POST', { boss }); if (!r.ok) return toast(r.error, 'bad'); me = r.me; dismissedRaidTs = null; await refreshRaidData(); paintRaid(); }
 function closeRaid() { if (curRaid) dismissedRaidTs = curRaid.startTs; lastPartyHtml = ''; paintRaid(); }
 
@@ -430,7 +421,7 @@ async function refreshRaidData() {
   lastFetch = Date.now();
   try {
     if (!BOSS_CACHE.length) { const br = await api('bosses'); BOSS_CACHE = br.bosses || []; }
-    const [meR, raidR, partiesR, playersR] = await Promise.all([api('me'), api('party/raid'), api('parties'), api('players')]);
+    const [meR, raidR, partiesR, playersR] = await Promise.all([api('me'), api('party-raid'), api('parties'), api('players')]);
     if (meR.ok) { me = meR.me; render(); }
     curRaid = raidR.raid; cacheParties = partiesR.list || []; cachePlayers = playersR.list || [];
   } catch (e) { /* 네트워크 순간 오류 무시 */ }
@@ -720,7 +711,6 @@ el('panel').addEventListener('click', e => {
   const r = e.target.closest('[data-raid]'); if (r) return act(() => doRaid(r.dataset.raid), r);
   const j = e.target.closest('[data-join]'); if (j) return act(() => doPartyJoin(j.dataset.join), j);
   const bu = e.target.closest('[data-buy]'); if (bu) return act(() => doBuy(bu.dataset.buy), bu);
-  const mc = e.target.closest('[data-minecollect]'); if (mc) return act(doMineCollect, mc);
   const iv = e.target.closest('[data-invite]'); if (iv) return act(() => doInvite(iv.dataset.invite), iv);
   const ac = e.target.closest('[data-accept]'); if (ac) return act(() => doAccept(ac.dataset.accept), ac);
   const rj = e.target.closest('[data-reject]'); if (rj) return act(() => doReject(rj.dataset.reject), rj);

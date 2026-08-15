@@ -317,8 +317,8 @@ function markRefresh() {
  * (강화는 랭킹이 흔들리므로 레벨이 실제로 변한 경우에만 아래에서 따로 처리) */
 const SHARED_ACTIONS = new Set([
   '/api/fight', '/api/raid', '/api/setclass', '/api/rename',
-  '/api/party/create', '/api/party/join', '/api/party/leave',
-  '/api/party/invite', '/api/party/accept', '/api/party/reject',
+  '/api/party-create', '/api/party-join', '/api/party-leave',
+  '/api/party-invite', '/api/party-accept', '/api/party-reject',
 ]);
 
 /* ---------- 공개 조회 캐시 ----------
@@ -522,7 +522,7 @@ const server = http.createServer(async (req, res) => {
     if (!id) return sendJson(res, 401, { ok: false, error: '로그인이 필요합니다.' });
 
     if (req.method === 'GET' && p === '/api/me') return sendJson(res, 200, { ok: true, me: game.publicView(db, id) });
-    if (req.method === 'GET' && p === '/api/party/raid') return sendJson(res, 200, game.raidState(db, id));
+    if (req.method === 'GET' && p === '/api/party-raid') return sendJson(res, 200, game.raidState(db, id));
 
     if (req.method === 'POST') {
       if (!allowAction(id)) return sendJson(res, 429, { ok: false, error: '너무 빠릅니다. 잠시 후 다시 시도하세요.' });
@@ -532,11 +532,11 @@ const server = http.createServer(async (req, res) => {
       else if (p === '/api/enhance') r = game.enhance(db, id);
       else if (p === '/api/attend') r = game.attend(db, id);
       else if (p === '/api/mine') r = game.mine(db, id);
-      else if (p === '/api/mine/swing') r = game.mineSwing(db, id);
+      else if (p === '/api/mine-swing') r = game.mineSwing(db, id);
       else if (p === '/api/hunt') r = game.hunt(db, id);
       else if (p === '/api/title') { const b = await readBody(req); r = game.equipTitle(db, id, b.title || null); }
       else if (p === '/api/protect') { const b = await readBody(req); r = game.buyProtect(db, id, b.qty); }
-      else if (p === '/api/shop/buy') {
+      else if (p === '/api/shop-buy') {
         const b = await readBody(req);
         if (b.item === 'protect') r = game.buyProtect(db, id, 1);
         else if (b.item === 'boost') r = game.buyBoost(db, id);
@@ -545,12 +545,12 @@ const server = http.createServer(async (req, res) => {
         else r = { ok: false, error: '알 수 없는 상품' };
       }
       else if (p === '/api/fight') { const b = await readBody(req); r = game.fight(db, id, b.target); }
-      else if (p === '/api/party/create') r = game.partyCreate(db, id);
-      else if (p === '/api/party/join') { const b = await readBody(req); r = game.partyJoin(db, id, b.id); }
-      else if (p === '/api/party/leave') r = game.partyLeave(db, id);
-      else if (p === '/api/party/invite') { const b = await readBody(req); r = game.partyInvite(db, id, b.nick); }
-      else if (p === '/api/party/accept') { const b = await readBody(req); r = game.partyAccept(db, id, b.id); }
-      else if (p === '/api/party/reject') { const b = await readBody(req); r = game.partyReject(db, id, b.id); }
+      else if (p === '/api/party-create') r = game.partyCreate(db, id);
+      else if (p === '/api/party-join') { const b = await readBody(req); r = game.partyJoin(db, id, b.id); }
+      else if (p === '/api/party-leave') r = game.partyLeave(db, id);
+      else if (p === '/api/party-invite') { const b = await readBody(req); r = game.partyInvite(db, id, b.nick); }
+      else if (p === '/api/party-accept') { const b = await readBody(req); r = game.partyAccept(db, id, b.id); }
+      else if (p === '/api/party-reject') { const b = await readBody(req); r = game.partyReject(db, id, b.id); }
       else if (p === '/api/raid') { const b = await readBody(req); r = game.raidStart(db, id, b.boss); }
       else return sendJson(res, 404, { ok: false, error: 'unknown action' });
 
@@ -572,7 +572,7 @@ const server = http.createServer(async (req, res) => {
               ? '🛡️ ' + r.atk.nick + '님의 도전을 막아냈어요! (+' + r.steal + 'G)'
               : '⚔️ ' + r.atk.nick + '님에게 패해 ' + r.steal + 'G를 뺏겼어요' + (r.broke && r.broke.who === r.def.nick ? ' · 💢무기 손상' : '')
           });
-        } else if (p === '/api/party/invite' && r.targetId) {
+        } else if (p === '/api/party-invite' && r.targetId) {
           sseSend(r.targetId, 'notify', { msg: '📨 ' + r.byNick + '님이 파티에 초대했어요!' });
         }
       }

@@ -203,11 +203,7 @@ body.loading-on #globalLoading{opacity:1}
 .mine-fb.ok{background:rgba(73,209,122,.14);border-color:var(--success);color:#c9f7d8}
 .mine-fb.info{background:rgba(79,172,254,.14);border-color:var(--info);color:#d3ecff}
 .mine-fb.tired{background:rgba(255,138,93,.12);border-color:#ff8a5d;color:#ffd9c6}
-.mine-auto{display:flex;align-items:center;gap:10px;margin-top:12px;padding:10px 12px;
-  border:1px solid var(--line);border-radius:12px;background:var(--card2);font-size:13px}
-.mine-auto span{flex:1}
-.mine-auto b{color:var(--gold)}
-.mine-session{text-align:center;color:var(--muted);font-size:12px;margin-top:10px}
+.mine-session{text-align:center;color:var(--muted);font-size:12px;margin-top:16px}
 .mine-session b{color:var(--gold)}
 
 /* 채굴장 돌 깨기 미니게임 */

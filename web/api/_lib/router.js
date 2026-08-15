@@ -98,7 +98,7 @@ async function handle(method, pathname, ctx) {
     if (!db.players[id]) return bad({ ok: false, error: '로그인이 필요합니다.' }, 401);
     return ok({ ok: true, me: game.publicView(db, id) });
   }
-  if (method === 'GET' && pathname === '/api/party/raid') {
+  if (method === 'GET' && pathname === '/api/party-raid') {
     if (!id) return bad({ ok: false, error: '로그인이 필요합니다.' }, 401);
     const db = await store.readDb(q);
     return ok(game.raidState(db, id));
@@ -119,15 +119,15 @@ async function handle(method, pathname, ctx) {
       const { r, db } = await store.runGame(q, { lockId: id, lockPlayerIds: [targetId] }, (db) => game.fight(db, id, b.target));
       return { status: r.ok ? 200 : 400, body: Object.assign(r, { me: game.publicView(db, id) }) };
     }
-    if (pathname.startsWith('/api/party/')) {
+    if (pathname.startsWith('/api/party-')) {
       const partyId = b.id || null; // join/accept/reject 대상 파티
       let pfn = null;
-      if (pathname === '/api/party/create') pfn = (db) => game.partyCreate(db, id);
-      else if (pathname === '/api/party/join') pfn = (db) => game.partyJoin(db, id, b.id);
-      else if (pathname === '/api/party/leave') pfn = (db) => game.partyLeave(db, id);
-      else if (pathname === '/api/party/invite') pfn = (db) => game.partyInvite(db, id, b.nick);
-      else if (pathname === '/api/party/accept') pfn = (db) => game.partyAccept(db, id, b.id);
-      else if (pathname === '/api/party/reject') pfn = (db) => game.partyReject(db, id, b.id);
+      if (pathname === '/api/party-create') pfn = (db) => game.partyCreate(db, id);
+      else if (pathname === '/api/party-join') pfn = (db) => game.partyJoin(db, id, b.id);
+      else if (pathname === '/api/party-leave') pfn = (db) => game.partyLeave(db, id);
+      else if (pathname === '/api/party-invite') pfn = (db) => game.partyInvite(db, id, b.nick);
+      else if (pathname === '/api/party-accept') pfn = (db) => game.partyAccept(db, id, b.id);
+      else if (pathname === '/api/party-reject') pfn = (db) => game.partyReject(db, id, b.id);
       if (!pfn) return bad({ ok: false, error: 'unknown action' }, 404);
       const { r, db } = await store.runGame(q, { lockId: id, lockPartyIds: [partyId] }, pfn);
       return { status: r.ok ? 200 : 400, body: Object.assign(r, { me: game.publicView(db, id) }) };
@@ -150,11 +150,11 @@ async function handle(method, pathname, ctx) {
     else if (pathname === '/api/enhance') fn = (db) => game.enhance(db, id);
     else if (pathname === '/api/attend') fn = (db) => game.attend(db, id);
     else if (pathname === '/api/mine') fn = (db) => game.mine(db, id);
-    else if (pathname === '/api/mine/swing') fn = (db) => game.mineSwing(db, id);
+    else if (pathname === '/api/mine-swing') fn = (db) => game.mineSwing(db, id);
     else if (pathname === '/api/hunt') fn = (db) => game.hunt(db, id);
     else if (pathname === '/api/title') fn = (db) => game.equipTitle(db, id, b.title || null);
     else if (pathname === '/api/protect') fn = (db) => game.buyProtect(db, id, b.qty);
-    else if (pathname === '/api/shop/buy') {
+    else if (pathname === '/api/shop-buy') {
       fn = (db) => b.item === 'protect' ? game.buyProtect(db, id, 1)
         : b.item === 'boost' ? game.buyBoost(db, id)
         : b.item === 'dye' ? game.buyDye(db, id)

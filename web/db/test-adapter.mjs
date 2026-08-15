@@ -65,7 +65,7 @@ async function main() {
 
   // 5) 채굴 곡괭이질(silent) → gold 증가, stamina 감소
   const g0 = Number((await req('GET', '/api/me', { token: tok })).body.me.gold);
-  r = await req('POST', '/api/mine/swing', { token: tok });
+  r = await req('POST', '/api/mine-swing', { token: tok });
   ok(r.body.ok && r.body.gold > 0, '곡괭이질 골드 획득');
   const me1 = (await req('GET', '/api/me', { token: tok })).body.me;
   ok(me1.stamina < me1.staminaMax, '기력 소모 반영');
@@ -115,30 +115,30 @@ async function main() {
 
   // 10) 파티 — 생성 → 초대 → 수락 → 2인 → 탈퇴
   console.log('[파티]');
-  r = await req('POST', '/api/party/create', { token: tok });
+  r = await req('POST', '/api/party-create', { token: tok });
   ok(r.body.ok && r.body.party && r.body.party.count === 1, '파티 생성(리더)');
   const pid = r.body.party.id;
-  r = await req('POST', '/api/party/invite', { token: tok, body: { nick: '궁수' } });
+  r = await req('POST', '/api/party-invite', { token: tok, body: { nick: '궁수' } });
   ok(r.body.ok, '초대 발송');
   let me2 = (await req('GET', '/api/me', { token: tok2 })).body.me;
   ok(me2.invites && me2.invites.length === 1, '초대가 상대 me.invites 에 노출');
-  r = await req('POST', '/api/party/accept', { token: tok2, body: { id: pid } });
+  r = await req('POST', '/api/party-accept', { token: tok2, body: { id: pid } });
   ok(r.body.ok && r.body.party.count === 2, '수락 → 파티 2인');
   ok((await q('SELECT count(*)::int AS c FROM parties'))[0].c === 1, 'parties 1개 영속화');
-  r = await req('POST', '/api/party/leave', { token: tok2 });
+  r = await req('POST', '/api/party-leave', { token: tok2 });
   ok(r.body.ok, '궁수 탈퇴');
   r = await req('GET', '/api/parties');
   ok(r.body.list[0].count === 1, '파티 인원 1로 갱신');
-  r = await req('POST', '/api/party/leave', { token: tok });
+  r = await req('POST', '/api/party-leave', { token: tok });
   ok((await q('SELECT count(*)::int AS c FROM parties'))[0].c === 0, '리더 탈퇴 시 파티 해체(삭제 영속화)');
 
   // 11) 레이드 — 파티 재구성 → 결과 즉시 계산(타임라인) → 전원 보상·횟수 영속화
   console.log('[레이드]');
   await q("UPDATE players SET level = 80 WHERE nick IN ('검사','궁수')"); // 승리 유도(보상 경로 확인)
-  r = await req('POST', '/api/party/create', { token: tok });
+  r = await req('POST', '/api/party-create', { token: tok });
   const pid2 = r.body.party.id;
-  await req('POST', '/api/party/invite', { token: tok, body: { nick: '궁수' } });
-  await req('POST', '/api/party/accept', { token: tok2, body: { id: pid2 } });
+  await req('POST', '/api/party-invite', { token: tok, body: { nick: '궁수' } });
+  await req('POST', '/api/party-accept', { token: tok2, body: { id: pid2 } });
   const goldBefore = Number((await req('GET', '/api/me', { token: tok })).body.me.gold);
   r = await req('POST', '/api/raid', { token: tok, body: { boss: 'goblin' } });
   ok(r.body.ok && typeof r.body.win === 'boolean', '레이드 성사(win=' + r.body.win + ')');
@@ -149,7 +149,7 @@ async function main() {
   if (r.body.win) ok(Number(meAfter.gold) > goldBefore, '승리 보상 골드 지급');
   else ok(true, '패배(보상 없음)');
   // 다른 파티원도 관전 상태(pt.raid)를 조회할 수 있어야 함
-  const watch = await req('GET', '/api/party/raid', { token: tok2 });
+  const watch = await req('GET', '/api/party-raid', { token: tok2 });
   ok(watch.body.raid && Array.isArray(watch.body.raid.timeline), '파티원이 관전용 타임라인 폴링 가능');
   // 파티 raid 결과가 parties 테이블에 영속화됐는지
   const prow = (await q('SELECT data FROM parties WHERE id=$1', [pid2]))[0];
