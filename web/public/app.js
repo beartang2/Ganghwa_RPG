@@ -180,7 +180,7 @@ function fmtPct(p) {
 /* ---------- 렌더 ---------- */
 function render() {
   if (!me) return;
-  el('hNick').innerHTML = (me.classEmoji || '') + ' ' + nickSpan(me.nick, me.nickColor);
+  el('hNick').innerHTML = (me.classEmoji || '') + ' ' + nickSpan(me.nick, me.nickColor) + ' <span class="edit-hint">✏️</span>';
   el('hGold').textContent = me.gold.toLocaleString();
   el('hProtect').textContent = me.protects;
 
@@ -552,6 +552,8 @@ el('huntBtn').onclick = () => act(doHunt);
 el('mineBtn').onclick = () => act(doMine);
 el('attendBtn').onclick = () => act(doAttend);
 el('protectBtn').onclick = () => act(doProtect);
+// 상단바 내 닉네임 클릭 → 내 프로필(닉변경 가능)
+el('hNick').onclick = () => { if (me) openProfile(me.nick); };
 
 document.querySelectorAll('.tab').forEach(btn => {
   btn.onclick = () => {

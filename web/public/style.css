@@ -41,7 +41,9 @@ small{opacity:.75;font-weight:600}
 
 /* 상단바 */
 .topbar{display:flex;align-items:center;gap:8px;max-width:520px;margin:0 auto 12px;padding:4px}
-.me-nick{font-weight:800;font-size:16px}
+.me-nick{font-weight:800;font-size:16px;cursor:pointer}
+.me-nick:hover{text-decoration:underline}
+.me-nick .edit-hint{font-size:12px;opacity:.55;text-decoration:none;display:inline-block}
 .chips{margin-left:auto;display:flex;gap:6px}
 .chip{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:6px 11px;font-size:14px}
 .chip.gold b{color:var(--gold)}
