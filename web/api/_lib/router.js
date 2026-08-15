@@ -35,8 +35,20 @@ async function handle(method, pathname, ctx) {
     // 배포 직후 DB 연결 확인용 — /api/health 방문 시 Postgres 연결 + 스키마 존재 체크
     if (pathname === '/api/health') {
       try {
+        // DB 왕복 1회당 실측(SELECT 1 × 5) — 리전/풀러 진단용. 자격증명은 노출하지 않는다.
+        const t0 = Date.now();
+        for (let i = 0; i < 5; i++) await q('SELECT 1', []);
+        const perTripMs = Math.round((Date.now() - t0) / 5 * 10) / 10;
         const c = await q('SELECT count(*)::int AS players FROM players', []);
-        return ok({ ok: true, db: true, players: c[0].players, ts: Date.now() });
+        let dbRegion = null, dbPort = null, pooler = null;
+        try {
+          const u = new URL(String(process.env.DATABASE_URL).replace(/^postgres(ql)?:/, 'http:'));
+          dbPort = u.port || '5432';
+          pooler = u.port === '6543' || /pooler/.test(u.hostname);
+          const m = /(us|eu|ap|sa|ca|af|me)-[a-z]+-\d/.exec(u.hostname); // 예: ap-northeast-2 (자격증명 아님)
+          dbRegion = m ? m[0] : null;
+        } catch (_) { /* noop */ }
+        return ok({ ok: true, db: true, players: c[0].players, perTripMs, dbRegion, dbPort, pooler, ts: Date.now() });
       } catch (e) {
         return bad({ ok: false, db: false, error: String(e && e.message || e) }, 500);
       }
