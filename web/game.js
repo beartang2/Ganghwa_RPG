@@ -140,22 +140,68 @@ const ACHIEVEMENTS = [
   { id: 'brk20',  title: '오늘의 호구',    grade: 'common',    desc: '무기 파괴 20회',  check: p => (p.breaks || 0) >= 20 },
   { id: 'brk77',  title: '파괴왕',         grade: 'rare',      desc: '무기 파괴 77회',  check: p => (p.breaks || 0) >= 77 },
   { id: 'brk200', title: '박살의 화신',    grade: 'epic',      desc: '무기 파괴 200회', check: p => (p.breaks || 0) >= 200 },
-  // 싸움
+  // 싸움 — 승리
   { id: 'win10',  title: '싸움꾼',         grade: 'common',    desc: '싸움 10승',       check: p => (p.wins || 0) >= 10 },
   { id: 'win50',  title: '검투사',         grade: 'rare',      desc: '싸움 50승',       check: p => (p.wins || 0) >= 50 },
+  { id: 'winmaster', title: '싸움의 달인', grade: 'epic',      desc: '싸움 100승',      check: p => (p.wins || 0) >= 100 },
   { id: 'win150', title: '무패의 전설',    grade: 'legend',    desc: '싸움 150승',      check: p => (p.wins || 0) >= 150 },
   // 채굴
   { id: 'mine10', title: '광부',           grade: 'common',    desc: '채굴 Lv.10',      check: p => (p.mineLevel || 1) >= 10 },
   { id: 'mine30', title: '채굴 장인',      grade: 'rare',      desc: '채굴 Lv.30',      check: p => (p.mineLevel || 1) >= 30 },
   { id: 'mine50', title: '대지의 지배자',  grade: 'epic',      desc: '채굴 Lv.50(만렙)', check: p => (p.mineLevel || 1) >= 50 },
-  // 패배(재미)
+  // 싸움 — 패배(재미)
   { id: 'lose30', title: '동네북',         grade: 'common',    desc: '싸움 30패',       check: p => (p.losses || 0) >= 30 },
+  { id: 'lose100', title: '물몸',          grade: 'rare',      desc: '싸움 100패',      check: p => (p.losses || 0) >= 100 },
+  // 골드 — 많이 쓴 사람 / 많이 번 사람
+  { id: 'flex',   title: 'Flex',           grade: 'epic',      desc: '누적 2천만 골드 소모',   check: p => (p.goldSpent || 0) >= 20000000 },
+  { id: 'billion', title: '억만장자',      grade: 'legend',    desc: '누적 1억 골드 획득',     check: p => (p.goldEarned || 0) >= 100000000 },
+  // 싸움 많이 건 사람
+  { id: 'maddog', title: '광견',           grade: 'epic',      desc: '싸움 300회 도전',       check: p => (p.fightsTotal || 0) >= 300 },
+  // 한 직업으로 +99 달성 (직업의 달인)
+  { id: 'm_warrior', title: '근딜의 달인', grade: 'legend', desc: '근딜로 +99 달성', check: p => (p.masteredClasses || []).includes('warrior') },
+  { id: 'm_archer',  title: '원딜의 달인', grade: 'legend', desc: '원딜로 +99 달성', check: p => (p.masteredClasses || []).includes('archer') },
+  { id: 'm_tanker',  title: '탱커의 달인', grade: 'legend', desc: '탱커로 +99 달성', check: p => (p.masteredClasses || []).includes('tanker') },
+  { id: 'm_healer',  title: '힐러의 달인', grade: 'legend', desc: '힐러로 +99 달성', check: p => (p.masteredClasses || []).includes('healer') },
+  // 채굴장 노가다
+  { id: 'blindmoney', title: '눈먼 돈',    grade: 'epic',      desc: '곡괭이질 5,000회',      check: p => (p.mineSwings || 0) >= 5000 },
+  // 몬스터 사냥
+  { id: 'monsterhunter', title: '괴물 사냥꾼', grade: 'epic',  desc: '몬스터 1,000마리 처치',  check: p => (p.kills || 0) >= 1000 },
+  // 레이드 피해
+  { id: 'threatdmg', title: '위협적인 피해량', grade: 'epic',  desc: '단일 레이드 3만 피해',    check: p => (p.raidDmg || 0) >= 30000 },
+  // 염색
+  { id: 'colormage', title: '색채 마술사',  grade: 'rare',     desc: '염색약 15회 사용',       check: p => (p.dyeCount || 0) >= 15 },
+  { id: 'fashion',  title: '패션의 완성',   grade: 'transcend', desc: '염색에서 무지개 획득',   check: p => !!p.gotRainbow },
 ];
 // 현재 스탯 기준으로 획득한 칭호 목록(높은 등급 우선). 단조 증가 스탯이라 저장 불필요.
 function earnedTitles(p) {
   return ACHIEVEMENTS.filter(a => a.check(p))
     .map(a => ({ id: a.id, title: a.title, grade: a.grade, color: TITLE_GRADES[a.grade].color, desc: a.desc }))
     .sort((x, y) => TITLE_GRADES[y.grade].rank - TITLE_GRADES[x.grade].rank);
+}
+function hasTitle(p, id) { const a = ACHIEVEMENTS.find(x => x.id === id); return !!(a && a.check(p)); }
+// +99(만렙) 달성 시 현재 직업을 '달인' 목록에 기록 (직업의 달인 칭호용)
+function markMastery(p) {
+  if (p.level >= CONFIG.maxLevel && p.class) {
+    if (!Array.isArray(p.masteredClasses)) p.masteredClasses = [];
+    if (!p.masteredClasses.includes(p.class)) p.masteredClasses.push(p.class);
+  }
+}
+// 장착 칭호(있으면) 한 개를 {id,title,grade,color} 로 반환. 조건을 잃으면(단조 증가라 실질 없음) null.
+function equippedTitleView(p) {
+  if (!p || !p.equippedTitle) return null;
+  const a = ACHIEVEMENTS.find(x => x.id === p.equippedTitle);
+  if (!a || !a.check(p)) return null;
+  return { id: a.id, title: a.title, grade: a.grade, color: TITLE_GRADES[a.grade].color };
+}
+// 칭호 장착/해제. titleId 가 null/'' 이면 해제. 미획득 칭호는 장착 불가.
+function equipTitle(db, id, titleId) {
+  const p = norm(db.players[id]);
+  if (!titleId) { p.equippedTitle = null; return { ok: true, equipped: null, msg: '칭호를 해제했어요.' }; }
+  const a = ACHIEVEMENTS.find(x => x.id === titleId);
+  if (!a) return { ok: false, error: '없는 칭호예요.' };
+  if (!a.check(p)) return { ok: false, error: '아직 획득하지 못한 칭호예요.' };
+  p.equippedTitle = titleId;
+  return { ok: true, equipped: equippedTitleView(p), msg: '「' + a.title + '」 칭호를 장착했어요.' };
 }
 
 /* ---------- 닉네임 염색(가챠) ---------- */
@@ -285,6 +331,17 @@ function norm(p) {
   if (p.mineLevel == null) p.mineLevel = 1;
   if (p.mineXp == null) p.mineXp = 0;
   if (p._lim === undefined) p._lim = null; // player_limits 오버라이드 (없으면 CONFIG 기본값)
+  // 도전과제용 누적 카운터(단조 증가 → 칭호가 사라지지 않음)
+  if (p.goldSpent == null) p.goldSpent = 0;
+  if (p.goldEarned == null) p.goldEarned = 0;
+  if (p.fightsTotal == null) p.fightsTotal = 0;
+  if (p.mineSwings == null) p.mineSwings = 0;
+  if (p.kills == null) p.kills = 0;
+  if (p.raidDmg == null) p.raidDmg = 0;      // 단일 레이드 최고 기여 피해
+  if (p.dyeCount == null) p.dyeCount = 0;
+  if (p.gotRainbow == null) p.gotRainbow = false;
+  if (!Array.isArray(p.masteredClasses)) p.masteredClasses = []; // +99 달성한 직업들
+  if (p.equippedTitle === undefined) p.equippedTitle = null;     // 장착 칭호 id
   return p;
 }
 
@@ -376,7 +433,16 @@ function publicView(db, id) {
     weapon: weaponName(p.level, p.class),
     grade: { name: g.name, key: g.key, emoji: g.emoji, color: g.color },
     element: p.element, elementName: em.name, elementEmoji: em.emoji, elementColor: em.color,
-    titles: earnedTitles(p),
+    titles: earnedTitles(p).map(t => ({ id: t.id, title: t.title, grade: t.grade, color: t.color })),
+    equippedTitle: equippedTitleView(p),
+    // 프로필 칭호 진열장: 획득한 건 이름 노출, 미획득은 잠금(이름·조건 비공개)
+    titleRoster: ACHIEVEMENTS.map(a => {
+      const got = a.check(p);
+      return got
+        ? { id: a.id, title: a.title, grade: a.grade, color: TITLE_GRADES[a.grade].color, earned: true }
+        : { grade: a.grade, color: TITLE_GRADES[a.grade].color, earned: false };
+    }).sort((x, y) => TITLE_GRADES[y.grade].rank - TITLE_GRADES[x.grade].rank || (y.earned === x.earned ? 0 : y.earned ? 1 : -1)),
+    titleTotal: ACHIEVEMENTS.length, titleEarned: earnedTitles(p).length,
     maxLevel: CONFIG.maxLevel,
     nextCost: p.level >= CONFIG.maxLevel ? null : enhanceCost(p.level),
     odds: od, enhanceBoost: p.enhanceBoost || 0, pity: p.pity || 0, nickColor: p.nickColor || null,
@@ -466,6 +532,7 @@ function enhance(db, id) {
   const cost = enhanceCost(p.level);
   if (p.gold < cost) return { ok: false, error: '골드 부족! (필요 ' + cost + ' / 보유 ' + p.gold + ')' };
   p.gold -= cost;
+  p.goldSpent = (p.goldSpent || 0) + cost;   // 도전과제: 누적 소모 골드
   const before = p.level;
   const base = odds(before);
 
@@ -474,6 +541,7 @@ function enhance(db, id) {
     const gain = successGain(before);
     p.level = Math.min(CONFIG.maxLevel, before + gain);
     if (p.level > p.best) p.best = p.level;
+    markMastery(p);
     p.pity = 0;
     bumpRank(db);
     addLog(db, '🔨 ' + p.nick + ' 장인의 기운 확정성공 +' + before + '→+' + p.level);
@@ -495,6 +563,7 @@ function enhance(db, id) {
     const gain = successGain(before);
     p.level = Math.min(CONFIG.maxLevel, before + gain);
     if (p.level > p.best) p.best = p.level;
+    markMastery(p);
     p.pity = 0;
     bumpRank(db);
     result = 'success';
@@ -529,6 +598,7 @@ function attend(db, id) {
   const p = norm(db.players[id]);
   if (p.attendDay === today()) return { ok: false, error: '오늘은 이미 출석했어요!' };
   p.attendDay = today(); p.gold += CONFIG.attendGold;
+  p.goldEarned = (p.goldEarned || 0) + CONFIG.attendGold;
   return { ok: true, gained: CONFIG.attendGold, msg: '출석 완료! +' + CONFIG.attendGold + 'G' };
 }
 function mine(db, id) {
@@ -536,6 +606,7 @@ function mine(db, id) {
   const amount = pendingMine(p);
   if (amount <= 0) return { ok: false, error: '아직 채굴된 골드가 없어요. 시간이 지나면 쌓여요.' };
   p.gold += amount; p.lastMine = Date.now();
+  p.goldEarned = (p.goldEarned || 0) + amount;
   return { ok: true, amount, msg: '⛏️ 채굴 +' + amount + 'G' };
 }
 // 채굴장 곡괭이질: 기력을 소모해 골드 채굴. 기력 0이면 '지친' 상태로 소량이나마 계속 가능.
@@ -568,6 +639,8 @@ function mineSwing(db, id) {
     addLog(db, '⛏️ ' + p.nick + ' 채굴 레벨 ' + p.mineLevel + ' 달성!');
   }
   p.gold += gold;
+  p.mineSwings = (p.mineSwings || 0) + 1;          // 도전과제: 곡괭이질 횟수
+  p.goldEarned = (p.goldEarned || 0) + gold;
   let msg = (tired ? '💤 지친 곡괭이질' : jackpot ? '💥 노다지!!' : '⛏️ 채굴') + ' +' + gold + 'G';
   if (gem) msg += '  ' + gem.text;
   if (leveledTo) msg += '  🎉 채굴Lv.' + leveledTo;
@@ -593,13 +666,15 @@ function hunt(db, id) {
   if (slain && !overtime) gold = Math.round(gold * 1.5);   // 처치 보너스는 일일 사냥만
   if (overtime) gold = Math.max(1, Math.round(gold * CONFIG.huntOvertimeMult));
   p.gold += gold;
+  p.goldEarned = (p.goldEarned || 0) + gold;
+  if (slain) p.kills = (p.kills || 0) + 1;         // 도전과제: 처치 수
   // 희귀할수록(=tier↑) 드랍 확률 상승 — 무한 사냥에선 드랍 없음
   let drop = null;
   if (!overtime) {
     const pc = CONFIG.dropProtectChance * (1 + m.tier * 0.35);
     const gc = CONFIG.dropGoldChance * (1 + m.tier * 0.2);
     if (Math.random() < pc) { p.protects++; drop = { type: 'protect', text: '🛡️ 파괴방지권 1개!' }; addLog(db, '🎁 ' + p.nick + ' [' + m.name + ']에게서 방지권 드랍!'); }
-    else if (Math.random() < gc) { const bonus = Math.round(randInt(200, 600) * m.gpp); p.gold += bonus; drop = { type: 'gold', amount: bonus, text: '💰 골드뭉치 +' + bonus }; }
+    else if (Math.random() < gc) { const bonus = Math.round(randInt(200, 600) * m.gpp); p.gold += bonus; p.goldEarned += bonus; drop = { type: 'gold', amount: bonus, text: '💰 골드뭉치 +' + bonus }; }
     addLog(db, '🗡️ ' + p.nick + ' ' + m.emoji + '[' + m.name + '](' + m.rarity + ') ' + (slain ? '처치' : '사냥') + ' +' + gold + 'G');
   }
   return { ok: true, monster: { name: m.name, emoji: m.emoji, hp: m.hp, rarity: m.rarity, tier: m.tier }, dmg, dealt, slain, crit, gold, drop, overtime };
@@ -610,20 +685,25 @@ function buyProtect(db, id, qty) {
   const total = CONFIG.protectPrice * qty;
   if (p.gold < total) return { ok: false, error: '골드 부족! (' + qty + '개 = ' + total + 'G / 보유 ' + p.gold + ')' };
   p.gold -= total; p.protects += qty;
+  p.goldSpent = (p.goldSpent || 0) + total;
   return { ok: true, qty, spent: total, msg: '파괴방지권 ' + qty + '개 구매!' };
 }
 function buyBoost(db, id) {
   const p = norm(db.players[id]);
   if (p.gold < CONFIG.boostPrice) return { ok: false, error: '골드 부족! (' + CONFIG.boostPrice + 'G)' };
   p.gold -= CONFIG.boostPrice; p.enhanceBoost += CONFIG.boostCount;
+  p.goldSpent = (p.goldSpent || 0) + CONFIG.boostPrice;
   return { ok: true, msg: '🍀 강화 부스트 ' + CONFIG.boostCount + '회 획득! (남은 부스트 ' + p.enhanceBoost + '회)' };
 }
 function buyDye(db, id) {
   const p = norm(db.players[id]);
   if (p.gold < CONFIG.dyePrice) return { ok: false, error: '골드 부족! (' + CONFIG.dyePrice + 'G)' };
   p.gold -= CONFIG.dyePrice;
+  p.goldSpent = (p.goldSpent || 0) + CONFIG.dyePrice;
+  p.dyeCount = (p.dyeCount || 0) + 1;              // 도전과제: 염색 횟수
   const dye = rollDye();
   p.nickColor = dye;
+  if (dye.kind === 'rainbow') p.gotRainbow = true; // 도전과제: 무지개 획득
   addLog(db, '🎨 ' + p.nick + ' 염색: ' + dye.name + (dye.rarity !== '기본' ? ' [' + dye.rarity + ']' : ''));
   return { ok: true, dye, msg: '🎨 염색 결과: ' + dye.name + ' [' + dye.rarity + ']' };
 }
@@ -631,6 +711,7 @@ function buyClassChange(db, id) {
   const p = norm(db.players[id]);
   if (p.gold < CONFIG.classChangePrice) return { ok: false, error: '골드 부족! (' + CONFIG.classChangePrice + 'G)' };
   p.gold -= CONFIG.classChangePrice;
+  p.goldSpent = (p.goldSpent || 0) + CONFIG.classChangePrice;
   p.class = null; // 재선택 필요
   if (p.party) partyLeave(db, id); // 파티에 있으면 나가기(직업 재선택 중)
   return { ok: true, needReselect: true, msg: '직업을 다시 선택하세요.' };
@@ -645,6 +726,7 @@ function fight(db, id, targetNick) {
   if (atk.fightDay !== today()) { atk.fightDay = today(); atk.fightsUsed = 0; }
   if (atk.fightsUsed >= limitOf(atk, 'dailyFights')) return { ok: false, error: '오늘 싸움 횟수를 다 썼어요!' };
   atk.fightsUsed++;
+  atk.fightsTotal = (atk.fightsTotal || 0) + 1;    // 도전과제: 싸움 도전 횟수(광견)
   let pWin = 0.5 + (atk.level - def.level) * 0.05;
   pWin = Math.max(0.1, Math.min(0.9, pWin));
   const atkWin = Math.random() < pWin;
@@ -653,6 +735,7 @@ function fight(db, id, targetNick) {
   winP.wins++; loseP.losses++;
   const steal = Math.floor(loseP.gold * CONFIG.stealPct);
   loseP.gold -= steal; winP.gold += steal;
+  winP.goldEarned = (winP.goldEarned || 0) + steal;
   let broke = null;
   if (loseP.level > 0 && Math.random() < CONFIG.fightBreakChance) {
     const b = loseP.level; loseP.level--; broke = { who: loser, from: b, to: loseP.level };
@@ -808,11 +891,18 @@ function raidStart(db, id, bossId) {
   participants.forEach(k => { db.players[k].raidsUsed++; });
   const parts = participants.map(k => ({ nick: db.players[k].nick, class: db.players[k].class, level: db.players[k].level }));
   const sim = simulateRaid(parts, boss);
+  // 도전과제: 이번 레이드에서 낸 개인 기여 피해 최고치 기록(위협적인 피해량)
+  participants.forEach(k => {
+    const mp = db.players[k];
+    const dealt = Math.round(sim.contrib[mp.nick] || 0);
+    if (dealt > (mp.raidDmg || 0)) mp.raidDmg = dealt;
+  });
   const rewards = [];
   if (sim.win) {
     const each = Math.floor(boss.reward / participants.length);
     participants.forEach(k => {
       const mp = db.players[k]; mp.gold += each;
+      mp.goldEarned = (mp.goldEarned || 0) + each;
       let drop = null;
       if (Math.random() < boss.dropChance) { mp.protects++; drop = '🛡️ 방지권'; }
       rewards.push({ nick: mp.nick, gold: each, drop });
@@ -847,10 +937,10 @@ function profile(db, nick) {
 function ranking(db) {
   return Object.values(db.players).map(p => p)
     .sort((a, b) => b.level - a.level || b.best - a.best).slice(0, 20)
-    .map(p => ({ nick: p.nick, level: p.level, weapon: weaponName(p.level, p.class), classEmoji: classOf(p).emoji, wins: p.wins, losses: p.losses, nickColor: p.nickColor || null }));
+    .map(p => ({ nick: p.nick, level: p.level, weapon: weaponName(p.level, p.class), classEmoji: classOf(p).emoji, wins: p.wins, losses: p.losses, nickColor: p.nickColor || null, title: equippedTitleView(p) }));
 }
 function goldRanking(db) {
-  return Object.values(db.players).map(p => ({ nick: p.nick, gold: p.gold, nickColor: p.nickColor || null })).sort((a, b) => b.gold - a.gold).slice(0, 20);
+  return Object.values(db.players).map(p => ({ nick: p.nick, gold: p.gold, nickColor: p.nickColor || null, title: equippedTitleView(p) })).sort((a, b) => b.gold - a.gold).slice(0, 20);
 }
 function hogu(db) {
   const t = today();
@@ -865,7 +955,7 @@ module.exports = {
   login, setClass, rename, publicView, enhance, attend, mine, mineSwing, hunt, buyProtect, fight,
   partyCreate, partyJoin, partyLeave, partyList, partyView, raidStart,
   partyInvite, partyAccept, partyReject, myInvites, raidState,
-  buyBoost, buyDye, buyClassChange, shopItems,
+  buyBoost, buyDye, buyClassChange, shopItems, equipTitle,
   profile, ranking, goldRanking, hogu, recentLog, playerList, findByNick,
   // 저장 계층(server.js)용 — 일일 카운터 / 유저별 상한
   today, normalizeDay, LIMIT_KEYS, DAILY_FIELDS, limitOf, setLimits, dailyUsage, applyDaily, norm,

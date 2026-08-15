@@ -197,6 +197,19 @@ small{opacity:.75;font-weight:600}
 .title-chip{font-size:12px;font-weight:800;padding:4px 9px;border-radius:20px;
   border:1px solid currentColor;background:rgba(255,255,255,.04);text-shadow:0 0 6px currentColor}
 .titles-empty{color:var(--muted);font-size:12px;margin:6px 0 12px}
+.titles-head{font-size:12px;font-weight:800;color:var(--muted);margin:8px 0 4px}
+.titles-head small{opacity:.8;font-weight:700}
+/* 내 프로필 진열장 */
+.title-chip.earn{cursor:pointer;transition:transform .08s,box-shadow .12s}
+.title-chip.earn:hover{transform:translateY(-1px)}
+.title-chip.equipped{background:currentColor;box-shadow:0 0 0 2px currentColor inset,0 0 10px currentColor}
+.title-chip.equipped:not(.clear){-webkit-text-fill-color:#0b0e15}
+.title-chip.locked{color:var(--muted);border-style:dashed;background:rgba(255,255,255,.02);
+  text-shadow:none;opacity:.5;cursor:not-allowed}
+.title-chip.clear{color:var(--muted);cursor:pointer;text-shadow:none}
+.title-chip.clear.equipped{color:var(--text);background:var(--muted)}
+/* 닉네임 옆 장착 칭호 태그 */
+.title-tag{font-size:.78em;font-weight:800;text-shadow:0 0 6px currentColor;white-space:nowrap}
 
 .pf-line{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
 .pf-line:last-child{border-bottom:0}

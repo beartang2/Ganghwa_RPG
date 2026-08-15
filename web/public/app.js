@@ -180,7 +180,7 @@ function fmtPct(p) {
 /* ---------- 렌더 ---------- */
 function render() {
   if (!me) return;
-  el('hNick').innerHTML = (me.classEmoji || '') + ' ' + nickSpan(me.nick, me.nickColor) + ' <span class="edit-hint">✏️</span>';
+  el('hNick').innerHTML = (me.classEmoji || '') + ' ' + nickSpan(me.nick, me.nickColor) + titleTag(me.equippedTitle) + ' <span class="edit-hint">✏️</span>';
   el('hGold').textContent = me.gold.toLocaleString();
   el('hProtect').textContent = me.protects;
 
@@ -443,7 +443,7 @@ async function loadTab() {
     const { list } = await api('rank'); if (stale()) return;
     panel.innerHTML = list.length ? list.map((p, i) =>
       `<div class="row"><span class="rk">${medal(i)}</span>
-        <span class="nm" data-nick="${esc(p.nick)}">${p.classEmoji || ''} ${nickSpan(p.nick, p.nickColor)}</span>
+        <span class="nm" data-nick="${esc(p.nick)}">${p.classEmoji || ''} ${nickSpan(p.nick, p.nickColor)}${titleTag(p.title)}</span>
         <span class="val">${esc(p.weapon)} · ${p.wins}승${p.losses}패</span></div>`).join('') : emptyMsg('아직 참가자가 없어요');
   } else if (currentTab === 'mine') {
     renderMinePanel();
@@ -451,7 +451,7 @@ async function loadTab() {
     const { list } = await api('goldrank'); if (stale()) return;
     panel.innerHTML = list.length ? list.map((p, i) =>
       `<div class="row"><span class="rk">${medal(i)}</span>
-        <span class="nm" data-nick="${esc(p.nick)}">${nickSpan(p.nick, p.nickColor)}</span>
+        <span class="nm" data-nick="${esc(p.nick)}">${nickSpan(p.nick, p.nickColor)}${titleTag(p.title)}</span>
         <span class="val gold">${p.gold.toLocaleString()}G</span></div>`).join('') : emptyMsg('아직 참가자가 없어요');
   } else if (currentTab === 'shop') {
     const { items } = await api('shop'); if (stale()) return;
@@ -495,6 +495,10 @@ function nickSpan(nick, nc) {
   if (nc.kind === 'rainbow') return '<span class="nick-rainbow">' + e + '</span>';
   return e;
 }
+// 장착 칭호 태그 (닉네임 옆 작게). t = {title,color} 또는 null
+function titleTag(t) {
+  return t ? ` <span class="title-tag" style="color:${t.color}">「${esc(t.title)}」</span>` : '';
+}
 
 /* ---------- 프로필 모달 ---------- */
 async function openProfile(nick) {
@@ -502,11 +506,10 @@ async function openProfile(nick) {
   if (!r.ok) return toast(r.error, 'bad');
   const p = r.profile;
   const isMe = me && p.nick === me.nick;
+  const eq = p.equippedTitle;
   el('modalBody').innerHTML =
-    `<h3>${p.classEmoji || '📇'} ${nickSpan(p.nick, p.nickColor)} <small style="color:var(--muted)">${esc(p.className || '')}</small></h3>
-     ${p.titles && p.titles.length
-      ? `<div class="titles-row">${p.titles.map(t => `<span class="title-chip" style="color:${t.color};border-color:${t.color}" title="${esc(t.desc)}">${esc(t.title)}</span>`).join('')}</div>`
-      : `<div class="titles-empty">아직 획득한 칭호가 없어요</div>`}
+    `<h3>${p.classEmoji || '📇'} ${nickSpan(p.nick, p.nickColor)}${titleTag(eq)} <small style="color:var(--muted)">${esc(p.className || '')}</small></h3>
+     ${titlesSection(p, isMe, eq)}
      <div class="pf-line"><span>무기</span><b>${esc(p.weapon)}</b></div>
      <div class="pf-line"><span>속성</span><b>${p.elementEmoji || ''} ${esc(p.elementName || '-')}</b></div>
      <div class="pf-line"><span>골드</span><b>${p.gold.toLocaleString()}G</b></div>
@@ -519,7 +522,40 @@ async function openProfile(nick) {
        <input id="renameInput" maxlength="12" value="${esc(p.nick)}" style="flex:1;padding:9px;border-radius:10px;border:1px solid var(--line);background:#0f131c;color:var(--text)">
        <button id="renameBtn" class="btn primary sm">닉변경</button></div>` : '');
   el('modal').hidden = false;
-  if (isMe) el('renameBtn').onclick = doRename;
+  if (isMe) {
+    el('renameBtn').onclick = doRename;
+    // 내 프로필: 칭호 클릭 → 장착/해제
+    el('modalBody').querySelectorAll('[data-title-id]').forEach(chip => {
+      chip.onclick = () => doEquipTitle(chip.dataset.titleId);
+    });
+  }
+}
+// 프로필 칭호 진열장. 내 프로필이면 클릭으로 장착/해제(미획득은 🔒 잠금), 남이면 획득 칭호만 표시.
+function titlesSection(p, isMe, eq) {
+  if (isMe) {
+    const roster = p.titleRoster || [];
+    const chips = roster.map(t => {
+      if (t.earned) {
+        const on = eq && eq.id === t.id;
+        return `<span class="title-chip earn${on ? ' equipped' : ''}" data-title-id="${t.id}" style="color:${t.color};border-color:${t.color}">${esc(t.title)}</span>`;
+      }
+      return `<span class="title-chip locked" style="border-color:${t.color}66">🔒</span>`;
+    }).join('');
+    return `<div class="titles-head">칭호 <small>${p.titleEarned || 0}/${p.titleTotal || roster.length}</small></div>
+      <div class="titles-row">
+        <span class="title-chip clear${eq ? '' : ' equipped'}" data-title-id="">칭호 없음</span>${chips}
+      </div>`;
+  }
+  return (p.titles && p.titles.length)
+    ? `<div class="titles-row">${p.titles.map(t => `<span class="title-chip${eq && eq.id === t.id ? ' equipped' : ''}" style="color:${t.color};border-color:${t.color}">${esc(t.title)}</span>`).join('')}</div>`
+    : `<div class="titles-empty">아직 획득한 칭호가 없어요</div>`;
+}
+async function doEquipTitle(titleId) {
+  const r = await api('title', 'POST', { title: titleId || null });
+  if (!r.ok) return toast(r.error, 'bad');
+  me = r.me; render();
+  openProfile(me.nick);  // 모달 새로고침(선택 상태 반영)
+  toast(r.msg, 'ok');
 }
 async function doRename() {
   const v = el('renameInput').value.trim();
