@@ -265,6 +265,9 @@ function sfx(name) {
     case 'protect': tone(520, 0.1, 'sine', 0.18); tone(720, 0.1, 'sine', 0.16, null, 0.08); break;
     case 'fail':    tone(150, 0.06, 'sine', 0.08); break;
     case 'coin':    tone(900, 0.08, 'square', 0.12, 1250); break;
+    case 'charge':  tone(180, 0.42, 'sawtooth', 0.11, 900); tone(360, 0.42, 'sine', 0.06, 1400); break; // 슈우웅(상승)
+    case 'pang':    tone(880, 0.1, 'triangle', 0.22, 1500); tone(1320, 0.12, 'square', 0.14, null, 0.03); tone(660, 0.18, 'triangle', 0.12, null, 0.05); break; // 팡!
+    case 'clink':   [1400, 1000, 1700, 800].forEach((f, i) => tone(f, 0.07, 'square', 0.12, f * 0.7, i * 0.045)); break; // 쨍그랑
   }
 }
 // 첫 사용자 제스처에서 오디오 unlock (iOS 자동재생 정책)
@@ -298,22 +301,59 @@ function loadEnd() {
   }
 }
 async function withLoad(fn) { loadStart(); try { return await fn(); } finally { loadEnd(); } }
-function flashWeapon(kind) {
-  const panel = document.querySelector('.weapon-panel');
-  panel.classList.remove('ok', 'bad'); void panel.offsetWidth; panel.classList.add(kind);
-  const art = el('weaponArt'); art.classList.remove('shake'); void art.offsetWidth;
-  if (kind === 'bad') art.classList.add('shake');
+// 강화 버튼 누른 순간: 무기 충전(슈우웅) — 서버 응답 대기 동안 loop
+function chargeWeapon() {
+  const art = el('weaponArt');
+  art.classList.remove('pop', 'crack', 'shake'); void art.offsetWidth;
+  art.classList.add('charging');
+  sfx('charge'); vibe(4);
+}
+// 강화 결과: 성공=팡(pop)·실패/파괴=쨍그랑(crack) + 파티클
+function weaponResult(kind) {   // 'success' | 'protect' | 'fail' | 'destroy'
+  const art = el('weaponArt'), panel = document.querySelector('.weapon-panel');
+  art.classList.remove('charging', 'pop', 'crack', 'shake');
+  panel.classList.remove('ok', 'bad');
+  void art.offsetWidth; void panel.offsetWidth;
+  const good = kind === 'success' || kind === 'protect';
+  art.classList.add(good ? 'pop' : 'crack');
+  panel.classList.add(good ? 'ok' : 'bad');
+  if (kind === 'success') spawnEnhParticles(['✨', '💫', '⭐', '🌟'], 9);
+  else if (kind === 'protect') spawnEnhParticles(['🛡️', '✨'], 6);
+  else if (kind === 'destroy') spawnEnhParticles(['💥', '🔥', '💢'], 9);
+  else spawnEnhParticles(['💢', '💨'], 4);
+}
+function spawnEnhParticles(emojis, count) {
+  const art = el('weaponArt'); if (!art) return;
+  const rc = art.getBoundingClientRect();
+  const cx = rc.left + rc.width / 2, cy = rc.top + rc.height / 2;
+  for (let i = 0; i < count; i++) {
+    const s = document.createElement('div');
+    s.className = 'enh-particle';
+    s.textContent = emojis[i % emojis.length];
+    s.style.left = cx + 'px'; s.style.top = cy + 'px';
+    const ang = (Math.PI * 2 * i) / count + Math.random() * 0.5;
+    const dist = 60 + Math.random() * 50;
+    s.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
+    s.style.setProperty('--dy', (Math.sin(ang) * dist - 20) + 'px');
+    document.body.appendChild(s);
+    setTimeout(() => s.remove(), 700);
+  }
 }
 
 /* ---------- 액션 ---------- */
 async function doEnhance() {
+  chargeWeapon();   // 슈우웅 — 응답 대기 동안 충전 연출
+  const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const r = await api('enhance', 'POST');
-  if (!r.ok) return toast(r.error, 'bad');
+  if (!r.ok) { el('weaponArt').classList.remove('charging'); return toast(r.error, 'bad'); }
+  // 서버가 빨라도 충전 연출이 최소 300ms 는 보이도록(슈우웅→팡 리듬 유지)
+  const wait = 300 - ((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0);
+  if (wait > 0) await new Promise(res => setTimeout(res, wait));
   me = r.me; render();
-  if (r.result === 'success') { toast(r.msg, 'ok'); flashWeapon('ok'); vibe(r.guaranteed ? [18, 40, 30] : 16); sfx(r.guaranteed ? 'guaranteed' : 'success'); }
-  else if (r.result === 'destroy') { toast(r.msg, 'bad'); flashWeapon('bad'); vibe([30, 50, 30, 50, 40]); sfx('destroy'); } // 파괴는 길고 강하게
-  else if (r.result === 'protected') { toast(r.msg, 'info'); flashWeapon('ok'); vibe([20, 35, 20]); sfx('protect'); }
-  else { toast(r.msg, ''); vibe(5); sfx('fail'); } // 실패는 짧게
+  if (r.result === 'success') { toast(r.msg, 'ok'); weaponResult('success'); vibe(r.guaranteed ? [18, 40, 30] : 16); sfx(r.guaranteed ? 'guaranteed' : 'success'); sfx('pang'); }
+  else if (r.result === 'destroy') { toast(r.msg, 'bad'); weaponResult('destroy'); vibe([30, 50, 30, 50, 40]); sfx('destroy'); sfx('clink'); }
+  else if (r.result === 'protected') { toast(r.msg, 'info'); weaponResult('protect'); vibe([20, 35, 20]); sfx('protect'); sfx('pang'); }
+  else { toast(r.msg, ''); weaponResult('fail'); vibe(8); sfx('clink'); }   // 실패 = 쨍그랑
   if (['rank', 'log', 'hogu'].includes(currentTab)) loadTab();
 }
 /* ---------- 사냥터: 몬스터 연타 처치 ----------
@@ -325,13 +365,29 @@ let huntOpen = false, huntSession = 0, huntKills = 0;
 let huntCur = null, huntSpawning = false, huntLastTap = 0;
 function openHunt() {
   if (!me) return;
-  huntOpen = true; huntSession = 0; huntKills = 0; huntCur = null;
+  huntOpen = true;
   el('huntModal').hidden = false;
   updateHuntHud();
-  el('huntFb').textContent = '';
-  spawnHuntMonster();
+  if (huntCur && !huntCur.dead) {
+    restoreHuntMonster();   // 진행 중이던 몬스터 복원 — 껐다 켜도 리롤 불가(죽여야 다음 몬스터)
+  } else {
+    huntSession = 0; huntKills = 0; huntCur = null;
+    el('huntFb').textContent = '';
+    spawnHuntMonster();
+  }
 }
-function closeHunt() { huntOpen = false; huntCur = null; el('huntModal').hidden = true; }
+// 모달을 닫아도 huntCur 는 유지(다시 열면 같은 몬스터). 죽여야만 새 몬스터가 나온다.
+function closeHunt() { huntOpen = false; el('huntModal').hidden = true; }
+function restoreHuntMonster() {
+  const c = huntCur; if (!c) return;
+  const m = c.r.monster;
+  const monEl = el('huntMon');
+  monEl.className = 'hunt-mon t' + (m.tier || 0);
+  monEl.querySelector('.hunt-emoji').textContent = m.emoji;
+  el('huntName').innerHTML = m.emoji + ' [' + esc(m.name) + '] <small>' + esc(m.rarity) + '</small>';
+  el('huntHpFill').style.width = Math.max(0, 100 - c.taps / c.need * 100) + '%';
+  el('huntFb').textContent = c.r.overtime ? '♾️ 무한 사냥 (보상↓)' : '연타해서 처치!';
+}
 function updateHuntHud() {
   if (!me) return;
   const overtime = me.huntsLeft <= 0;
