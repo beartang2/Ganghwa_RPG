@@ -7,9 +7,6 @@ let currentTab = 'rank';
 const el = id => document.getElementById(id);
 
 /* ---------- API ---------- */
-// meGen: 뮤테이션(POST) 완료 때마다 증가. 백그라운드 폴링(GET me)이 요청 직전 값을 기억했다가
-// 응답 시점에 값이 바뀌었으면(그 사이 액션이 있었으면) 낡은 me 로 덮어쓰지 않도록 버린다.
-let meGen = 0;
 async function api(pathName, method = 'GET', body) {
   const opt = { method, headers: {} };
   if (token) opt.headers['x-token'] = token;
@@ -18,16 +15,21 @@ async function api(pathName, method = 'GET', body) {
   try { res = await fetch('/api/' + pathName, opt); }
   catch (e) { return { ok: false, error: '네트워크 오류: ' + (e && e.message || e) }; }
   const text = await res.text();
-  if (method !== 'GET') meGen++;   // 뮤테이션 완료 표시
   // 응답이 JSON 이 아니면(서버 크래시·타임아웃 등) throw 대신 보이는 에러로 돌려준다
   try { return JSON.parse(text); }
   catch (e) { return { ok: false, error: '서버 오류 (' + res.status + ')' + (text ? ': ' + text.slice(0, 120) : '') }; }
 }
-// 폴링용: 요청 사이 뮤테이션이 없었을 때만 me 적용(낡은 폴링 응답이 최신 액션 결과를 덮는 것 방지)
+/* me 갱신은 항상 이걸로. 서버가 붙인 ts 가 현재 me 보다 오래됐으면 무시한다.
+ * → 도착 순서가 뒤바뀌거나 낡은 폴링이 최신 액션 결과를 덮어써 숫자가 깜빡이던 문제 해결. */
+function applyMe(m) {
+  if (!m) return false;
+  if (me && typeof m.ts === 'number' && typeof me.ts === 'number' && m.ts < me.ts) return false;
+  me = m;
+  return true;
+}
 async function pollMe() {
-  const g = meGen;
   const r = await api('me');
-  if (r && r.ok && g === meGen) { me = r.me; render(); checkInvites(); return true; }
+  if (r && r.ok && applyMe(r.me)) { render(); checkInvites(); return true; }
   return false;
 }
 
@@ -179,7 +181,7 @@ async function showClassSelect() {
     card.onclick = async () => {
       const r = await withLoad(() => api('setclass', 'POST', { class: card.dataset.class }));
       if (!r.ok) return toast(r.error, 'bad');
-      me = r.me; enterGame();
+      applyMe(r.me); enterGame();
       toast('모험을 시작합니다! "출석"·"채굴"·"사냥"으로 골드를 모으세요 🎉', 'info');
     };
   });
@@ -397,7 +399,7 @@ async function doEnhance() {
   // 서버가 빨라도 충전 연출이 최소 300ms 는 보이도록(슈우웅→팡 리듬 유지)
   const wait = 300 - ((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0);
   if (wait > 0) await new Promise(res => setTimeout(res, wait));
-  me = r.me; render();
+  applyMe(r.me); render();
   if (r.result === 'success') { toast(r.msg, 'ok'); weaponResult('success'); vibe(r.guaranteed ? [18, 40, 30] : 16); sfx(r.guaranteed ? 'guaranteed' : 'success'); sfx('pang'); }
   else if (r.result === 'destroy') { toast(r.msg, 'bad'); weaponResult('destroy'); vibe([30, 50, 30, 50, 40]); sfx('destroy'); sfx('clink'); }
   else if (r.result === 'protected') { toast(r.msg, 'info'); weaponResult('protect'); vibe([20, 35, 20]); sfx('protect'); sfx('pang'); }
@@ -484,7 +486,7 @@ function killMonster() {
   c.dead = true;
   const r = c.r;
   const monEl = el('huntMon'); if (monEl) monEl.classList.add('dead');
-  me = r.me; huntSession += r.gold; huntKills++; render();  // 서버 반영분을 이제 화면에 리빌
+  applyMe(r.me); huntSession += r.gold; huntKills++; render();  // 서버 반영분을 이제 화면에 리빌
   let msg = '💰 +' + r.gold.toLocaleString() + 'G' + (r.crit ? ' 💥치명타!' : '');
   if (r.drop) msg += r.drop.type === 'potion' ? '  ' + r.drop.text : '  🎁' + r.drop.text;
   spawnHuntReward(msg, r.crit);
@@ -532,7 +534,7 @@ function closeMine() { mineOpen = false; el('mineModal').hidden = true; }
 async function doMineCollect() {
   const r = await withLoad(() => api('mine', 'POST'));
   if (!r.ok) return toast(r.error, 'bad');
-  me = r.me; mineSession += r.amount; render(); vibe(12); sfx('coin');
+  applyMe(r.me); mineSession += r.amount; render(); vibe(12); sfx('coin');
   renderMinePanel({ text: '🕳️ 자동채굴 수령 +' + r.amount.toLocaleString() + 'G', kind: 'ok' });
 }
 function renderMinePanel(fb) {
@@ -601,7 +603,7 @@ async function breakRock() {
     const rock = document.getElementById('rock'); if (rock) rock.classList.remove('breaking');
     return toast(r.error, 'bad');
   }
-  me = r.me; mineSession += r.gold; render();
+  applyMe(r.me); mineSession += r.gold; render();
   vibe(r.jackpot || r.gem ? [14, 30, 20] : 16);   // 돌 파괴 햅틱(노다지·원석은 강하게)
   sfx(r.jackpot || r.gem ? 'jackpot' : 'break');
   spawnRockReward(r);
@@ -639,13 +641,13 @@ function spawnRockReward(r) {
 async function doAttend() {
   const r = await api('attend', 'POST');
   if (!r.ok) return toast(r.error, 'bad');
-  me = r.me; render(); toast('📅 ' + r.msg, 'ok');
+  applyMe(r.me); render(); toast('📅 ' + r.msg, 'ok');
 }
 async function doBuy(item) {
   if (item === 'classchange' && !confirm('직업 변경권 30,000G — 직업을 다시 선택합니다(레벨·골드 유지). 구매할까요?')) return;
   const r = await api('shop-buy', 'POST', { item });
   if (!r.ok) return toast(r.error, 'bad');
-  me = r.me;
+  applyMe(r.me);
   if (item === 'classchange' && r.needReselect) { showClassSelect(); return; }
   render();
   if (item === 'dye') toast('🎨 ' + r.dye.name + ' [' + r.dye.rarity + '] 뽑기 완료!', r.dye.rarity === '기본' ? 'ok' : 'info');
@@ -655,7 +657,7 @@ async function doBuy(item) {
 async function doFight(target) {
   const r = await api('fight', 'POST', { target });
   if (!r.ok) return toast(r.error, 'bad');
-  me = r.me; render();
+  applyMe(r.me); render();
   let msg = (r.iWon ? '🏆 승리! ' : '😢 패배... ') + r.winner + ' 승 (💰' + r.steal + ' 이동)';
   if (r.broke) msg += ' · 💢' + r.broke.who + ' 무기 +' + r.broke.from + '→+' + r.broke.to;
   toast(msg, r.iWon ? 'ok' : 'bad');
@@ -666,16 +668,16 @@ async function doFight(target) {
 let raidTimer = null, curRaid = null, cacheParties = [], cachePlayers = [], BOSS_CACHE = [];
 let lastFetch = 0, dismissedRaidTs = null, lastPartyHtml = '';
 
-async function doPartyCreate() { const r = await api('party-create', 'POST'); if (!r.ok) return toast(r.error, 'bad'); me = r.me; await refreshRaidData(); paintRaid(); }
-async function doPartyLeave() { const r = await api('party-leave', 'POST'); if (!r.ok) return toast(r.error, 'bad'); me = r.me; if (curRaid) dismissedRaidTs = curRaid.startTs; await refreshRaidData(); paintRaid(); }
-async function doPartyJoin(id) { const r = await api('party-join', 'POST', { id }); if (!r.ok) return toast(r.error, 'bad'); me = r.me; await refreshRaidData(); paintRaid(); }
+async function doPartyCreate() { const r = await api('party-create', 'POST'); if (!r.ok) return toast(r.error, 'bad'); applyMe(r.me); await refreshRaidData(); paintRaid(); }
+async function doPartyLeave() { const r = await api('party-leave', 'POST'); if (!r.ok) return toast(r.error, 'bad'); applyMe(r.me); if (curRaid) dismissedRaidTs = curRaid.startTs; await refreshRaidData(); paintRaid(); }
+async function doPartyJoin(id) { const r = await api('party-join', 'POST', { id }); if (!r.ok) return toast(r.error, 'bad'); applyMe(r.me); await refreshRaidData(); paintRaid(); }
 async function doInvite(nick) { const r = await api('party-invite', 'POST', { nick }); toast(r.ok ? ('📨 ' + r.msg) : r.error, r.ok ? 'info' : 'bad'); await refreshRaidData(); paintRaid(); }
-async function doAccept(id) { const r = await api('party-accept', 'POST', { id }); if (!r.ok) return toast(r.error, 'bad'); me = r.me; await refreshRaidData(); paintRaid(); }
+async function doAccept(id) { const r = await api('party-accept', 'POST', { id }); if (!r.ok) return toast(r.error, 'bad'); applyMe(r.me); await refreshRaidData(); paintRaid(); }
 async function doReject(id) { await api('party-reject', 'POST', { id }); await refreshRaidData(); paintRaid(); }
 async function doRaid(boss) {
   const r = await api('raid', 'POST', { boss });
   if (!r.ok) return toast(r.error, 'bad');
-  me = r.me; curRaid = r.raid; dismissedRaidTs = null; raidBuiltFor = null; raidFinishing = false; raidLocalHits = 0;
+  applyMe(r.me); curRaid = r.raid; dismissedRaidTs = null; raidBuiltFor = null; raidFinishing = false; raidLocalHits = 0;
   paintRaid();
 }
 function closeRaid() { if (curRaid) dismissedRaidTs = curRaid.startTs; lastPartyHtml = ''; raidBuiltFor = null; paintRaid(); }
@@ -774,13 +776,13 @@ async function flushRaidHits() {
   const hits = raidLocalHits; raidLocalHits = 0;
   if (hits <= 0 || !curRaid || curRaid.status !== 'active') return;
   const r = await api('raid-hit', 'POST', { hits });
-  if (r && r.ok && r.raid) { curRaid = r.raid; if (r.me) me = r.me; if (raidBuiltFor === curRaid.startTs) updateBattleUI(); }
+  if (r && r.ok && r.raid) { curRaid = r.raid; if (r.me) applyMe(r.me); if (raidBuiltFor === curRaid.startTs) updateBattleUI(); }
 }
 async function doRaidSkill() {
   if (!curRaid || curRaid.status !== 'active') return;
   const r = await api('raid-skill', 'POST');
   if (!r.ok) return toast(r.error, 'bad');
-  if (r.raid) { curRaid = r.raid; if (r.me) me = r.me; updateBattleUI(); }
+  if (r.raid) { curRaid = r.raid; if (r.me) applyMe(r.me); updateBattleUI(); }
   if (r.skillText) { toast(r.skillText, 'info'); sfx(r.skillKind === 'dmg' ? 'crit' : r.skillKind === 'heal' ? 'success' : 'protect'); vibe([15, 30, 20]); }
 }
 async function raidPoll() {
@@ -794,7 +796,7 @@ async function maybeFinishRaid() {
     raidFinishing = true;
     if (raidLocalHits > 0) { if (raidFlushT) { clearTimeout(raidFlushT); raidFlushT = null; } await flushRaidHits(); }
     const r = await api('raid-finish', 'POST');
-    if (r && r.ok && r.raid) { curRaid = r.raid; if (r.me) me = r.me; }
+    if (r && r.ok && r.raid) { curRaid = r.raid; if (r.me) applyMe(r.me); }
     raidFinishing = false;
     updateBattleUI();
   }
@@ -815,9 +817,8 @@ async function refreshRaidData() {
   lastFetch = Date.now();
   try {
     if (!BOSS_CACHE.length) { const br = await api('bosses'); BOSS_CACHE = br.bosses || []; }
-    const g = meGen;
     const [meR, raidR, partiesR, playersR] = await Promise.all([api('me'), api('party-raid'), api('parties'), api('players')]);
-    if (meR.ok && g === meGen) { me = meR.me; render(); seedInvites(); } // 낡은 폴링 방지 + 초대 seen 처리
+    if (meR.ok && applyMe(meR.me)) { render(); seedInvites(); } // ts 가드 + 초대 seen 처리
     curRaid = raidR.raid; cacheParties = partiesR.list || []; cachePlayers = playersR.list || [];
   } catch (e) { /* 네트워크 순간 오류 무시 */ }
 }
@@ -1015,7 +1016,7 @@ function titlesSection(p, isMe, eq) {
 async function doEquipTitle(titleId) {
   const r = await withLoad(() => api('title', 'POST', { title: titleId || null }));
   if (!r.ok) return toast(r.error, 'bad');
-  me = r.me; render();
+  applyMe(r.me); render();
   openProfile(me.nick);  // 모달 새로고침(선택 상태 반영)
   toast(r.msg, 'ok');
 }
@@ -1023,7 +1024,7 @@ async function doRename() {
   const v = el('renameInput').value.trim();
   const r = await withLoad(() => api('rename', 'POST', { nick: v }));
   if (!r.ok) return toast(r.error, 'bad');
-  me = r.me; el('modal').hidden = true; render(); loadTab();
+  applyMe(r.me); el('modal').hidden = true; render(); loadTab();
   toast('✏️ ' + r.msg, 'ok');
 }
 
@@ -1042,7 +1043,7 @@ el('loginBtn').onclick = async () => {
   try {
     const r = await api('login', 'POST', { nick, pin });
     if (!r.ok) { el('loginErr').textContent = r.error; return; }
-    token = r.token; localStorage.setItem('token', token); me = r.me;
+    token = r.token; localStorage.setItem('token', token); applyMe(r.me);
     if (r.needClass) return showClassSelect();
     enterGame();
   } catch (e) {
@@ -1125,7 +1126,7 @@ updateSoundBtn();
   if (!token) return;
   const r = await api('me');
   if (r.ok) {
-    me = r.me;
+    applyMe(r.me);
     if (!me.class) return showClassSelect();
     enterGame();
   } else { token = null; localStorage.removeItem('token'); }

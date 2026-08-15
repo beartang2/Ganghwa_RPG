@@ -441,6 +441,7 @@ function publicView(db, id) {
     party = { id: pt.id, leaderNick: db.players[pt.leader] ? db.players[pt.leader].nick : '?', count: pt.members.length };
   }
   return {
+    ts: Date.now(),   // 응답 생성 시각 — 클라가 더 오래된 스냅샷을 버리는 데 사용(숫자 깜빡임 방지)
     nick: p.nick,
     class: p.class, className: c.name, classEmoji: c.emoji, weaponBase: c.weapon,
     level: p.level, best: p.best, breaks: p.breaks,
