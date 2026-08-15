@@ -70,6 +70,16 @@ body.loading-on #globalLoading{opacity:1}
 .chips{margin-left:auto;display:flex;gap:6px}
 .chip{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:6px 11px;font-size:14px}
 .chip.gold b{color:var(--gold)}
+/* 상단바 메뉴(☰ 드롭다운) */
+.menu-wrap{position:relative}
+#menuBtn{font-size:17px;line-height:1;padding:6px 11px}
+.menu-drop{position:absolute;right:0;top:calc(100% + 6px);z-index:90;min-width:160px;
+  background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;
+  box-shadow:0 10px 28px rgba(0,0,0,.5)}
+.menu-item{display:block;width:100%;text-align:left;padding:12px 15px;font-size:14px;font-weight:700;
+  background:none;border:0;border-bottom:1px solid var(--line);color:var(--text);cursor:pointer}
+.menu-item:last-child{border-bottom:0}
+.menu-item:hover,.menu-item:active{background:var(--card2)}
 .wrap{display:flex;flex-direction:column;gap:12px}
 .col-left,.col-right{display:flex;flex-direction:column;gap:12px}
 

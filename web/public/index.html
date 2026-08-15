@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>⚔️ 강화 RPG</title>
-<link rel="stylesheet" href="/style.css?v=20">
+<link rel="stylesheet" href="/style.css?v=21">
 </head>
 <body>
 
@@ -38,9 +38,14 @@
       <span class="chip gold">💰 <b id="hGold">0</b></span>
       <span class="chip">🛡️ <b id="hProtect">0</b></span>
     </span>
-    <button id="soundBtn" class="btn ghost sm" aria-label="효과음 켜기/끄기" title="효과음">🔊</button>
-    <button id="helpBtn" class="btn ghost sm" aria-label="플레이 방법" title="플레이 방법">❔</button>
-    <button id="logoutBtn" class="btn ghost sm">로그아웃</button>
+    <div class="menu-wrap">
+      <button id="menuBtn" class="btn ghost sm" aria-label="메뉴">☰</button>
+      <div id="menuDrop" class="menu-drop" hidden>
+        <button class="menu-item" id="soundItem">🔊 효과음 ON</button>
+        <button class="menu-item" id="helpItem">❔ 플레이 방법</button>
+        <button class="menu-item" id="logoutItem">🚪 로그아웃</button>
+      </div>
+    </div>
   </header>
 
   <main class="wrap">
@@ -148,6 +153,6 @@
 
 <!-- Supabase Realtime (선택) — 로드 실패해도 게임은 폴링으로 동작 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/app.js?v=20"></script>
+<script src="/app.js?v=21"></script>
 </body>
 </html>

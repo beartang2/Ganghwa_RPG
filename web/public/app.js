@@ -949,7 +949,7 @@ el('loginBtn').onclick = async () => {
   }
 };
 el('pin').addEventListener('keydown', e => { if (e.key === 'Enter') el('loginBtn').click(); });
-el('logoutBtn').onclick = () => { stopRaidLoop(); closeEvents(); closeRealtime(); token = null; me = null; curRaid = null; localStorage.removeItem('token'); show('login'); };
+function doLogout() { stopRaidLoop(); closeEvents(); closeRealtime(); token = null; me = null; curRaid = null; localStorage.removeItem('token'); show('login'); }
 
 // 버튼 연타 방지: 액션 사이 최소 간격
 const COOLDOWN = 450;
@@ -1003,9 +1003,15 @@ el('mineClose').onclick = closeMine;
 el('mineModal').addEventListener('click', e => { if (e.target === el('mineModal')) closeMine(); });
 el('modal').addEventListener('click', e => { if (e.target === el('modal')) el('modal').hidden = true; });
 el('guideClose').onclick = () => { el('guide').hidden = true; localStorage.setItem('guideSeen', '1'); };
-el('helpBtn').onclick = () => { el('guide').hidden = false; };
-function updateSoundBtn() { el('soundBtn').textContent = soundOn ? '🔊' : '🔇'; el('soundBtn').style.opacity = soundOn ? '' : '.5'; }
-el('soundBtn').onclick = () => { soundOn = !soundOn; localStorage.setItem('soundOff', soundOn ? '0' : '1'); updateSoundBtn(); if (soundOn) { ensureAudio(); sfx('click'); } };
+/* ---------- 상단바 메뉴(☰) ---------- */
+function updateSoundBtn() { el('soundItem').textContent = (soundOn ? '🔊' : '🔇') + ' 효과음 ' + (soundOn ? 'ON' : 'OFF'); }
+function closeMenu() { el('menuDrop').hidden = true; }
+el('menuBtn').onclick = (e) => { e.stopPropagation(); el('menuDrop').hidden = !el('menuDrop').hidden; };
+el('soundItem').onclick = () => { soundOn = !soundOn; localStorage.setItem('soundOff', soundOn ? '0' : '1'); updateSoundBtn(); if (soundOn) { ensureAudio(); sfx('click'); } };
+el('helpItem').onclick = () => { closeMenu(); el('guide').hidden = false; };
+el('logoutItem').onclick = () => { closeMenu(); doLogout(); };
+// 메뉴 바깥 클릭 시 닫기
+document.addEventListener('click', (e) => { if (!el('menuDrop').hidden && !e.target.closest('.menu-wrap')) closeMenu(); });
 updateSoundBtn();
 
 /* ---------- 자동 로그인 ---------- */
