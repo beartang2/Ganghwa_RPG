@@ -46,6 +46,20 @@ small{opacity:.75;font-weight:600}
   animation:spin .6s linear infinite}
 .btn.loading,.btn.loading:disabled{cursor:progress;opacity:.9}
 
+/* 전역 로딩 표시 (상단 진행바 + '로딩 중…' 배지) */
+#globalLoading{position:fixed;left:0;top:0;right:0;z-index:200;pointer-events:none;
+  opacity:0;transition:opacity .15s}
+body.loading-on #globalLoading{opacity:1}
+#globalLoading .gl-bar{height:3px;width:100%;
+  background:linear-gradient(90deg,transparent,var(--primary),#9db4ff,var(--primary),transparent);
+  background-size:45% 100%;background-repeat:no-repeat;animation:glslide 1.05s linear infinite}
+@keyframes glslide{0%{background-position:-45% 0}100%{background-position:145% 0}}
+#globalLoading .gl-pill{position:absolute;top:11px;left:50%;transform:translateX(-50%);
+  display:flex;align-items:center;gap:7px;white-space:nowrap;
+  background:rgba(18,22,32,.96);border:1px solid var(--line);border-radius:20px;
+  padding:6px 15px;font-size:12.5px;font-weight:800;color:var(--text);
+  box-shadow:0 6px 18px rgba(0,0,0,.45)}
+
 /* 상단바 */
 .topbar{display:flex;align-items:center;gap:8px;max-width:520px;margin:0 auto 12px;padding:4px}
 .me-nick{font-weight:800;font-size:16px;cursor:pointer}

@@ -69,7 +69,7 @@ function show(which) {
   ['login', 'classSelect', 'game'].forEach(s => { el(s).hidden = (s !== which); });
 }
 function maybeShowGuide() { if (!sessionStorage.getItem('guideSeen')) el('guide').hidden = false; }
-function enterGame() { show('game'); render(); loadTab(); maybeShowGuide(); openEvents(); initRealtime(); }
+function enterGame() { show('game'); render(); withLoad(loadTab); maybeShowGuide(); openEvents(); initRealtime(); }
 
 /* ---------- Supabase Realtime (선택) — logs INSERT 구독 → 즉시 갱신 ----------
  * 환경변수(SUPABASE_URL/ANON_KEY)가 있고 supabase-js 가 로드됐을 때만.
@@ -126,7 +126,7 @@ function closeEvents() { if (es) { es.onerror = null; es.close(); es = null; } }
 /* ---------- 직업 선택 ---------- */
 async function showClassSelect() {
   show('classSelect');
-  const { classes } = await api('classes');
+  const { classes } = await withLoad(() => api('classes'));
   el('classGrid').innerHTML = Object.values(classes).map(c =>
     `<div class="class-card" data-class="${c.id}">
       <div class="cemoji">${c.emoji}</div>
@@ -136,7 +136,7 @@ async function showClassSelect() {
     </div>`).join('');
   el('classGrid').querySelectorAll('.class-card').forEach(card => {
     card.onclick = async () => {
-      const r = await api('setclass', 'POST', { class: card.dataset.class });
+      const r = await withLoad(() => api('setclass', 'POST', { class: card.dataset.class }));
       if (!r.ok) return toast(r.error, 'bad');
       me = r.me; enterGame();
       toast('모험을 시작합니다! "출석"·"채굴"·"사냥"으로 골드를 모으세요 🎉', 'info');
@@ -216,6 +216,35 @@ function toast(msg, kind) {
   t.textContent = msg; t.className = 'toast ' + (kind || ''); t.hidden = false;
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 4000);
 }
+
+/* ---------- 전역 로딩 표시 ----------
+ * 사용자 동작(액션·탭전환·프로필·직업선택 등)이 서버 응답을 기다리는 동안 상단에
+ * 진행바 + "로딩 중…" 표시. 아주 짧은 요청은 깜빡임 방지를 위해 살짝 지연 후 표시. */
+let loadCount = 0, loadShowTimer = null;
+function ensureLoadingEl() {
+  let g = document.getElementById('globalLoading');
+  if (!g) {
+    g = document.createElement('div');
+    g.id = 'globalLoading';
+    g.innerHTML = '<div class="gl-bar"></div><div class="gl-pill"><span class="spinner"></span> 로딩 중…</div>';
+    document.body.appendChild(g);
+  }
+  return g;
+}
+function loadStart() {
+  loadCount++;
+  if (loadCount === 1 && !loadShowTimer) {
+    loadShowTimer = setTimeout(() => { ensureLoadingEl(); document.body.classList.add('loading-on'); loadShowTimer = null; }, 160);
+  }
+}
+function loadEnd() {
+  loadCount = Math.max(0, loadCount - 1);
+  if (loadCount === 0) {
+    if (loadShowTimer) { clearTimeout(loadShowTimer); loadShowTimer = null; }
+    document.body.classList.remove('loading-on');
+  }
+}
+async function withLoad(fn) { loadStart(); try { return await fn(); } finally { loadEnd(); } }
 function flashWeapon(kind) {
   const panel = document.querySelector('.weapon-panel');
   panel.classList.remove('ok', 'bad'); void panel.offsetWidth; panel.classList.add(kind);
@@ -313,7 +342,7 @@ function tapRock(e) {
   }
 }
 async function breakRock() {
-  const r = await api('mine/swing', 'POST');
+  const r = await withLoad(() => api('mine/swing', 'POST'));
   if (!r.ok) {
     rockHits = 0; rockBusy = false; updateRockVisual();
     const rock = document.getElementById('rock'); if (rock) rock.classList.remove('breaking');
@@ -571,7 +600,7 @@ function titleTag(t) {
 
 /* ---------- 프로필 모달 ---------- */
 async function openProfile(nick) {
-  const r = await api('profile?name=' + encodeURIComponent(nick));
+  const r = await withLoad(() => api('profile?name=' + encodeURIComponent(nick)));
   if (!r.ok) return toast(r.error, 'bad');
   const p = r.profile;
   const isMe = me && p.nick === me.nick;
@@ -620,7 +649,7 @@ function titlesSection(p, isMe, eq) {
     : `<div class="titles-empty">아직 획득한 칭호가 없어요</div>`;
 }
 async function doEquipTitle(titleId) {
-  const r = await api('title', 'POST', { title: titleId || null });
+  const r = await withLoad(() => api('title', 'POST', { title: titleId || null }));
   if (!r.ok) return toast(r.error, 'bad');
   me = r.me; render();
   openProfile(me.nick);  // 모달 새로고침(선택 상태 반영)
@@ -628,7 +657,7 @@ async function doEquipTitle(titleId) {
 }
 async function doRename() {
   const v = el('renameInput').value.trim();
-  const r = await api('rename', 'POST', { nick: v });
+  const r = await withLoad(() => api('rename', 'POST', { nick: v }));
   if (!r.ok) return toast(r.error, 'bad');
   me = r.me; el('modal').hidden = true; render(); loadTab();
   toast('✏️ ' + r.msg, 'ok');
@@ -670,7 +699,8 @@ let busy = false;
 async function act(fn) {
   if (busy) return;
   busy = true;
-  try { await fn(); } finally { setTimeout(() => { busy = false; }, COOLDOWN); }
+  loadStart();
+  try { await fn(); } finally { loadEnd(); setTimeout(() => { busy = false; }, COOLDOWN); }
 }
 el('enhanceBtn').onclick = () => act(doEnhance);
 el('huntBtn').onclick = () => act(doHunt);
@@ -687,7 +717,7 @@ document.querySelectorAll('.tab').forEach(btn => {
     if (currentTab === 'mine') { mineSession = 0; lastMineFb = null; }
     // 본 적 있는 탭이면 캐시를 즉시 표시(로딩 없이), 처음이면 로딩 표시. 그다음 loadTab 이 갱신.
     if (cacheableTab(currentTab)) el('panel').innerHTML = tabHtmlCache[currentTab] || '<div class="empty">불러오는 중…</div>';
-    loadTab();
+    withLoad(loadTab);
   };
 });
 
