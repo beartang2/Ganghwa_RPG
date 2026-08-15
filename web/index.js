@@ -41,7 +41,10 @@ function serveStatic(res, urlPath) {
   if (!filePath.startsWith(PUBLIC_DIR)) { res.writeHead(403); return res.end('forbidden'); }
   fs.readFile(filePath, (err, buf) => {
     if (err) { res.writeHead(404); return res.end('not found'); }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' });
+    const ext = path.extname(filePath);
+    // HTML/JS/CSS 는 항상 재검증(캐시로 옛 버전 고착 방지), 이미지는 캐시 허용
+    const cache = (ext === '.html' || ext === '.js' || ext === '.css') ? 'no-cache' : 'public, max-age=3600';
+    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': cache });
     res.end(buf);
   });
 }
