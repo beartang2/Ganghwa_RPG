@@ -156,7 +156,7 @@ const ACHIEVEMENTS = [
   { id: 'flex',   title: 'Flex',           grade: 'epic',      desc: '누적 2천만 골드 소모',   check: p => (p.goldSpent || 0) >= 20000000 },
   { id: 'billion', title: '억만장자',      grade: 'legend',    desc: '누적 1억 골드 획득',     check: p => (p.goldEarned || 0) >= 100000000 },
   // 싸움 많이 건 사람
-  { id: 'maddog', title: '광견',           grade: 'legend',    desc: '싸움 1,000회 도전',     check: p => (p.fightsTotal || 0) >= 1000 },
+  { id: 'maddog', title: '광견',           grade: 'epic',      desc: '싸움 300회 도전',       check: p => (p.fightsTotal || 0) >= 300 },
   // 한 직업으로 +99 달성 (직업의 달인)
   { id: 'm_warrior', title: '근딜의 달인', grade: 'legend', desc: '근딜로 +99 달성', check: p => (p.masteredClasses || []).includes('warrior') },
   { id: 'm_archer',  title: '원딜의 달인', grade: 'legend', desc: '원딜로 +99 달성', check: p => (p.masteredClasses || []).includes('archer') },
