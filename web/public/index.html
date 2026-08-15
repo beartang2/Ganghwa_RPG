@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>⚔️ 강화 RPG</title>
-<link rel="stylesheet" href="/style.css?v=14">
+<link rel="stylesheet" href="/style.css?v=16">
 </head>
 <body>
 
@@ -113,6 +113,23 @@
   </div>
 </div>
 
+<!-- 사냥터 (몬스터 연타 처치) -->
+<div id="huntModal" class="modal" hidden>
+  <div class="card modal-card hunt-card">
+    <button id="huntClose" class="btn ghost sm close">✕</button>
+    <div class="hunt-top">🗡️ 사냥터 <small id="huntCount"></small></div>
+    <div class="hunt-stage">
+      <div id="huntMon" class="hunt-mon" role="button" aria-label="몬스터 공격">
+        <span class="hunt-emoji">🐺</span>
+      </div>
+    </div>
+    <div class="hunt-hpbar"><div id="huntHpFill" class="hunt-hpfill"></div></div>
+    <div id="huntName" class="hunt-name"></div>
+    <div id="huntFb" class="hunt-fb">몬스터를 연타해서 처치하세요!</div>
+    <div id="huntSession" class="hunt-session"></div>
+  </div>
+</div>
+
 <!-- 프로필 모달 -->
 <div id="modal" class="modal" hidden>
   <div class="card modal-card">
@@ -123,6 +140,6 @@
 
 <!-- Supabase Realtime (선택) — 로드 실패해도 게임은 폴링으로 동작 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/app.js?v=14"></script>
+<script src="/app.js?v=16"></script>
 </body>
 </html>

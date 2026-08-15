@@ -236,6 +236,41 @@ body.loading-on #globalLoading{opacity:1}
   background:linear-gradient(90deg,#ff8a5d,#ffd93d)}
 .rock-hint{text-align:center;color:var(--muted);font-size:13px;font-weight:800;margin:6px 0 10px}
 
+/* 사냥터 (몬스터 연타 처치) */
+.hunt-card{max-width:380px;text-align:center}
+.hunt-top{font-weight:900;font-size:16px;margin:2px 0 4px}
+.hunt-top small{color:var(--muted);font-weight:800;font-size:12.5px;margin-left:6px}
+.hunt-stage{position:relative;display:flex;align-items:center;justify-content:center;
+  height:170px;margin:6px 0;-webkit-user-select:none;user-select:none;overflow:visible}
+.hunt-mon{position:relative;cursor:pointer;line-height:1;touch-action:manipulation;
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;will-change:transform}
+.hunt-mon .hunt-emoji{display:block;font-size:104px;filter:drop-shadow(0 8px 12px rgba(0,0,0,.5))}
+.hunt-mon.t2 .hunt-emoji{filter:drop-shadow(0 0 12px #a770ef)}
+.hunt-mon.t3 .hunt-emoji{filter:drop-shadow(0 0 14px #f7971e)}
+.hunt-mon.t4 .hunt-emoji{filter:drop-shadow(0 0 18px #ff5d6c)}
+.hunt-mon.hit{animation:monHit .13s ease-out}
+@keyframes monHit{0%{transform:scale(1.06) rotate(2deg)}40%{transform:scale(.9) translateY(4px) rotate(-3deg)}100%{transform:scale(1)}}
+.hunt-mon.dead{animation:monDead .34s ease-in forwards;pointer-events:none}
+@keyframes monDead{0%{transform:scale(1)}30%{transform:scale(1.12)}100%{transform:scale(.3) rotate(28deg) translateY(30px);opacity:0;filter:grayscale(1)}}
+.hunt-hpbar{height:12px;background:#0f131c;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:0 4px}
+.hunt-hpfill{height:100%;width:100%;border-radius:8px;transition:width .07s ease-out;
+  background:linear-gradient(90deg,#ff5d6c,#ff9f45)}
+.hunt-name{font-weight:800;font-size:14px;margin:8px 0 2px}
+.hunt-name small{color:var(--muted);font-weight:700;font-size:12px}
+.hunt-fb{min-height:20px;color:var(--muted);font-size:13px;font-weight:700;margin:2px 0 6px}
+.hunt-session{border-top:1px solid var(--line);padding-top:9px;color:var(--muted);font-size:13px}
+.hunt-session b{color:var(--text)}
+/* 떠오르는 데미지·보상 (body 에 fixed) */
+.hunt-dmg{position:fixed;z-index:120;pointer-events:none;transform:translate(-50%,-50%);
+  font-weight:900;font-size:20px;color:#fff;text-shadow:0 2px 6px #000;animation:dmgFloat .65s ease-out forwards}
+.hunt-dmg.crit{font-size:30px;color:#ffe259;text-shadow:0 0 12px #ff8a00,0 2px 6px #000}
+@keyframes dmgFloat{0%{opacity:0;transform:translate(-50%,-20%) scale(.7)}
+  20%{opacity:1;transform:translate(-50%,-70%) scale(1.1)}
+  100%{opacity:0;transform:translate(-50%,-160%) scale(1)}}
+.hunt-reward{position:fixed;z-index:121;pointer-events:none;white-space:nowrap;transform:translate(-50%,-50%);
+  font-weight:900;font-size:18px;color:var(--gold);text-shadow:0 2px 8px #000;animation:rewardUp .98s ease-out forwards}
+.hunt-reward.crit{color:#ffe259;text-shadow:0 0 12px #ffb300,0 2px 8px #000}
+
 /* 모달 */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
 .modal-card{position:relative;max-width:360px;width:100%}

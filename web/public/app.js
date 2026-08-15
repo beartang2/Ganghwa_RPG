@@ -218,6 +218,34 @@ function toast(msg, kind) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 4000);
 }
 
+/* ---------- 햅틱(진동) ----------
+ * 안드로이드: navigator.vibrate 로 패턴 진동.
+ * iOS: Vibration API 미지원 → iOS 17.4+ 의 <input switch> 토글 시 나는 시스템 햅틱을 편법으로 사용
+ *      (세기 조절 불가·고정 틱, 안 될 수도 있음). 반드시 사용자 제스처(탭) 안에서 호출해야 함. */
+let _iosHaptic = null;
+function iosHapticTick() {
+  try {
+    if (!_iosHaptic) {
+      const label = document.createElement('label');
+      label.setAttribute('aria-hidden', 'true');
+      label.style.cssText = 'position:absolute;width:0;height:0;opacity:0;pointer-events:none;overflow:hidden';
+      const input = document.createElement('input');
+      input.type = 'checkbox'; input.setAttribute('switch', '');
+      label.appendChild(input);
+      document.body.appendChild(label);
+      _iosHaptic = { label, input };
+    }
+    _iosHaptic.input.checked = !_iosHaptic.input.checked; // 상태 변화가 있어야 틱 발생
+    _iosHaptic.label.click();
+  } catch (e) { /* noop */ }
+}
+function vibe(pattern) {
+  try {
+    if (navigator.vibrate) { navigator.vibrate(pattern); return; }  // 안드로이드 등
+    iosHapticTick();                                                // iOS 폴백(고정 틱)
+  } catch (e) { /* noop */ }
+}
+
 /* ---------- 전역 로딩 표시 ----------
  * 사용자 동작(액션·탭전환·프로필·직업선택 등)이 서버 응답을 기다리는 동안 상단에
  * 진행바 + "로딩 중…" 표시. 아주 짧은 요청은 깜빡임 방지를 위해 살짝 지연 후 표시. */
@@ -258,22 +286,102 @@ async function doEnhance() {
   const r = await api('enhance', 'POST');
   if (!r.ok) return toast(r.error, 'bad');
   me = r.me; render();
-  if (r.result === 'success') { toast(r.msg, 'ok'); flashWeapon('ok'); }
-  else if (r.result === 'destroy') { toast(r.msg, 'bad'); flashWeapon('bad'); }
-  else if (r.result === 'protected') { toast(r.msg, 'info'); flashWeapon('ok'); }
-  else { toast(r.msg, ''); } // 실패는 흔한 결과 → 번쩍임 없이 담백하게
+  if (r.result === 'success') { toast(r.msg, 'ok'); flashWeapon('ok'); vibe(r.guaranteed ? [18, 40, 30] : 16); }
+  else if (r.result === 'destroy') { toast(r.msg, 'bad'); flashWeapon('bad'); vibe([30, 50, 30, 50, 40]); } // 파괴는 길고 강하게
+  else if (r.result === 'protected') { toast(r.msg, 'info'); flashWeapon('ok'); vibe([20, 35, 20]); }
+  else { toast(r.msg, ''); vibe(5); } // 실패는 짧게
   if (['rank', 'log', 'hogu'].includes(currentTab)) loadTab();
 }
-async function doHunt() {
-  const r = await api('hunt', 'POST');
-  if (!r.ok) return toast(r.error, 'bad');
-  me = r.me; render();
-  let msg = (r.overtime ? '♾️ ' : '') + (r.crit ? '💥치명타! ' : '') + r.monster.emoji + ' ' + r.monster.name + '(' + r.monster.rarity + ')에게 ' + r.dealt + ' 데미지' + (r.slain ? ' 처치!' : '') + '  💰+' + r.gold;
+/* ---------- 사냥터: 몬스터 연타 처치 ----------
+ * 채굴 돌과 같은 원칙: 몬스터 1마리 = 서버콜(hunt) 1회. 탭은 연출이고,
+ * 스폰 때 서버가 결과를 정한 뒤(보상은 서버에 즉시 반영) 마지막 타격에 실제 치명타를 리빌한다. */
+const HUNT_TAP_MS = 70;              // 사냥 연타 최소 간격(매크로는 서버 속도제한이 막음)
+let huntOpen = false, huntSession = 0, huntKills = 0;
+let huntCur = null, huntSpawning = false, huntLastTap = 0;
+function openHunt() {
+  if (!me) return;
+  huntOpen = true; huntSession = 0; huntKills = 0; huntCur = null;
+  el('huntModal').hidden = false;
+  updateHuntHud();
+  el('huntFb').textContent = '';
+  spawnHuntMonster();
+}
+function closeHunt() { huntOpen = false; huntCur = null; el('huntModal').hidden = true; }
+function updateHuntHud() {
+  if (!me) return;
+  const overtime = me.huntsLeft <= 0;
+  el('huntCount').textContent = overtime ? '♾️ 무한 사냥' : ('오늘 ' + (me.dailyHunts - me.huntsLeft) + '/' + me.dailyHunts);
+  el('huntSession').innerHTML = '처치 <b>' + huntKills + '</b> · 획득 💰 <b>+' + huntSession.toLocaleString() + 'G</b>';
+}
+async function spawnHuntMonster() {
+  if (!huntOpen || huntSpawning) return;
+  huntSpawning = true;
+  const mon = el('huntMon'); if (mon) mon.classList.remove('dead');
+  const r = await withLoad(() => api('hunt', 'POST'));   // 서버가 몬스터·보상·치명타 결정(보상은 서버에 즉시 반영)
+  huntSpawning = false;
+  if (!huntOpen) return;                  // 그새 닫힘
+  if (!r.ok) { el('huntFb').textContent = r.error + ' — 잠시 후 다시'; huntCur = null;
+    setTimeout(() => { if (huntOpen && !huntCur) spawnHuntMonster(); }, 1200); return; }
+  const m = r.monster;
+  const need = Math.min(7, 4 + (m.tier || 0));   // 강한(희귀) 몬스터일수록 더 여러 번
+  huntCur = { r, taps: 0, need, dmgPerTap: Math.max(1, Math.ceil((m.hp || 10) / need)) };
+  const monEl = el('huntMon');
+  monEl.className = 'hunt-mon t' + (m.tier || 0);
+  monEl.querySelector('.hunt-emoji').textContent = m.emoji;
+  el('huntName').innerHTML = m.emoji + ' [' + esc(m.name) + '] <small>' + esc(m.rarity) + '</small>';
+  el('huntHpFill').style.width = '100%';
+  el('huntFb').textContent = r.overtime ? '♾️ 무한 사냥 (보상↓)' : '연타해서 처치!';
+}
+function tapMonster(e) {
+  if (e) e.preventDefault();
+  if (!huntOpen || !huntCur || huntCur.dead) return;
+  const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  if (now - huntLastTap < HUNT_TAP_MS) return;
+  huntLastTap = now;
+  const c = huntCur; c.taps++;
+  const last = c.taps >= c.need;
+  const isCrit = last && c.r.crit;                 // 실제 치명타는 마지막 타격에 표시
+  vibe(isCrit ? [12, 28, 22] : last ? 18 : 7);     // 타격 햅틱(처치·치명타는 강하게)
+  const monEl = el('huntMon');
+  if (monEl) { monEl.classList.remove('hit'); void monEl.offsetWidth; monEl.classList.add('hit'); }
+  spawnHuntDmg(isCrit ? c.dmgPerTap * 2 : c.dmgPerTap, isCrit);
+  el('huntHpFill').style.width = Math.max(0, 100 - c.taps / c.need * 100) + '%';
+  if (last) killMonster();
+}
+function killMonster() {
+  const c = huntCur; if (!c || c.dead) return;
+  c.dead = true;
+  const r = c.r;
+  const monEl = el('huntMon'); if (monEl) monEl.classList.add('dead');
+  me = r.me; huntSession += r.gold; huntKills++; render();  // 서버 반영분을 이제 화면에 리빌
+  let msg = '💰 +' + r.gold.toLocaleString() + 'G' + (r.crit ? ' 💥치명타!' : '');
   if (r.drop) msg += r.drop.type === 'potion' ? '  ' + r.drop.text : '  🎁' + r.drop.text;
-  toast(msg, r.drop ? 'info' : 'ok');
-  // 채광 물약으로 기력이 찼으면 채굴장 탭 갱신
-  if (currentTab === 'mine' && r.drop && r.drop.type === 'potion') renderMinePanel();
-  else if (['log', 'goldrank'].includes(currentTab)) loadTab();
+  spawnHuntReward(msg, r.crit);
+  updateHuntHud();
+  setTimeout(() => { if (huntOpen) spawnHuntMonster(); }, 340);
+}
+// 떠오르는 데미지 숫자 (fixed — 모달 위에 표시)
+function spawnHuntDmg(n, crit) {
+  const mon = el('huntMon'); if (!mon) return;
+  const rc = mon.getBoundingClientRect();
+  const t = document.createElement('div');
+  t.className = 'hunt-dmg' + (crit ? ' crit' : '');
+  t.textContent = (crit ? '💥' : '') + '-' + n.toLocaleString();
+  t.style.left = (rc.left + rc.width * (0.3 + Math.random() * 0.4)) + 'px';
+  t.style.top = (rc.top + rc.height * 0.3) + 'px';
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 650);
+}
+function spawnHuntReward(text, crit) {
+  const mon = el('huntMon'); if (!mon) return;
+  const rc = mon.getBoundingClientRect();
+  const t = document.createElement('div');
+  t.className = 'hunt-reward' + (crit ? ' crit' : '');
+  t.textContent = text;
+  t.style.left = (rc.left + rc.width / 2) + 'px';
+  t.style.top = (rc.top + rc.height * 0.15) + 'px';
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 1000);
 }
 async function doMine() {
   const r = await api('mine', 'POST');
@@ -332,6 +440,7 @@ function tapRock(e) {
   if (rockBusy || now - lastTapTs < MINE_TAP_MS) return;  // 처리 중이거나 0.1초 이내 연타 → 무시
   lastTapTs = now;
   rockHits++;
+  vibe(7);          // 곡괭이질 햅틱
   const rock = document.getElementById('rock');
   if (rock) { rock.classList.remove('hit'); void rock.offsetWidth; rock.classList.add('hit'); }
   updateRockVisual();
@@ -349,6 +458,7 @@ async function breakRock() {
     return toast(r.error, 'bad');
   }
   me = r.me; mineSession += r.gold; render();
+  vibe(r.jackpot || r.gem ? [14, 30, 20] : 16);   // 돌 파괴 햅틱(노다지·원석은 강하게)
   spawnRockReward(r);
   setTimeout(() => {
     rockHits = 0; rockBusy = false;
@@ -686,13 +796,14 @@ let busy = false;
 async function act(fn, btn) {
   if (busy) return;
   busy = true;
+  vibe(6);          // 버튼 누름 햅틱(안드로이드)
   loadStart();
   if (btn) btn.classList.add('acting');   // 클릭 즉시 버튼에 처리중 표시(서버 응답 지연 체감↓)
   try { await fn(); }
   finally { loadEnd(); if (btn) btn.classList.remove('acting'); setTimeout(() => { busy = false; }, COOLDOWN); }
 }
 el('enhanceBtn').onclick = () => act(doEnhance, el('enhanceBtn'));
-el('huntBtn').onclick = () => act(doHunt, el('huntBtn'));
+el('huntBtn').onclick = openHunt;   // 사냥터(연타 처치) 모달 열기
 el('mineBtn').onclick = () => act(doMine, el('mineBtn'));
 el('attendBtn').onclick = () => act(doAttend, el('attendBtn'));
 // 상단바 내 닉네임 클릭 → 내 프로필(닉변경 가능)
@@ -723,6 +834,10 @@ el('panel').addEventListener('click', e => {
   const nm = e.target.closest('[data-nick]'); if (nm) return openProfile(nm.dataset.nick);
 });
 el('modalClose').onclick = () => { el('modal').hidden = true; };
+// 사냥터 모달: 몬스터 연타(pointerdown), 닫기
+el('huntMon').addEventListener('pointerdown', tapMonster);
+el('huntClose').onclick = closeHunt;
+el('huntModal').addEventListener('click', e => { if (e.target === el('huntModal')) closeHunt(); });
 el('modal').addEventListener('click', e => { if (e.target === el('modal')) el('modal').hidden = true; });
 el('guideClose').onclick = () => { el('guide').hidden = true; localStorage.setItem('guideSeen', '1'); };
 el('helpBtn').onclick = () => { el('guide').hidden = false; };
