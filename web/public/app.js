@@ -273,6 +273,13 @@ function sfx(name) {
 // 첫 사용자 제스처에서 오디오 unlock (iOS 자동재생 정책)
 document.addEventListener('pointerdown', () => ensureAudio(), { once: true, capture: true });
 
+/* ---------- 확대(핀치 줌) 차단 ----------
+ * 안드로이드: viewport user-scalable=no. iOS Safari 는 그걸 무시하므로 제스처 이벤트를 막는다.
+ * 한 손가락 스크롤/탭은 그대로 두고, 두 손가락(핀치)만 차단. */
+['gesturestart', 'gesturechange', 'gestureend'].forEach(ev =>
+  document.addEventListener(ev, (e) => e.preventDefault(), { passive: false }));
+document.addEventListener('touchmove', (e) => { if (e.touches && e.touches.length > 1) e.preventDefault(); }, { passive: false });
+
 /* ---------- 전역 로딩 표시 ----------
  * 사용자 동작(액션·탭전환·프로필·직업선택 등)이 서버 응답을 기다리는 동안 상단에
  * 진행바 + "로딩 중…" 표시. 아주 짧은 요청은 깜빡임 방지를 위해 살짝 지연 후 표시. */

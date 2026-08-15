@@ -10,9 +10,9 @@ const crypto = require('crypto');
 const CONFIG = {
   dailyFights: 5, dailyHunts: 20, dailyRaids: 3,
   maxLevel: 99, startGold: 1000, attendGold: 1000,
-  stealPct: 0.2, protectPrice: 3000,
+  stealPct: 0.2, protectPrice: 8000,
   fightBreakChance: 0.10,    // 싸움 패배 시 무기 1단계 하락 확률(진 사람만, 확률적)
-  dropProtectChance: 0.03, dropGoldChance: 0.07,
+  dropProtectChance: 0.012, dropGoldChance: 0.07,
   mineRate: 12, mineCap: 3000, partyMax: 5, raidMinMembers: 2,
   raidAtkBuffCap: 0.15,      // 힐러 아군 공격 버프 상한
   raidDRCap: 0.40,           // 탱커 아군 피해감소 상한

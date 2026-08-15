@@ -7,10 +7,13 @@
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{margin:0;padding:0}
+/* 오버스크롤(위/아래 바운스) 시 배경 밖으로 밝은색이 비치지 않도록 html 도 어둡게 */
+html{background:var(--bg)}
 body{
-  background:radial-gradient(1200px 600px at 50% -10%, #1a2030, var(--bg)) fixed;
+  background:radial-gradient(1200px 600px at 50% -10%, #1a2030, var(--bg)) fixed, var(--bg);
   color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
   min-height:100vh; -webkit-font-smoothing:antialiased;
+  touch-action:manipulation;   /* 더블탭 확대 차단(일반 탭·클릭은 정상, 핀치는 JS로 별도 차단) */
 }
 .screen{max-width:520px;margin:0 auto;padding:16px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,.35)}
@@ -225,9 +228,12 @@ body.loading-on #globalLoading{opacity:1}
   border-radius:12px;padding:12px 14px;font-weight:700;text-align:center;
   border:1px solid var(--line);background:#141a26;color:var(--text);
   box-shadow:0 12px 36px rgba(0,0,0,.6);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
-.toast.ok{background:#16281d;border-color:var(--success);color:#c9f7d8}
-.toast.bad{background:#2a161b;border-color:var(--danger);color:#ffd6da}
-.toast.info{background:#13202f;border-color:var(--info);color:#d3ecff}
+.toast.ok{background:#1d5137;border-color:var(--success);color:#e4ffee;
+  box-shadow:0 12px 36px rgba(0,0,0,.5),0 0 0 1px rgba(73,209,122,.55),0 0 22px rgba(73,209,122,.28)}
+.toast.bad{background:#5a2130;border-color:var(--danger);color:#ffe3e6;
+  box-shadow:0 12px 36px rgba(0,0,0,.5),0 0 0 1px rgba(255,93,108,.55),0 0 22px rgba(255,93,108,.28)}
+.toast.info{background:#1c4a70;border-color:var(--info);color:#e6f4ff;
+  box-shadow:0 12px 36px rgba(0,0,0,.5),0 0 0 1px rgba(79,172,254,.5),0 0 22px rgba(79,172,254,.25)}
 
 /* 닉네임 염색 */
 .nick-glow{text-shadow:0 0 7px currentColor}
