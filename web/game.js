@@ -158,10 +158,10 @@ const ACHIEVEMENTS = [
   // 싸움 많이 건 사람
   { id: 'maddog', title: '광견',           grade: 'epic',      desc: '싸움 300회 도전',       check: p => (p.fightsTotal || 0) >= 300 },
   // 한 직업으로 +99 달성 (직업의 달인)
-  { id: 'm_warrior', title: '근딜의 달인', grade: 'legend', desc: '근딜로 +99 달성', check: p => (p.masteredClasses || []).includes('warrior') },
-  { id: 'm_archer',  title: '원딜의 달인', grade: 'legend', desc: '원딜로 +99 달성', check: p => (p.masteredClasses || []).includes('archer') },
-  { id: 'm_tanker',  title: '탱커의 달인', grade: 'legend', desc: '탱커로 +99 달성', check: p => (p.masteredClasses || []).includes('tanker') },
-  { id: 'm_healer',  title: '힐러의 달인', grade: 'legend', desc: '힐러로 +99 달성', check: p => (p.masteredClasses || []).includes('healer') },
+  { id: 'm_warrior', title: CLASSES.warrior.name + '의 달인', grade: 'legend', desc: CLASSES.warrior.name + '(으)로 +99 달성', check: p => (p.masteredClasses || []).includes('warrior') },
+  { id: 'm_archer',  title: CLASSES.archer.name  + '의 달인', grade: 'legend', desc: CLASSES.archer.name  + '(으)로 +99 달성', check: p => (p.masteredClasses || []).includes('archer') },
+  { id: 'm_tanker',  title: CLASSES.tanker.name  + '의 달인', grade: 'legend', desc: CLASSES.tanker.name  + '(으)로 +99 달성', check: p => (p.masteredClasses || []).includes('tanker') },
+  { id: 'm_healer',  title: CLASSES.healer.name  + '의 달인', grade: 'legend', desc: CLASSES.healer.name  + '(으)로 +99 달성', check: p => (p.masteredClasses || []).includes('healer') },
   // 채굴장 노가다
   { id: 'blindmoney', title: '눈먼 돈',    grade: 'epic',      desc: '곡괭이질 5,000회',      check: p => (p.mineSwings || 0) >= 5000 },
   // 몬스터 사냥
