@@ -566,14 +566,31 @@ async function doRename() {
 }
 
 /* ---------- 이벤트 ---------- */
+let loggingIn = false;
 el('loginBtn').onclick = async () => {
+  if (loggingIn) return;
   const nick = el('nick').value.trim(), pin = el('pin').value.trim();
   el('loginErr').textContent = '';
-  const r = await api('login', 'POST', { nick, pin });
-  if (!r.ok) { el('loginErr').textContent = r.error; return; }
-  token = r.token; localStorage.setItem('token', token); me = r.me;
-  if (r.needClass) return showClassSelect();
-  enterGame();
+  const btn = el('loginBtn');
+  loggingIn = true;
+  btn.disabled = true;
+  btn.classList.add('loading');
+  btn.dataset.label = btn.textContent;
+  btn.innerHTML = '<span class="spinner"></span> 접속 중...';
+  try {
+    const r = await api('login', 'POST', { nick, pin });
+    if (!r.ok) { el('loginErr').textContent = r.error; return; }
+    token = r.token; localStorage.setItem('token', token); me = r.me;
+    if (r.needClass) return showClassSelect();
+    enterGame();
+  } catch (e) {
+    el('loginErr').textContent = '접속에 실패했어요. 잠시 후 다시 시도하세요.';
+  } finally {
+    loggingIn = false;
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    btn.textContent = btn.dataset.label || '시작';
+  }
 };
 el('pin').addEventListener('keydown', e => { if (e.key === 'Enter') el('loginBtn').click(); });
 el('logoutBtn').onclick = () => { stopRaidLoop(); closeEvents(); closeRealtime(); token = null; me = null; curRaid = null; localStorage.removeItem('token'); show('login'); };

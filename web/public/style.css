@@ -39,6 +39,13 @@ small{opacity:.75;font-weight:600}
 .hint{color:var(--muted);font-size:12px;margin-top:14px;line-height:1.5}
 .err{color:var(--danger);font-size:13px;min-height:18px;margin:8px 0 0}
 
+/* 로딩 스피너 (로그인 버튼 등) */
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{display:inline-block;width:15px;height:15px;vertical-align:-2px;
+  border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;
+  animation:spin .6s linear infinite}
+.btn.loading,.btn.loading:disabled{cursor:progress;opacity:.9}
+
 /* 상단바 */
 .topbar{display:flex;align-items:center;gap:8px;max-width:520px;margin:0 auto 12px;padding:4px}
 .me-nick{font-weight:800;font-size:16px;cursor:pointer}
