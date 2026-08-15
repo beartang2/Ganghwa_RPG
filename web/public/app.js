@@ -392,13 +392,6 @@ async function doAttend() {
   if (!r.ok) return toast(r.error, 'bad');
   me = r.me; render(); toast('📅 ' + r.msg, 'ok');
 }
-async function doProtect() {
-  const qty = prompt('파괴방지권 몇 개를 살까요? (개당 3,000G)', '1');
-  if (qty == null) return;
-  const r = await api('protect', 'POST', { qty });
-  if (!r.ok) return toast(r.error, 'bad');
-  me = r.me; render(); toast('🛡️ ' + r.msg, 'info');
-}
 async function doBuy(item) {
   if (item === 'classchange' && !confirm('직업 변경권 30,000G — 직업을 다시 선택합니다(레벨·골드 유지). 구매할까요?')) return;
   const r = await api('shop/buy', 'POST', { item });
@@ -696,17 +689,18 @@ el('logoutBtn').onclick = () => { stopRaidLoop(); closeEvents(); closeRealtime()
 // 버튼 연타 방지: 액션 사이 최소 간격
 const COOLDOWN = 450;
 let busy = false;
-async function act(fn) {
+async function act(fn, btn) {
   if (busy) return;
   busy = true;
   loadStart();
-  try { await fn(); } finally { loadEnd(); setTimeout(() => { busy = false; }, COOLDOWN); }
+  if (btn) btn.classList.add('acting');   // 클릭 즉시 버튼에 처리중 표시(서버 응답 지연 체감↓)
+  try { await fn(); }
+  finally { loadEnd(); if (btn) btn.classList.remove('acting'); setTimeout(() => { busy = false; }, COOLDOWN); }
 }
-el('enhanceBtn').onclick = () => act(doEnhance);
-el('huntBtn').onclick = () => act(doHunt);
-el('mineBtn').onclick = () => act(doMine);
-el('attendBtn').onclick = () => act(doAttend);
-el('protectBtn').onclick = () => act(doProtect);
+el('enhanceBtn').onclick = () => act(doEnhance, el('enhanceBtn'));
+el('huntBtn').onclick = () => act(doHunt, el('huntBtn'));
+el('mineBtn').onclick = () => act(doMine, el('mineBtn'));
+el('attendBtn').onclick = () => act(doAttend, el('attendBtn'));
 // 상단바 내 닉네임 클릭 → 내 프로필(닉변경 가능)
 el('hNick').onclick = () => { if (me) openProfile(me.nick); };
 
@@ -722,16 +716,16 @@ document.querySelectorAll('.tab').forEach(btn => {
 });
 
 el('panel').addEventListener('click', e => {
-  const f = e.target.closest('[data-fight]'); if (f) return act(() => doFight(f.dataset.fight));
-  const r = e.target.closest('[data-raid]'); if (r) return act(() => doRaid(r.dataset.raid));
-  const j = e.target.closest('[data-join]'); if (j) return act(() => doPartyJoin(j.dataset.join));
-  const bu = e.target.closest('[data-buy]'); if (bu) return act(() => doBuy(bu.dataset.buy));
-  if (e.target.closest('[data-minecollect]')) return act(doMineCollect);
-  const iv = e.target.closest('[data-invite]'); if (iv) return act(() => doInvite(iv.dataset.invite));
-  const ac = e.target.closest('[data-accept]'); if (ac) return act(() => doAccept(ac.dataset.accept));
-  const rj = e.target.closest('[data-reject]'); if (rj) return act(() => doReject(rj.dataset.reject));
-  if (e.target.closest('#createPartyBtn')) return act(doPartyCreate);
-  if (e.target.closest('#leavePartyBtn')) return act(doPartyLeave);
+  const f = e.target.closest('[data-fight]'); if (f) return act(() => doFight(f.dataset.fight), f);
+  const r = e.target.closest('[data-raid]'); if (r) return act(() => doRaid(r.dataset.raid), r);
+  const j = e.target.closest('[data-join]'); if (j) return act(() => doPartyJoin(j.dataset.join), j);
+  const bu = e.target.closest('[data-buy]'); if (bu) return act(() => doBuy(bu.dataset.buy), bu);
+  const mc = e.target.closest('[data-minecollect]'); if (mc) return act(doMineCollect, mc);
+  const iv = e.target.closest('[data-invite]'); if (iv) return act(() => doInvite(iv.dataset.invite), iv);
+  const ac = e.target.closest('[data-accept]'); if (ac) return act(() => doAccept(ac.dataset.accept), ac);
+  const rj = e.target.closest('[data-reject]'); if (rj) return act(() => doReject(rj.dataset.reject), rj);
+  const cp = e.target.closest('#createPartyBtn'); if (cp) return act(doPartyCreate, cp);
+  const lp = e.target.closest('#leavePartyBtn'); if (lp) return act(doPartyLeave, lp);
   if (e.target.closest('#closeRaidBtn')) return closeRaid();
   const nm = e.target.closest('[data-nick]'); if (nm) return openProfile(nm.dataset.nick);
 });

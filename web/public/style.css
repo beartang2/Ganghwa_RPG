@@ -45,6 +45,11 @@ small{opacity:.75;font-weight:600}
   border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;
   animation:spin .6s linear infinite}
 .btn.loading,.btn.loading:disabled{cursor:progress;opacity:.9}
+/* 클릭 즉시 표시되는 버튼 처리중 상태(우측 스피너) */
+.btn.acting{position:relative;opacity:.75;pointer-events:none;padding-right:34px!important}
+.btn.acting::after{content:'';position:absolute;right:12px;top:50%;width:14px;height:14px;
+  margin-top:-7px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;
+  animation:spin .6s linear infinite}
 
 /* 전역 로딩 표시 (상단 진행바 + '로딩 중…' 배지) */
 #globalLoading{position:fixed;left:0;top:0;right:0;z-index:200;pointer-events:none;
