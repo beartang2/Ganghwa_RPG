@@ -194,6 +194,36 @@ small{opacity:.75;font-weight:600}
 .mine-session{text-align:center;color:var(--muted);font-size:12px;margin-top:10px}
 .mine-session b{color:var(--gold)}
 
+/* 채굴장 돌 깨기 미니게임 */
+.rock-stage{position:relative;display:flex;align-items:center;justify-content:center;
+  height:150px;margin:12px 0 6px;-webkit-user-select:none;user-select:none;overflow:visible}
+.rock{position:relative;cursor:pointer;line-height:1;touch-action:manipulation;
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;
+  transition:transform .05s ease-out;will-change:transform}
+.rock .rock-emoji{display:block;font-size:96px;
+  transform:scale(calc(1 - var(--dmg,0) * .12)) rotate(calc(var(--dmg,0) * -4deg));
+  filter:drop-shadow(0 6px 10px rgba(0,0,0,.45)) brightness(calc(1 - var(--dmg,0) * .22));
+  transition:transform .06s ease-out,filter .12s}
+.rock.tired{opacity:.6;filter:grayscale(.5)}
+.rock.hit{animation:rockHit .13s ease-out}
+@keyframes rockHit{0%{transform:scale(.9) rotate(-3deg)}45%{transform:scale(1.08) rotate(3deg)}100%{transform:scale(1)}}
+.rock.breaking{animation:rockBreak .24s ease-in forwards;pointer-events:none}
+@keyframes rockBreak{0%{transform:scale(1)}35%{transform:scale(1.18)}100%{transform:scale(.2) rotate(30deg);opacity:0}}
+.rock-reward{position:fixed;z-index:60;pointer-events:none;white-space:nowrap;
+  font-weight:900;font-size:20px;color:var(--gold);text-shadow:0 2px 8px #000;
+  animation:rewardUp .95s ease-out forwards}
+.rock-reward.big{font-size:27px;color:#ffe259;text-shadow:0 0 12px #ffb300,0 2px 8px #000}
+@keyframes rewardUp{0%{opacity:0;transform:translate(-50%,-30px) scale(.8)}
+  22%{opacity:1;transform:translate(-50%,-52px) scale(1.12)}
+  100%{opacity:0;transform:translate(-50%,-100px) scale(1)}}
+.rock-shard{position:fixed;z-index:59;font-size:20px;pointer-events:none;
+  transform:translate(-50%,-50%);animation:shardFly .5s ease-out forwards}
+@keyframes shardFly{to{opacity:0;transform:translate(calc(-50% + var(--dx,0)),calc(-50% + var(--dy,0))) rotate(180deg)}}
+.rock-crackbar{height:7px;background:#0f131c;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.rock-crackfill{height:100%;width:0;border-radius:6px;transition:width .06s ease-out;
+  background:linear-gradient(90deg,#ff8a5d,#ffd93d)}
+.rock-hint{text-align:center;color:var(--muted);font-size:13px;font-weight:800;margin:6px 0 10px}
+
 /* 모달 */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
 .modal-card{position:relative;max-width:360px;width:100%}

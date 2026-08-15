@@ -100,7 +100,8 @@ function onRefresh() {
   clearTimeout(refreshT);
   refreshT = setTimeout(async () => {
     try { const r = await api('me'); if (r.ok) { me = r.me; render(); } } catch (e) { /* 무시 */ }
-    if (['rank', 'goldrank', 'hogu', 'log', 'fight', 'shop', 'mine'].includes(currentTab)) loadTab();
+    // 채굴장(mine)은 돌 깨기 연타 중 리렌더되면 진행이 끊겨 제외 — 곡괭이질마다 자체 갱신
+    if (['rank', 'goldrank', 'hogu', 'log', 'fight', 'shop'].includes(currentTab)) loadTab();
   }, 250);
 }
 // SSE(상시서버)와 폴링(서버리스) 겸용:
@@ -248,8 +249,13 @@ async function doMine() {
   me = r.me; render(); toast('⛏️ 채굴 완료! +' + r.amount.toLocaleString() + 'G', 'ok');
   if (currentTab === 'mine') renderMinePanel();
 }
-/* ---------- 채굴장(능동) ---------- */
+/* ---------- 채굴장(능동): 돌 깨기 미니게임 ----------
+ * 돌을 연타(최소 0.1초 간격)해서 깨면 곡괭이질 1회(mine/swing) 발동.
+ * 돌 하나 = 서버 요청 1회로 묶어 연타해도 속도제한(초당 3)에 안 걸리게 한다. */
 let mineSession = 0, lastMineFb;
+const MINE_TAP_MS = 100;   // 최소 연타 간격(0.1초) — 이보다 빠른 탭은 무시
+const ROCK_TAPS = 5;       // 돌 하나 깨는 데 필요한 타격 수
+let rockHits = 0, rockBusy = false, lastTapTs = 0;
 function renderMinePanel(fb) {
   if (currentTab !== 'mine' || !me) return;
   if (fb !== undefined) lastMineFb = fb;
@@ -265,23 +271,86 @@ function renderMinePanel(fb) {
      <div class="mine-bar xp"><div class="mine-fill xp" style="width:${xpPct}%"></div></div>
      <div class="mine-stamlabel">💪 기력 <span>${me.stamina}/${me.staminaMax}</span></div>
      <div class="mine-bar stam"><div class="mine-fill stam${tired ? ' low' : ''}" style="width:${stPct}%"></div></div>
-     <button class="btn primary big" data-mineswing style="margin:14px 0 6px">⛏️ 곡괭이질</button>
+     <div class="rock-stage">
+       <div id="rock" class="rock${tired ? ' tired' : ''}" data-rock role="button" aria-label="돌 깨기">
+         <span class="rock-emoji">🪨</span>
+       </div>
+     </div>
+     <div class="rock-crackbar"><div id="rockCrackFill" class="rock-crackfill"></div></div>
+     <div class="rock-hint">${tired ? '💤 지친 곡괭이질(보상↓) — 시간당 기력 회복' : '🪨 돌을 연타해서 깨세요!'}</div>
      <div class="mine-fb ${f ? f.kind : ''}">${f ? f.text : (tired
-        ? '💤 기력이 바닥이라 지친 곡괭이질(보상↓)만 돼요. 시간당 회복!'
-        : '곡괭이질로 골드를 캐고 숙련도를 올려요. 기력이 있으면 💥노다지·💎원석 찬스!')}</div>
+        ? '기력이 바닥이라 지친 곡괭이질만 돼요.'
+        : '돌을 깨면 골드·숙련도 획득.<br>기력이 있으면 💥노다지·💎원석 찬스!')}</div>
      <div class="mine-auto">
        <span>🕳️ 자동 채굴 누적 <b>+${me.mine.toLocaleString()}G</b></span>
        <button class="btn sm primary" data-minecollect ${me.mine <= 0 ? 'disabled' : ''}>수령</button>
      </div>
      <div class="mine-session">이번 세션 획득 💰 <b>+${mineSession.toLocaleString()}G</b></div>`;
+  const rock = document.getElementById('rock');
+  if (rock) rock.addEventListener('pointerdown', tapRock);
+  updateRockVisual();
 }
-async function doMineSwing() {
+function updateRockVisual() {
+  const rock = document.getElementById('rock');
+  if (rock) rock.style.setProperty('--dmg', (rockHits / ROCK_TAPS).toFixed(3));
+  const fill = document.getElementById('rockCrackFill');
+  if (fill) fill.style.width = Math.min(100, rockHits / ROCK_TAPS * 100) + '%';
+}
+function tapRock(e) {
+  if (e) e.preventDefault();
+  if (currentTab !== 'mine') return;
+  const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  if (rockBusy || now - lastTapTs < MINE_TAP_MS) return;  // 처리 중이거나 0.1초 이내 연타 → 무시
+  lastTapTs = now;
+  rockHits++;
+  const rock = document.getElementById('rock');
+  if (rock) { rock.classList.remove('hit'); void rock.offsetWidth; rock.classList.add('hit'); }
+  updateRockVisual();
+  if (rockHits >= ROCK_TAPS) {           // 돌 완파 → 곡괭이질 1회 발동
+    rockBusy = true;
+    if (rock) rock.classList.add('breaking');
+    breakRock();
+  }
+}
+async function breakRock() {
   const r = await api('mine/swing', 'POST');
-  if (!r.ok) return toast(r.error, 'bad');
+  if (!r.ok) {
+    rockHits = 0; rockBusy = false; updateRockVisual();
+    const rock = document.getElementById('rock'); if (rock) rock.classList.remove('breaking');
+    return toast(r.error, 'bad');
+  }
   me = r.me; mineSession += r.gold; render();
-  renderMinePanel({ text: r.msg, kind: r.jackpot ? 'ok' : r.gem ? 'info' : r.tired ? 'tired' : '' });
-  if (r.leveledTo) toast('🎉 채굴 레벨 ' + r.leveledTo + ' 달성! 채굴 수익 증가', 'ok');
-  else if (r.gem && r.gem.type === 'protect') toast(r.gem.text, 'info');
+  spawnRockReward(r);
+  setTimeout(() => {
+    rockHits = 0; rockBusy = false;
+    renderMinePanel({ text: r.msg, kind: r.jackpot ? 'ok' : r.gem ? 'info' : r.tired ? 'tired' : '' });
+    if (r.leveledTo) toast('🎉 채굴 레벨 ' + r.leveledTo + ' 달성! 채굴 수익 증가', 'ok');
+    else if (r.gem && r.gem.type === 'protect') toast(r.gem.text, 'info');
+  }, 240);
+}
+// 보상 텍스트·파편은 body 에 fixed 로 띄운다(패널이 곧 리렌더돼도 애니메이션 유지)
+function spawnRockReward(r) {
+  const rock = document.getElementById('rock');
+  const rc = rock ? rock.getBoundingClientRect() : null;
+  const cx = rc ? rc.left + rc.width / 2 : window.innerWidth / 2;
+  const cy = rc ? rc.top + rc.height / 2 : window.innerHeight / 2;
+  const t = document.createElement('div');
+  t.className = 'rock-reward' + (r.jackpot ? ' big' : '');
+  t.style.left = cx + 'px'; t.style.top = cy + 'px';
+  t.textContent = (r.jackpot ? '💥 ' : '') + '+' + r.gold.toLocaleString() + 'G' + (r.gem ? ' 💎' : '');
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 950);
+  for (let i = 0; i < 5; i++) {   // 파편 튀기기
+    const s = document.createElement('div');
+    s.className = 'rock-shard';
+    s.textContent = '🪨';
+    s.style.left = cx + 'px'; s.style.top = cy + 'px';
+    const ang = (Math.PI * 2 * i) / 5 + i * 0.3;
+    s.style.setProperty('--dx', Math.cos(ang) * 60 + 'px');
+    s.style.setProperty('--dy', (Math.sin(ang) * 60 - 20) + 'px');
+    document.body.appendChild(s);
+    setTimeout(() => s.remove(), 550);
+  }
 }
 async function doMineCollect() {
   const r = await api('mine', 'POST');
@@ -627,7 +696,6 @@ el('panel').addEventListener('click', e => {
   const r = e.target.closest('[data-raid]'); if (r) return act(() => doRaid(r.dataset.raid));
   const j = e.target.closest('[data-join]'); if (j) return act(() => doPartyJoin(j.dataset.join));
   const bu = e.target.closest('[data-buy]'); if (bu) return act(() => doBuy(bu.dataset.buy));
-  if (e.target.closest('[data-mineswing]')) return act(doMineSwing);
   if (e.target.closest('[data-minecollect]')) return act(doMineCollect);
   const iv = e.target.closest('[data-invite]'); if (iv) return act(() => doInvite(iv.dataset.invite));
   const ac = e.target.closest('[data-accept]'); if (ac) return act(() => doAccept(ac.dataset.accept));
@@ -657,5 +725,6 @@ el('guideClose').onclick = () => { el('guide').hidden = true; sessionStorage.set
 setInterval(async () => {
   if (!me || el('game').hidden || currentTab === 'raid') return;
   try { const r = await api('me'); if (r.ok) { me = r.me; render(); } } catch (e) { /* 무시 */ }
-  if (['rank', 'log', 'hogu', 'goldrank', 'shop', 'mine'].includes(currentTab)) loadTab();
+  // 채굴장 제외(위와 동일 이유): 연타 중 돌 리셋 방지
+  if (['rank', 'log', 'hogu', 'goldrank', 'shop'].includes(currentTab)) loadTab();
 }, 5000);
