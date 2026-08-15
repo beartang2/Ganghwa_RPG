@@ -132,8 +132,8 @@ async function handle(method, pathname, ctx) {
       const { r, db } = await store.runGame(q, { lockId: id, lockPartyIds: [partyId] }, pfn);
       return { status: r.ok ? 200 : 400, body: Object.assign(r, { me: game.publicView(db, id) }) };
     }
-    if (pathname === '/api/raid') {
-      // 레이드는 전원의 골드/방지권/횟수를 변경 → 파티원 전원 + 파티 행을 함께 잠근다.
+    // 레이드(시작·타격·스킬·종료): 종료 시 전원 골드/방지권 변경 → 파티원 전원 + 파티 행을 함께 잠근다.
+    if (pathname === '/api/raid' || pathname === '/api/raid-hit' || pathname === '/api/raid-skill' || pathname === '/api/raid-finish') {
       const prow = await q("SELECT data->>'party' AS pid FROM players WHERE id = $1", [id]);
       const pid = prow.length ? prow[0].pid : null;
       let memberIds = [];
@@ -141,7 +141,12 @@ async function handle(method, pathname, ctx) {
         const prt = await q('SELECT data FROM parties WHERE id = $1', [pid]);
         if (prt.length) { const d = typeof prt[0].data === 'string' ? JSON.parse(prt[0].data) : prt[0].data; memberIds = (d && d.members) || []; }
       }
-      const { r, db } = await store.runGame(q, { lockId: id, lockPlayerIds: memberIds, lockPartyIds: [pid], withLogs: false }, (db) => game.raidStart(db, id, b.boss));
+      let rfn;
+      if (pathname === '/api/raid') rfn = (db) => game.raidStart(db, id, b.boss);
+      else if (pathname === '/api/raid-hit') rfn = (db) => game.raidHit(db, id, b.hits);
+      else if (pathname === '/api/raid-skill') rfn = (db) => game.raidSkill(db, id);
+      else rfn = (db) => game.raidFinish(db, id);
+      const { r, db } = await store.runGame(q, { lockId: id, lockPlayerIds: memberIds, lockPartyIds: [pid], withLogs: false }, rfn);
       return { status: r.ok ? 200 : 400, body: Object.assign(r, { me: game.publicView(db, id) }) };
     }
     let fn = null;

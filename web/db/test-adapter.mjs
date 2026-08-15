@@ -132,29 +132,38 @@ async function main() {
   r = await req('POST', '/api/party-leave', { token: tok });
   ok((await q('SELECT count(*)::int AS c FROM parties'))[0].c === 0, '리더 탈퇴 시 파티 해체(삭제 영속화)');
 
-  // 11) 레이드 — 파티 재구성 → 결과 즉시 계산(타임라인) → 전원 보상·횟수 영속화
+  // 11) 인터랙티브 레이드 — 시작(active) → 연타로 딜 → 처치/종료 → 전원 보상·횟수 영속화
   console.log('[레이드]');
-  await q("UPDATE players SET level = 80 WHERE nick IN ('검사','궁수')"); // 승리 유도(보상 경로 확인)
+  await q("UPDATE players SET level = 80 WHERE nick IN ('검사','궁수')"); // 고레벨 → 몇 타로 처치
   r = await req('POST', '/api/party-create', { token: tok });
   const pid2 = r.body.party.id;
   await req('POST', '/api/party-invite', { token: tok, body: { nick: '궁수' } });
   await req('POST', '/api/party-accept', { token: tok2, body: { id: pid2 } });
   const goldBefore = Number((await req('GET', '/api/me', { token: tok })).body.me.gold);
-  r = await req('POST', '/api/raid', { token: tok, body: { boss: 'goblin' } });
-  ok(r.body.ok && typeof r.body.win === 'boolean', '레이드 성사(win=' + r.body.win + ')');
-  ok(Array.isArray(r.body.raid.timeline) && r.body.raid.timeline.length > 0, '타임라인(턴 로그) 반환 → 클라 재생용');
-  ok(r.body.participants.length === 2, '참가자 2명');
+  r = await req('POST', '/api/raid', { token: tok, body: { boss: 'demon' } }); // 큰 보스(한 방에 안 죽게)
+  ok(r.body.ok && r.body.raid.status === 'active', '레이드 시작(active)');
+  ok(r.body.raid.bossHP === r.body.raid.bossMax && r.body.raid.partyHP === 100, '보스 풀피·파티 HP 100 시작');
+  ok(r.body.raid.participants.length === 2, '참가자 2명');
+  // 폴링(GET 투영) 조회 가능
+  const watch = await req('GET', '/api/party-raid', { token: tok2 });
+  ok(watch.body.raid && typeof watch.body.raid.bossHP === 'number', '파티원 폴링(투영) 조회');
+  // 연타 제출 → 딜 적용(보스 살아있음)
+  let hr = await req('POST', '/api/raid-hit', { token: tok, body: { hits: 40 } });
+  ok(hr.body.ok && hr.body.dmg > 0, '타격 딜 적용(dmg=' + hr.body.dmg + ')');
+  // 스킬(궁수 난사) → 큰 피해로 처치
+  const sk = await req('POST', '/api/raid-skill', { token: tok2 });
+  ok(sk.body.ok && sk.body.skillText, '스킬 발동(' + (sk.body.skillText || '') + ')');
+  if (sk.body.raid.status !== 'done') await req('POST', '/api/raid-hit', { token: tok2, body: { hits: 40 } });
+  const fin = await req('POST', '/api/raid-finish', { token: tok });
+  ok(fin.body.raid.status === 'done' && typeof fin.body.raid.win === 'boolean', '전투 종료·승패 결정(win=' + fin.body.raid.win + ')');
   const meAfter = (await req('GET', '/api/me', { token: tok })).body.me;
   ok(meAfter.raidsLeft === meAfter.dailyRaids - 1, '레이드 횟수 1 차감 영속화');
-  if (r.body.win) ok(Number(meAfter.gold) > goldBefore, '승리 보상 골드 지급');
+  if (fin.body.raid.win) ok(Number(meAfter.gold) > goldBefore, '승리 보상 골드 지급');
   else ok(true, '패배(보상 없음)');
-  // 다른 파티원도 관전 상태(pt.raid)를 조회할 수 있어야 함
-  const watch = await req('GET', '/api/party-raid', { token: tok2 });
-  ok(watch.body.raid && Array.isArray(watch.body.raid.timeline), '파티원이 관전용 타임라인 폴링 가능');
-  // 파티 raid 결과가 parties 테이블에 영속화됐는지
+  // parties.data.raid 영속화(늦게 접속해도 결과 관전)
   const prow = (await q('SELECT data FROM parties WHERE id=$1', [pid2]))[0];
   const pdata = typeof prow.data === 'string' ? JSON.parse(prow.data) : prow.data;
-  ok(pdata.raid && pdata.raid.timeline, 'parties.data.raid 영속화(늦게 접속해도 관전)');
+  ok(pdata.raid && pdata.raid.status === 'done', 'parties.data.raid 종료상태 영속화');
 
   // 12) 속도제한 — 전용 테스트만 rateLimit:true
   console.log('[속도제한]');

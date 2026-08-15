@@ -552,6 +552,9 @@ const server = http.createServer(async (req, res) => {
       else if (p === '/api/party-accept') { const b = await readBody(req); r = game.partyAccept(db, id, b.id); }
       else if (p === '/api/party-reject') { const b = await readBody(req); r = game.partyReject(db, id, b.id); }
       else if (p === '/api/raid') { const b = await readBody(req); r = game.raidStart(db, id, b.boss); }
+      else if (p === '/api/raid-hit') { const b = await readBody(req); r = game.raidHit(db, id, b.hits); }
+      else if (p === '/api/raid-skill') r = game.raidSkill(db, id);
+      else if (p === '/api/raid-finish') r = game.raidFinish(db, id);
       else return sendJson(res, 404, { ok: false, error: 'unknown action' });
 
       if (r.ok) {

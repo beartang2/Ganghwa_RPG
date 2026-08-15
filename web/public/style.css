@@ -130,6 +130,34 @@ body.loading-on #globalLoading{opacity:1}
 .raid-result{border-radius:12px;padding:12px;margin-bottom:10px;border:1px solid var(--line)}
 .raid-result.win{background:rgba(73,209,122,.13);border-color:var(--success)}
 .raid-result.lose{background:rgba(255,93,108,.13);border-color:var(--danger)}
+.raid-mvp{margin-top:8px;font-size:12px;color:var(--muted)}
+
+/* 인터랙티브 레이드 전투 */
+.raid-battle{-webkit-user-select:none;user-select:none}
+.raid-timerrow{display:flex;justify-content:space-between;align-items:center;font-weight:800;margin-bottom:4px}
+.raid-boss-name{font-size:14px}
+.raid-timer b{color:#ffd93d;font-variant-numeric:tabular-nums}
+.raid-stage{position:relative;display:flex;align-items:center;justify-content:center;height:130px;overflow:visible}
+.raid-mon{position:relative;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;will-change:transform}
+.raid-mon .rmon-emoji{display:block;font-size:88px;filter:drop-shadow(0 6px 12px rgba(0,0,0,.5))}
+.raid-mon.hit{animation:monHit .12s ease-out}
+.raid-mon.dead{filter:grayscale(.7);opacity:.55;cursor:default;pointer-events:none;transform:rotate(8deg)}
+.rbar-label{font-size:12px;color:var(--muted);margin:6px 0 3px;display:flex;gap:8px;align-items:center}
+.rbar-label small{margin-left:auto;color:#9fe6ff}
+.rbar{height:14px;background:#0f131c;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.rbar-fill{height:100%;border-radius:8px;transition:width .3s ease-out}
+.rbar-fill.boss{background:linear-gradient(90deg,#ff5d6c,#ff9f45)}
+.rbar-fill.party{background:linear-gradient(90deg,#49d17a,#7ee8a2)}
+.rbar-fill.party.low{background:linear-gradient(90deg,#ff5d6c,#ffb03a)}
+.raid-parts{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 6px;justify-content:center}
+.raid-part{font-size:12px;background:var(--card2);border:1px solid var(--line);border-radius:20px;padding:3px 10px}
+.raid-part.me{border-color:var(--primary)}
+.raid-part b{color:var(--gold)}
+.raid-skillbtn{width:100%;margin:4px 0 8px}
+.raid-events{min-height:20px;font-size:12px;color:#cfd6e6}
+.raid-ev{padding:2px 0;border-bottom:1px dashed rgba(255,255,255,.06)}
+.raid-spark{position:fixed;z-index:120;pointer-events:none;font-size:22px;transform:translate(-50%,-50%);animation:raidSpark .4s ease-out forwards}
+@keyframes raidSpark{0%{opacity:0;transform:translate(-50%,-40%) scale(.6) rotate(-20deg)}30%{opacity:1;transform:translate(-50%,-60%) scale(1.1)}100%{opacity:0;transform:translate(-50%,-90%) scale(1) rotate(20deg)}}
 
 /* 스탯 */
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}

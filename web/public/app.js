@@ -554,8 +554,144 @@ async function doPartyJoin(id) { const r = await api('party-join', 'POST', { id 
 async function doInvite(nick) { const r = await api('party-invite', 'POST', { nick }); toast(r.ok ? ('📨 ' + r.msg) : r.error, r.ok ? 'info' : 'bad'); await refreshRaidData(); paintRaid(); }
 async function doAccept(id) { const r = await api('party-accept', 'POST', { id }); if (!r.ok) return toast(r.error, 'bad'); me = r.me; await refreshRaidData(); paintRaid(); }
 async function doReject(id) { await api('party-reject', 'POST', { id }); await refreshRaidData(); paintRaid(); }
-async function doRaid(boss) { const r = await api('raid', 'POST', { boss }); if (!r.ok) return toast(r.error, 'bad'); me = r.me; dismissedRaidTs = null; await refreshRaidData(); paintRaid(); }
-function closeRaid() { if (curRaid) dismissedRaidTs = curRaid.startTs; lastPartyHtml = ''; paintRaid(); }
+async function doRaid(boss) {
+  const r = await api('raid', 'POST', { boss });
+  if (!r.ok) return toast(r.error, 'bad');
+  me = r.me; curRaid = r.raid; dismissedRaidTs = null; raidBuiltFor = null; raidFinishing = false; raidLocalHits = 0;
+  paintRaid();
+}
+function closeRaid() { if (curRaid) dismissedRaidTs = curRaid.startTs; lastPartyHtml = ''; raidBuiltFor = null; paintRaid(); }
+
+/* ---------- 인터랙티브 레이드 전투(연타) ---------- */
+const RAID_TAP_MS = 70;      // 보스 연타 최소 간격
+const RAID_FLUSH_MS = 700;   // 누적 타수 서버 제출 주기
+let raidLocalHits = 0, raidLastTap = 0, raidFlushT = null, raidBuiltFor = null, raidFinishing = false, raidLastPoll = 0;
+const SKILL_LABEL = { warrior: '⚔️ 강타', archer: '🏹 난사', tanker: '🛡️ 철벽', healer: '✨ 치유의 물결' };
+
+// 배틀 스켈레톤을 레이드당 1회만 만든다(연타 반응성 유지). 이후엔 값만 갱신.
+function renderBattle(raid) {
+  const panel = el('panel');
+  const active = raid.status === 'active';
+  panel.innerHTML =
+    `<div class="raid-battle">
+       <div class="raid-timerrow"><span class="raid-boss-name">${raid.boss.emoji} ${esc(raid.boss.name)}</span>
+         <span class="raid-timer">⏱ <b id="rTimer">--</b></span></div>
+       <div class="raid-stage"><div id="rBoss" class="raid-mon${active ? '' : ' dead'}" role="button" aria-label="보스 공격"><span class="rmon-emoji">${raid.boss.emoji}</span></div></div>
+       <div class="rbar-label">보스 HP <span id="rBossTxt"></span></div>
+       <div class="rbar"><div id="rBossHp" class="rbar-fill boss"></div></div>
+       <div class="rbar-label">파티 HP <span id="rPartyTxt"></span> <small id="rDr"></small></div>
+       <div class="rbar"><div id="rPartyHp" class="rbar-fill party"></div></div>
+       <div id="rParts" class="raid-parts"></div>
+       <button id="rSkillBtn" class="btn primary sm raid-skillbtn"></button>
+       <div id="rEvents" class="raid-events"></div>
+       <div id="rResult" class="raid-resultwrap"></div>
+     </div>`;
+  const boss = el('rBoss');
+  if (boss) boss.addEventListener('pointerdown', tapRaidBoss);
+  const sk = document.getElementById('rSkillBtn');
+  if (sk) sk.onclick = doRaidSkill;
+  raidBuiltFor = raid.startTs;
+  updateBattleUI();
+}
+function myRaidPart() { return curRaid && curRaid.participants.find(p => p.nick === (me && me.nick)); }
+function updateBattleUI() {
+  if (!curRaid) return;
+  const raid = curRaid, active = raid.status === 'active';
+  const remain = Math.max(0, raid.startTs + raid.duration - Date.now());
+  const tEl = document.getElementById('rTimer'); if (tEl) tEl.textContent = active ? (remain / 1000).toFixed(1) + 's' : '종료';
+  const bh = document.getElementById('rBossHp'), bt = document.getElementById('rBossTxt');
+  if (bh) bh.style.width = Math.max(0, raid.bossHP / raid.bossMax * 100) + '%';
+  if (bt) bt.textContent = raid.bossHP.toLocaleString() + ' / ' + raid.bossMax.toLocaleString();
+  const ph = document.getElementById('rPartyHp'), pt = document.getElementById('rPartyTxt'), dr = document.getElementById('rDr');
+  if (ph) { ph.style.width = raid.partyHP + '%'; ph.classList.toggle('low', raid.partyHP <= 30); }
+  if (pt) pt.textContent = raid.partyHP + '%';
+  if (dr) dr.textContent = raid.dr ? '🛡️피해감소 ' + raid.dr + '%' : '';
+  const parts = document.getElementById('rParts');
+  if (parts) parts.innerHTML = raid.participants.map(p =>
+    `<span class="raid-part${p.nick === (me && me.nick) ? ' me' : ''}">${p.classEmoji}${esc(p.nick)} <b>${p.contrib.toLocaleString()}</b>${p.skillUsed ? ' ✨' : ''}</span>`).join('');
+  const ev = document.getElementById('rEvents');
+  if (ev) ev.innerHTML = (raid.events || []).slice(-5).map(e => `<div class="raid-ev">${esc(e.text)}</div>`).join('');
+  // 스킬 버튼
+  const mine = myRaidPart(), sk = document.getElementById('rSkillBtn');
+  if (sk) {
+    if (!mine) { sk.style.display = 'none'; }
+    else {
+      sk.style.display = '';
+      sk.textContent = SKILL_LABEL[mine.class] || '스킬';
+      sk.disabled = !active || mine.skillUsed;
+    }
+  }
+  const boss = document.getElementById('rBoss');
+  if (boss && !active) boss.classList.add('dead');
+  // 결과
+  if (!active) {
+    const res = document.getElementById('rResult');
+    if (res && !res.dataset.done) {
+      res.dataset.done = '1';
+      const parts2 = raid.participants.slice().sort((a, b) => b.contrib - a.contrib);
+      res.innerHTML = `<div class="raid-result ${raid.win ? 'win' : 'lose'}"><b>${raid.win ? '🏆 레이드 성공!' : '☠️ 레이드 실패...'}</b>` +
+        (raid.win && raid.rewards && raid.rewards.length ? '<br>' + raid.rewards.map(rw => esc(rw.nick) + ' 💰+' + rw.gold.toLocaleString() + (rw.drop ? ' ' + rw.drop : '')).join('<br>') : '') +
+        `<div class="raid-mvp">기여: ${parts2.map(p => esc(p.nick) + ' ' + p.contrib.toLocaleString()).join(' · ')}</div>` +
+        `</div><button class="btn ghost sm" id="closeRaidBtn" style="margin-top:8px">닫기</button>`;
+      sfx(raid.win ? 'jackpot' : 'destroy'); vibe(raid.win ? [15, 40, 25] : [40, 60, 40]);
+      api('me').then(mr => { if (mr && mr.ok) { me = mr.me; render(); } });   // 보상 반영(상단바 골드)
+    }
+  }
+}
+function tapRaidBoss(e) {
+  if (e) e.preventDefault();
+  if (!curRaid || curRaid.status !== 'active') return;
+  if (curRaid.startTs + curRaid.duration <= Date.now()) return;   // 타임아웃
+  const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  if (now - raidLastTap < RAID_TAP_MS) return;
+  raidLastTap = now; raidLocalHits++;
+  vibe(6); sfx('hit');
+  const boss = document.getElementById('rBoss');
+  if (boss) { boss.classList.remove('hit'); void boss.offsetWidth; boss.classList.add('hit'); }
+  spawnRaidSpark();
+  if (!raidFlushT) raidFlushT = setTimeout(flushRaidHits, RAID_FLUSH_MS);
+}
+async function flushRaidHits() {
+  raidFlushT = null;
+  const hits = raidLocalHits; raidLocalHits = 0;
+  if (hits <= 0 || !curRaid || curRaid.status !== 'active') return;
+  const r = await api('raid-hit', 'POST', { hits });
+  if (r && r.ok && r.raid) { curRaid = r.raid; if (r.me) me = r.me; if (raidBuiltFor === curRaid.startTs) updateBattleUI(); }
+}
+async function doRaidSkill() {
+  if (!curRaid || curRaid.status !== 'active') return;
+  const r = await api('raid-skill', 'POST');
+  if (!r.ok) return toast(r.error, 'bad');
+  if (r.raid) { curRaid = r.raid; if (r.me) me = r.me; updateBattleUI(); }
+  if (r.skillText) { toast(r.skillText, 'info'); sfx(r.skillKind === 'dmg' ? 'crit' : r.skillKind === 'heal' ? 'success' : 'protect'); vibe([15, 30, 20]); }
+}
+async function raidPoll() {
+  raidLastPoll = Date.now();
+  try { const r = await api('party-raid'); if (r && r.ok) { curRaid = r.raid; if (curRaid && raidBuiltFor === curRaid.startTs) updateBattleUI(); } } catch (e) { /* 무시 */ }
+}
+async function maybeFinishRaid() {
+  if (raidFinishing || !curRaid) return;
+  const ended = curRaid.status === 'done' || curRaid.projectedEnded || curRaid.startTs + curRaid.duration <= Date.now();
+  if (curRaid.status === 'active' && ended) {
+    raidFinishing = true;
+    if (raidLocalHits > 0) { if (raidFlushT) { clearTimeout(raidFlushT); raidFlushT = null; } await flushRaidHits(); }
+    const r = await api('raid-finish', 'POST');
+    if (r && r.ok && r.raid) { curRaid = r.raid; if (r.me) me = r.me; }
+    raidFinishing = false;
+    updateBattleUI();
+  }
+}
+function spawnRaidSpark() {
+  const boss = document.getElementById('rBoss'); if (!boss) return;
+  const rc = boss.getBoundingClientRect();
+  const s = document.createElement('div');
+  s.className = 'raid-spark';
+  s.textContent = '⚔️';
+  s.style.left = (rc.left + rc.width * (0.3 + Math.random() * 0.4)) + 'px';
+  s.style.top = (rc.top + rc.height * 0.35) + 'px';
+  document.body.appendChild(s);
+  setTimeout(() => s.remove(), 420);
+}
 
 async function refreshRaidData() {
   lastFetch = Date.now();
@@ -568,45 +704,32 @@ async function refreshRaidData() {
 }
 function startRaidLoop() {
   stopRaidLoop();
-  lastPartyHtml = ''; // 탭 재진입 시 항상 다시 그리도록 캐시 리셋
+  lastPartyHtml = ''; raidBuiltFor = null;
   refreshRaidData().then(paintRaid);
-  raidTimer = setInterval(async () => {
-    if (currentTab !== 'raid') return;
+  raidTimer = setInterval(raidLoopTick, 300);
+}
+function stopRaidLoop() { if (raidTimer) { clearInterval(raidTimer); raidTimer = null; } if (raidFlushT) { clearTimeout(raidFlushT); raidFlushT = null; } }
+async function raidLoopTick() {
+  if (currentTab !== 'raid') return;
+  const inBattle = curRaid && curRaid.status && curRaid.startTs !== dismissedRaidTs;
+  if (inBattle && curRaid.status === 'active') {
+    if (raidBuiltFor !== curRaid.startTs) renderBattle(curRaid);
+    if (Date.now() - raidLastPoll > 850) await raidPoll();
+    updateBattleUI();
+    maybeFinishRaid();
+  } else if (inBattle && curRaid.status === 'done') {
+    if (raidBuiltFor !== curRaid.startTs) renderBattle(curRaid);
+    updateBattleUI();
+  } else {
     if (Date.now() - lastFetch > 1600) await refreshRaidData();
     paintRaid();
-  }, 500);
+  }
 }
-function stopRaidLoop() { if (raidTimer) clearInterval(raidTimer); raidTimer = null; }
-
 function paintRaid() {
   if (currentTab !== 'raid') return;
-  const panel = el('panel');
-  if (curRaid && curRaid.startTs !== dismissedRaidTs) paintBattle(panel, curRaid);
-  else paintParty(panel);
-}
-function bar(pct, color) {
-  const w = Math.max(0, Math.min(100, pct));
-  return `<div style="background:#0f131c;border-radius:6px;height:15px;overflow:hidden;border:1px solid var(--line)"><div style="height:100%;width:${w}%;background:${color};transition:width .35s"></div></div>`;
-}
-function paintBattle(panel, raid) {
-  const len = raid.timeline.length;
-  let idx = Math.floor((Date.now() - raid.startTs) / 700);
-  if (idx > len) idx = len;
-  const done = idx >= len;
-  const e = idx <= 0 ? { bossHP: raid.boss.hp, partyHP: raid.maxHP, dmg: 0, incoming: 0, enrage: false } : raid.timeline[idx - 1];
-  let html = `<div style="text-align:center;margin-bottom:8px"><div style="font-size:38px">${raid.boss.emoji}</div>
-      <b>${esc(raid.boss.name)}</b> ${done ? '' : '<small style="color:var(--muted)">⚔️ 전투 중...</small>'}</div>
-    <div style="font-size:12px;color:var(--muted)">보스 HP</div>${bar(e.bossHP / raid.boss.hp * 100, '#ff5d6c')}
-    <div style="font-size:12px;color:var(--muted);margin-top:6px">파티 HP</div>${bar(e.partyHP / raid.maxHP * 100, '#49d17a')}
-    <div style="text-align:center;margin:10px 0;font-size:13px">라운드 ${Math.min(idx, len)}/${len} ${e.enrage ? '🔥광폭화' : ''}<br>
-      <span style="color:#ffd479">파티 −${e.dmg}</span> · <span style="color:#ff8a94">피격 ${e.incoming}</span></div>
-    <div style="text-align:center;font-size:14px">${raid.participants.map(p => p.classEmoji + esc(p.nick)).join('  ')}</div>`;
-  if (done) {
-    html += `<div class="raid-result ${raid.win ? 'win' : 'lose'}" style="margin-top:12px"><b>${raid.win ? '🏆 레이드 성공!' : '☠️ 레이드 실패...'}</b>` +
-      (raid.win ? '<br>' + raid.rewards.map(rw => esc(rw.nick) + ' 💰+' + rw.gold.toLocaleString() + (rw.drop ? ' ' + rw.drop : '')).join('<br>') : '') +
-      `</div><button class="btn ghost sm" id="closeRaidBtn" style="margin-top:8px">닫기</button>`;
-  }
-  panel.innerHTML = html;
+  const inBattle = curRaid && curRaid.status && curRaid.startTs !== dismissedRaidTs;
+  if (inBattle) renderBattle(curRaid);
+  else paintParty(el('panel'));
 }
 function paintParty(panel) {
   let html = '';
@@ -635,7 +758,7 @@ function paintParty(panel) {
           <div class="binfo"><div class="bname">${esc(b.name)} <small>${['입문', '보통', '어려움', '지옥'][i] || ''}</small></div>
             <div class="bstat">HP ${b.hp.toLocaleString()} · 공격 ${b.atk} · 보상 💰${b.reward.toLocaleString()}</div></div>
           <button class="btn sm primary" data-raid="${b.id}">도전</button></div>`).join('');
-    } else html += `<p class="hint">파티장이 레이드를 시작할 수 있어요. 시작하면 여기서 함께 전투를 관전해요.</p>`;
+    } else html += `<p class="hint">파티장이 레이드를 시작할 수 있어요. 시작하면 여기서 다같이 보스를 연타해요!</p>`;
   } else {
     html += `<p class="hint" style="margin:0 0 8px">파티를 만들어 동료를 초대하거나, 열린 파티에 참가하세요! (탱커·힐러 조합이 중요)</p>`;
     html += `<button class="btn primary sm" id="createPartyBtn" style="margin-bottom:10px">➕ 파티 만들기</button>`;

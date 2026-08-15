@@ -16,6 +16,14 @@ const CONFIG = {
   mineRate: 12, mineCap: 3000, partyMax: 5, raidMinMembers: 2,
   raidAtkBuffCap: 0.15,      // 힐러 아군 공격 버프 상한
   raidDRCap: 0.40,           // 탱커 아군 피해감소 상한
+  // 인터랙티브 레이드(연타 전투)
+  raidDuration: 15000,       // 전투 지속(ms)
+  raidHitDmgMult: 0.55,      // 탭 1회 데미지 = memberStats.atk * 이 배율
+  raidHitBatchMax: 40,       // raidHit 한 번에 인정하는 최대 타수(치트 방지)
+  raidHitMsPerTap: 80,       // 누적 타수 상한 계산용(경과ms/이 값 = 최대 타수)
+  raidBossAttMin: 3, raidBossAttMax: 6,   // 타이머 내 보스 공격 횟수
+  raidHealPctPerHealer: 2.6, // 힐러 1인당 파티HP 회복(%/초)
+  raidDRCapSkill: 0.6,       // 탱커 스킬로 올라갈 수 있는 피해감소 상한
   // 상점
   boostAmount: 0.10,         // 강화 부스트권: 성공률 +10%p
   boostCount: 10,            // 강화 부스트권: 지속 횟수
@@ -299,11 +307,12 @@ function huntSpawn(level) {
 }
 
 /* ---------- 보스 (레이드) ---------- */
+// danger = 타이머 동안 보스가 파티 HP(100%)에 넣는 총 피해(%). 탱커 DR·힐러 회복으로 상쇄.
 const BOSSES = [
-  { id: 'goblin', name: '고블린 군주', emoji: '👺', hp: 2200,  atk: 130, reward: 5000,  dropChance: 0.10 },
-  { id: 'golem',  name: '스톤 골렘',   emoji: '🗿', hp: 6500,  atk: 340, reward: 15000, dropChance: 0.20 },
-  { id: 'dragon', name: '고대 드래곤', emoji: '🐲', hp: 10500, atk: 600, reward: 40000, dropChance: 0.35 },
-  { id: 'demon',  name: '마계 군주',   emoji: '😈', hp: 16000, atk: 780, reward: 90000, dropChance: 0.55 },
+  { id: 'goblin', name: '고블린 군주', emoji: '👺', hp: 2200,  atk: 130, reward: 5000,  dropChance: 0.10, danger: 55 },
+  { id: 'golem',  name: '스톤 골렘',   emoji: '🗿', hp: 6500,  atk: 340, reward: 15000, dropChance: 0.20, danger: 75 },
+  { id: 'dragon', name: '고대 드래곤', emoji: '🐲', hp: 10500, atk: 600, reward: 40000, dropChance: 0.35, danger: 95 },
+  { id: 'demon',  name: '마계 군주',   emoji: '😈', hp: 16000, atk: 780, reward: 90000, dropChance: 0.55, danger: 120 },
 ];
 function bossById(id) { return BOSSES.find(b => b.id === id); }
 
@@ -819,10 +828,11 @@ function partyReject(db, id, pid) {
   if (pt && pt.pending) pt.pending = pt.pending.filter(x => x !== id);
   return { ok: true };
 }
+// 폴링용(GET, 읽기전용): 저장 상태로부터 '지금 시점' 을 투영해 보여준다. 저장은 하지 않는다.
 function raidState(db, id) {
   const p = norm(db.players[id]);
   if (!p.party || !db.parties[p.party]) return { ok: true, raid: null };
-  return { ok: true, raid: db.parties[p.party].raid || null };
+  return { ok: true, raid: raidProject(db.parties[p.party].raid) };
 }
 function partyJoin(db, id, pid) {
   const p = norm(db.players[id]);
@@ -852,42 +862,23 @@ function partyList(db) {
   return Object.values(db.parties).map(pt => partyView(db, pt.id)).sort((a, b) => b.count - a.count);
 }
 
-// 레이드 전투 시뮬레이션 (직업 버프 반영, 라운드별 로그 포함)
-function simulateRaid(parts, boss) {
-  const st = parts.map(p => ({ nick: p.nick, cls: p.class, s: memberStats(p) }));
-  let dps = 0, heal = 0, flatArmor = 0, maxHP = 0, dr = 0, atkBuff = 0;
-  st.forEach(m => {
-    dps += m.s.atk; heal += m.s.heal; flatArmor += m.s.armor; maxHP += m.s.hp;
-    dr += m.s.dr; atkBuff += m.s.atkBuff;
-  });
-  dr = Math.min(CONFIG.raidDRCap, dr);
-  atkBuff = Math.min(CONFIG.raidAtkBuffCap, atkBuff);
-  const contrib = {}; st.forEach(m => contrib[m.nick] = 0);
-  let hp = maxHP, bossHP = boss.hp, round = 0;
-  const timeline = [];
-  while (bossHP > 0 && hp > 0 && round < 60) {
-    round++;
-    let roundDmg = 0;
-    st.forEach(m => { const d = m.s.atk * (1 + atkBuff) * (0.9 + Math.random() * 0.2); roundDmg += d; contrib[m.nick] += d; });
-    bossHP = Math.max(0, bossHP - roundDmg);
-    const enrage = round > 20 ? 1 + (round - 20) * 0.09 : 1;
-    let incoming = 0;
-    if (bossHP > 0) { incoming = Math.max(0, boss.atk * enrage * (1 - dr) - flatArmor); hp = Math.max(0, hp - incoming); if (hp > 0) hp = Math.min(maxHP, hp + heal); }
-    timeline.push({ round, bossHP: Math.round(bossHP), partyHP: Math.round(hp), dmg: Math.round(roundDmg), incoming: Math.round(incoming), enrage: enrage > 1 });
-    if (bossHP <= 0 || hp <= 0) break;
-  }
-  return {
-    win: bossHP <= 0, rounds: round, maxHP: Math.round(maxHP), remainHP: Math.max(0, Math.round(hp)),
-    bossRemain: Math.max(0, Math.round(bossHP)), dps: Math.round(dps * (1 + atkBuff)), heal: Math.round(heal),
-    armor: Math.round(flatArmor), dr: Math.round(dr * 100), atkBuff: Math.round(atkBuff * 100), contrib, timeline,
-  };
-}
+/* ---------- 인터랙티브 레이드(연타 전투) ----------
+ * 공유 전투: 파티원이 15초간 보스를 함께 연타(연타=딜). 보스는 타이머 내 랜덤 횟수로 파티를 강타.
+ * 탱커=피해감소, 힐러=파티 HP 회복 → 파티 HP 0이면 전멸. 스킬 1회씩.
+ * 서버리스라 백그라운드 타이머 없이 요청마다 raidTick 으로 시계를 진행(결정적 스케줄).
+ *   raidStart  파티장 시작(공격 스케줄 확정)
+ *   raidHit    누적 타수 제출 → 딜(쓰기 경로에서 tick+저장)
+ *   raidSkill  직업 스킬 1회
+ *   raidFinish 종료 확정(타임아웃·전멸 등, 클라가 종료 감지 시 1회 호출)
+ *   raidState  폴링(GET, 읽기전용 투영) — raidProject */
 function raidStart(db, id, bossId) {
   const p = norm(db.players[id]);
   if (!p.party) return { ok: false, error: '먼저 파티를 만들거나 참가하세요.' };
   const pt = db.parties[p.party];
   if (!pt) { p.party = null; return { ok: false, error: '파티 정보를 찾을 수 없어요.' }; }
   if (pt.leader !== id) return { ok: false, error: '파티장만 레이드를 시작할 수 있어요.' };
+  if (pt.raid && pt.raid.status === 'active' && Date.now() - pt.raid.startTs < CONFIG.raidDuration + 5000)
+    return { ok: false, error: '이미 전투가 진행 중이에요.' };
   const boss = bossById(bossId);
   if (!boss) return { ok: false, error: '보스를 선택하세요.' };
   const participants = [];
@@ -899,43 +890,157 @@ function raidStart(db, id, bossId) {
   if (participants.length === 0) return { ok: false, error: '파티원 모두 오늘 레이드 횟수를 소진했어요.' };
   if (participants.length < CONFIG.raidMinMembers) return { ok: false, error: '레이드는 최소 ' + CONFIG.raidMinMembers + '명이 필요해요. (혼자서는 불가 — 동료를 초대하세요)' };
   participants.forEach(k => { db.players[k].raidsUsed++; });
-  const parts = participants.map(k => ({ nick: db.players[k].nick, class: db.players[k].class, level: db.players[k].level }));
-  const sim = simulateRaid(parts, boss);
-  // 도전과제: 이번 레이드에서 낸 개인 기여 피해 최고치 기록(위협적인 피해량)
+  // 파티 집계: 탱커 피해감소, 힐러 회복
+  let dr = 0, healPct = 0;
   participants.forEach(k => {
-    const mp = db.players[k];
-    const dealt = Math.round(sim.contrib[mp.nick] || 0);
-    if (dealt > (mp.raidDmg || 0)) mp.raidDmg = dealt;
+    const mp = db.players[k], s = memberStats(mp);
+    dr += s.dr;
+    if (mp.class === 'healer') healPct += CONFIG.raidHealPctPerHealer;
   });
-  const rewards = [];
-  if (sim.win) {
-    const each = Math.floor(boss.reward / participants.length);
-    participants.forEach(k => {
-      const mp = db.players[k]; mp.gold += each;
-      mp.goldEarned = (mp.goldEarned || 0) + each;
+  dr = Math.min(CONFIG.raidDRCap, dr);
+  // 보스 공격 스케줄(결정적): N회, 랜덤 시각, 총 danger% 를 균등 배분
+  const N = randInt(CONFIG.raidBossAttMin, CONFIG.raidBossAttMax);
+  const times = [];
+  for (let i = 0; i < N; i++) times.push(randInt(1000, CONFIG.raidDuration - 600));
+  times.sort((a, b) => a - b);
+  const attacks = times.map(t => ({ t, pct: boss.danger / N, applied: false }));
+  const parts = participants.map(k => {
+    const mp = db.players[k];
+    return { id: k, nick: mp.nick, class: mp.class, level: mp.level, classEmoji: classOf(mp).emoji };
+  });
+  const now = Date.now();
+  pt.raid = {
+    status: 'active', startTs: now, lastTick: now, duration: CONFIG.raidDuration,
+    boss: { id: boss.id, name: boss.name, emoji: boss.emoji, hp: boss.hp, atk: boss.atk, reward: boss.reward, dropChance: boss.dropChance },
+    bossHP: boss.hp, partyHP: 100, dr, drBase: dr, healPct, attacks, participants: parts,
+    contrib: {}, hits: {}, skillUsed: {}, events: [{ t: 0, text: '⚔️ 전투 시작!' }], win: null, rewards: [], topContributor: null,
+  };
+  parts.forEach(m => { pt.raid.contrib[m.nick] = 0; pt.raid.hits[m.nick] = 0; pt.raid.skillUsed[m.nick] = false; });
+  addLog(db, '⚔️ ' + p.nick + ' 파티가 ' + boss.emoji + '[' + boss.name + '] 레이드 시작! (' + parts.length + '명)');
+  return { ok: true, raid: raidView(pt.raid) };
+}
+// 시계 진행(쓰기 경로에서만 호출) — 보스 공격·힐 적용 후 종료면 결산
+function raidTick(db, pt) {
+  const raid = pt && pt.raid;
+  if (!raid || raid.status !== 'active') return;
+  const now = Date.now();
+  const elapsed = now - raid.startTs;
+  const dt = Math.max(0, now - raid.lastTick) / 1000;
+  raid.lastTick = now;
+  if (raid.healPct > 0 && raid.partyHP > 0) raid.partyHP = Math.min(100, raid.partyHP + raid.healPct * dt);
+  for (const a of raid.attacks) {
+    if (!a.applied && elapsed >= a.t) {
+      a.applied = true;
+      const net = a.pct * (1 - raid.dr);
+      raid.partyHP = Math.max(0, raid.partyHP - net);
+      raid.events.push({ t: a.t, text: '💥 보스 공격! 파티 HP -' + Math.round(net) + '%' });
+    }
+  }
+  if (raid.bossHP <= 0) return raidResolve(db, pt, true);
+  if (raid.partyHP <= 0) return raidResolve(db, pt, false);
+  if (elapsed >= raid.duration) {
+    for (const a of raid.attacks) if (!a.applied) { a.applied = true; raid.partyHP = Math.max(0, raid.partyHP - a.pct * (1 - raid.dr)); }
+    return raidResolve(db, pt, raid.bossHP <= 0);
+  }
+}
+function raidResolve(db, pt, win) {
+  const raid = pt.raid;
+  if (!raid || raid.status === 'done') return;
+  raid.status = 'done'; raid.win = !!win; raid.endTs = Date.now();
+  const boss = raid.boss, rewards = [];
+  raid.participants.forEach(m => {
+    const mp = db.players[m.id]; if (!mp) return;
+    const c = Math.round(raid.contrib[m.nick] || 0);
+    if (c > (mp.raidDmg || 0)) mp.raidDmg = c;   // 도전과제: 개인 기여 피해 최고치
+  });
+  if (win) {
+    const each = Math.floor(boss.reward / raid.participants.length);
+    raid.participants.forEach(m => {
+      const mp = db.players[m.id]; if (!mp) return;
+      mp.gold += each; mp.goldEarned = (mp.goldEarned || 0) + each;
       let drop = null;
       if (Math.random() < boss.dropChance) { mp.protects++; drop = '🛡️ 방지권'; }
       rewards.push({ nick: mp.nick, gold: each, drop });
     });
-    addLog(db, '🏆 ' + (db.players[pt.leader] ? db.players[pt.leader].nick : '?') + ' 파티가 ' + boss.emoji + '[' + boss.name + '] 레이드 성공! (' + participants.length + '명)');
+    addLog(db, '🏆 ' + boss.emoji + '[' + boss.name + '] 레이드 성공! (' + raid.participants.length + '명)');
   } else {
-    addLog(db, '☠️ ' + (db.players[pt.leader] ? db.players[pt.leader].nick : '?') + ' 파티가 ' + boss.emoji + '[' + boss.name + '] 레이드 실패...');
+    addLog(db, '☠️ ' + boss.emoji + '[' + boss.name + '] 레이드 실패...');
   }
-  const topNick = Object.keys(sim.contrib).sort((a, b) => sim.contrib[b] - sim.contrib[a])[0];
-  // 라이브 관전용 상태를 파티에 저장 (전원이 폴링해서 함께 관전)
-  pt.raid = {
-    startTs: Date.now(),
-    boss: { name: boss.name, emoji: boss.emoji, hp: boss.hp, atk: boss.atk },
-    maxHP: sim.maxHP, rounds: sim.rounds, win: sim.win, timeline: sim.timeline,
-    rewards, topContributor: topNick,
-    participants: parts.map(x => ({ nick: x.nick, classEmoji: (CLASSES[x.class] || CLASSES.warrior).emoji })),
-  };
+  raid.rewards = rewards;
+  raid.topContributor = Object.keys(raid.contrib).sort((a, b) => raid.contrib[b] - raid.contrib[a])[0] || null;
+}
+function raidMember(db, id) {
+  const p = norm(db.players[id]);
+  const pt = p.party && db.parties[p.party];
+  return { p, pt, raid: pt && pt.raid };
+}
+function raidHit(db, id, hits) {
+  const { p, pt, raid } = raidMember(db, id);
+  if (!raid) return { ok: false, error: '진행 중인 레이드가 없어요.' };
+  raidTick(db, pt);
+  if (raid.status !== 'active') return { ok: true, ended: true, raid: raidView(raid) };
+  if (!(p.nick in raid.contrib)) return { ok: false, error: '이 레이드 참가자가 아니에요.' };
+  hits = Math.max(0, Math.min(parseInt(hits, 10) || 0, CONFIG.raidHitBatchMax));
+  // 누적 타수 상한: 경과시간으로 물리적 최대치 초과분은 버림(오토클리커 방지)
+  const maxTotal = Math.floor((Date.now() - raid.startTs) / CONFIG.raidHitMsPerTap) + 12;
+  if ((raid.hits[p.nick] || 0) + hits > maxTotal) hits = Math.max(0, maxTotal - (raid.hits[p.nick] || 0));
+  const dmg = Math.round(hits * memberStats(p).atk * CONFIG.raidHitDmgMult);
+  raid.bossHP = Math.max(0, raid.bossHP - dmg);
+  raid.contrib[p.nick] = (raid.contrib[p.nick] || 0) + dmg;
+  raid.hits[p.nick] = (raid.hits[p.nick] || 0) + hits;
+  if (raid.bossHP <= 0) raidTick(db, pt);
+  return { ok: true, dmg, raid: raidView(raid) };
+}
+function raidSkill(db, id) {
+  const { p, pt, raid } = raidMember(db, id);
+  if (!raid) return { ok: false, error: '진행 중인 레이드가 없어요.' };
+  raidTick(db, pt);
+  if (raid.status !== 'active') return { ok: true, ended: true, raid: raidView(raid) };
+  if (!(p.nick in raid.skillUsed)) return { ok: false, error: '이 레이드 참가자가 아니에요.' };
+  if (raid.skillUsed[p.nick]) return { ok: false, error: '이미 스킬을 사용했어요.' };
+  raid.skillUsed[p.nick] = true;
+  const s = memberStats(p);
+  let text, kind;
+  if (p.class === 'warrior') { const d = Math.round(s.atk * CONFIG.raidHitDmgMult * 45); raid.bossHP = Math.max(0, raid.bossHP - d); raid.contrib[p.nick] += d; text = '⚔️ ' + p.nick + ' 강타! 보스 -' + d.toLocaleString(); kind = 'dmg'; }
+  else if (p.class === 'archer') { const d = Math.round(s.atk * CONFIG.raidHitDmgMult * 60); raid.bossHP = Math.max(0, raid.bossHP - d); raid.contrib[p.nick] += d; text = '🏹 ' + p.nick + ' 난사! 보스 -' + d.toLocaleString(); kind = 'dmg'; }
+  else if (p.class === 'tanker') { raid.dr = Math.min(CONFIG.raidDRCapSkill, raid.dr + 0.25); raid.partyHP = Math.min(100, raid.partyHP + 10); text = '🛡️ ' + p.nick + ' 철벽! 피해감소↑ · 파티 HP +10%'; kind = 'buff'; }
+  else { raid.partyHP = Math.min(100, raid.partyHP + 40); text = '✨ ' + p.nick + ' 치유의 물결! 파티 HP +40%'; kind = 'heal'; }
+  raid.events.push({ t: Date.now() - raid.startTs, text });
+  if (raid.bossHP <= 0) raidTick(db, pt);
+  return { ok: true, skillText: text, skillKind: kind, raid: raidView(raid) };
+}
+function raidFinish(db, id) {
+  const { pt, raid } = raidMember(db, id);
+  if (!raid) return { ok: true, raid: null };
+  raidTick(db, pt);   // 시계 진행 → 종료조건이면 결산·저장
+  return { ok: true, raid: raidView(raid) };
+}
+// 저장 상태 그대로의 뷰(쓰기 응답용 — 값이 이미 확정)
+function raidView(raid) {
+  if (!raid) return null;
   return {
-    ok: true, win: sim.win,
-    boss: { name: boss.name, emoji: boss.emoji, hp: boss.hp, atk: boss.atk },
-    sim: { rounds: sim.rounds, maxHP: sim.maxHP, remainHP: sim.remainHP, bossRemain: sim.bossRemain, dps: sim.dps, heal: sim.heal, armor: sim.armor, dr: sim.dr, atkBuff: sim.atkBuff, timeline: sim.timeline },
-    participants: parts, rewards, topContributor: topNick, raid: pt.raid,
+    status: raid.status, startTs: raid.startTs, duration: raid.duration,
+    remain: Math.max(0, raid.duration - (Date.now() - raid.startTs)),
+    boss: { id: raid.boss.id, name: raid.boss.name, emoji: raid.boss.emoji, hp: raid.boss.hp, atk: raid.boss.atk },
+    bossHP: Math.round(raid.bossHP), bossMax: raid.boss.hp, partyHP: Math.round(raid.partyHP),
+    dr: Math.round(raid.dr * 100),
+    participants: raid.participants.map(m => ({ nick: m.nick, classEmoji: m.classEmoji, class: m.class, hits: raid.hits[m.nick] || 0, contrib: Math.round(raid.contrib[m.nick] || 0), skillUsed: !!raid.skillUsed[m.nick] })),
+    events: raid.events.slice(-8),
+    win: raid.win, rewards: raid.rewards, topContributor: raid.topContributor,
   };
+}
+// 폴링용 투영(읽기전용): 저장값에서 '지금'을 계산해 보여주되 저장/난수 없음
+function raidProject(raid) {
+  if (!raid) return null;
+  if (raid.status === 'done') return raidView(raid);
+  const now = Date.now(), elapsed = now - raid.startTs;
+  let php = raid.partyHP + (raid.healPct > 0 ? raid.healPct * Math.max(0, now - raid.lastTick) / 1000 : 0);
+  for (const a of raid.attacks) if (!a.applied && elapsed >= a.t) php -= a.pct * (1 - raid.dr);
+  php = Math.max(0, Math.min(100, php));
+  const v = raidView(raid);
+  v.partyHP = Math.round(php);
+  v.projectedEnded = raid.bossHP <= 0 || php <= 0 || elapsed >= raid.duration;   // 클라가 보면 raid-finish 호출
+  return v;
 }
 
 /* ---------- 조회 ---------- */
@@ -965,6 +1070,7 @@ module.exports = {
   login, setClass, rename, publicView, enhance, attend, mine, mineSwing, hunt, buyProtect, fight,
   partyCreate, partyJoin, partyLeave, partyList, partyView, raidStart,
   partyInvite, partyAccept, partyReject, myInvites, raidState,
+  raidHit, raidSkill, raidFinish,
   buyBoost, buyDye, buyClassChange, shopItems, equipTitle,
   profile, ranking, goldRanking, hogu, recentLog, playerList, findByNick,
   // 저장 계층(server.js)용 — 일일 카운터 / 유저별 상한
