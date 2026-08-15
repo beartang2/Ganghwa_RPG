@@ -219,32 +219,9 @@ function toast(msg, kind) {
 }
 
 /* ---------- 햅틱(진동) ----------
- * 안드로이드: navigator.vibrate 로 패턴 진동.
- * iOS: Vibration API 미지원 → iOS 17.4+ 의 <input switch> 토글 시 나는 시스템 햅틱을 편법으로 사용
- *      (세기 조절 불가·고정 틱, 안 될 수도 있음). 반드시 사용자 제스처(탭) 안에서 호출해야 함. */
-let _iosHaptic = null;
-function iosHapticTick() {
-  try {
-    if (!_iosHaptic) {
-      const label = document.createElement('label');
-      label.setAttribute('aria-hidden', 'true');
-      label.style.cssText = 'position:absolute;width:0;height:0;opacity:0;pointer-events:none;overflow:hidden';
-      const input = document.createElement('input');
-      input.type = 'checkbox'; input.setAttribute('switch', '');
-      label.appendChild(input);
-      document.body.appendChild(label);
-      _iosHaptic = { label, input };
-    }
-    _iosHaptic.input.checked = !_iosHaptic.input.checked; // 상태 변화가 있어야 틱 발생
-    _iosHaptic.label.click();
-  } catch (e) { /* noop */ }
-}
-function vibe(pattern) {
-  try {
-    if (navigator.vibrate) { navigator.vibrate(pattern); return; }  // 안드로이드 등
-    iosHapticTick();                                                // iOS 폴백(고정 틱)
-  } catch (e) { /* noop */ }
-}
+ * 안드로이드 등 Vibration API 지원 기기에서만 울림. iOS Safari 는 미지원 → 조용히 무시.
+ * (iOS 17.4+ <input switch> 편법도 시도해봤으나 실기기에서 동작 안 해 제거) */
+function vibe(pattern) { try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) { /* noop */ } }
 
 /* ---------- 전역 로딩 표시 ----------
  * 사용자 동작(액션·탭전환·프로필·직업선택 등)이 서버 응답을 기다리는 동안 상단에
@@ -296,6 +273,7 @@ async function doEnhance() {
  * 채굴 돌과 같은 원칙: 몬스터 1마리 = 서버콜(hunt) 1회. 탭은 연출이고,
  * 스폰 때 서버가 결과를 정한 뒤(보상은 서버에 즉시 반영) 마지막 타격에 실제 치명타를 리빌한다. */
 const HUNT_TAP_MS = 70;              // 사냥 연타 최소 간격(매크로는 서버 속도제한이 막음)
+const HUNT_SPAWN_DELAY = 650;        // 처치 후 다음 몬스터 스폰까지 대기(연출 감상용)
 let huntOpen = false, huntSession = 0, huntKills = 0;
 let huntCur = null, huntSpawning = false, huntLastTap = 0;
 function openHunt() {
@@ -358,7 +336,7 @@ function killMonster() {
   if (r.drop) msg += r.drop.type === 'potion' ? '  ' + r.drop.text : '  🎁' + r.drop.text;
   spawnHuntReward(msg, r.crit);
   updateHuntHud();
-  setTimeout(() => { if (huntOpen) spawnHuntMonster(); }, 340);
+  setTimeout(() => { if (huntOpen) spawnHuntMonster(); }, HUNT_SPAWN_DELAY);
 }
 // 떠오르는 데미지 숫자 (fixed — 모달 위에 표시)
 function spawnHuntDmg(n, crit) {
