@@ -54,8 +54,13 @@ const CONFIG = {
 /* ---------- 유틸 ---------- */
 function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
 function pad2(n) { return n < 10 ? '0' + n : '' + n; }
-// 'YYYY-MM-DD' (제로패딩 — player_daily.day 의 정렬/범위조회 키로도 쓰인다)
-function today() { const d = new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+// 'YYYY-MM-DD' 한국시간(KST=UTC+9) 기준. 일일 리셋을 KST 00시로 고정.
+// 서버 타임존과 무관하도록 UTC 타임스탬프에 +9h 후 UTC 필드를 읽는다(Vercel=UTC, 로컬 무관).
+const KST_OFFSET_MS = 9 * 3600 * 1000;
+function today() {
+  const d = new Date(Date.now() + KST_OFFSET_MS);
+  return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate());
+}
 // 구버전 비패딩 날짜('2026-8-1')를 패딩 형식으로 보정
 function normalizeDay(s) {
   const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(s || ''));

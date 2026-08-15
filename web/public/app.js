@@ -397,7 +397,8 @@ function updateHuntHud() {
 async function spawnHuntMonster() {
   if (!huntOpen || huntSpawning) return;
   huntSpawning = true;
-  const mon = el('huntMon'); if (mon) mon.classList.remove('dead');
+  // 이전 몬스터는 죽은(사라진) 상태 그대로 유지한 채 다음 몬스터를 받아온다.
+  // (여기서 'dead' 를 미리 지우면 응답 대기 동안 방금 잡은 몬스터가 되살아나 보임)
   const r = await withLoad(() => api('hunt', 'POST'));   // 서버가 몬스터·보상·치명타 결정(보상은 서버에 즉시 반영)
   huntSpawning = false;
   if (!huntOpen) return;                  // 그새 닫힘
@@ -407,7 +408,7 @@ async function spawnHuntMonster() {
   const need = Math.min(7, 4 + (m.tier || 0));   // 강한(희귀) 몬스터일수록 더 여러 번
   huntCur = { r, taps: 0, need, dmgPerTap: Math.max(1, Math.ceil((m.hp || 10) / need)) };
   const monEl = el('huntMon');
-  monEl.className = 'hunt-mon t' + (m.tier || 0);
+  monEl.className = 'hunt-mon t' + (m.tier || 0);   // 'dead' 제거 + 새 등급 = 새 몬스터로 즉시 교체
   monEl.querySelector('.hunt-emoji').textContent = m.emoji;
   el('huntName').innerHTML = m.emoji + ' [' + esc(m.name) + '] <small>' + esc(m.rarity) + '</small>';
   el('huntHpFill').style.width = '100%';
