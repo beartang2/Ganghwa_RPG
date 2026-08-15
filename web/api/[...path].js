@@ -50,19 +50,20 @@ module.exports = async (req, res) => {
     return send(res, 500, { ok: false, db: false, error: 'DATABASE_URL 환경변수가 설정되지 않았습니다. Vercel Settings → Environment Variables 에서 추가 후 재배포하세요.' });
   }
 
+  const write = method !== 'GET';   // 읽기 전용 GET 은 트랜잭션 없이(autocommit) — BEGIN/COMMIT 왕복 2회 절약
   let client;
   try {
     // Vercel 이 이미 JSON 파싱했으면 그걸 쓰고, 아니면 원본 스트림에서 읽는다
     const body = (req.body && typeof req.body === 'object') ? req.body
       : (method === 'POST' ? await readRawJson(req) : {});
     client = await getPool().connect();   // 연결 실패도 여기서 잡아 깔끔한 500 으로
-    await client.query('BEGIN');
+    if (write) await client.query('BEGIN');
     const q = async (text, params) => (await client.query(text, params || [])).rows;
     const out = await handle(method, pathname, { token, body, query: url.searchParams, q, ip });
-    await client.query('COMMIT');
+    if (write) await client.query('COMMIT');
     send(res, out.status, out.body);
   } catch (e) {
-    if (client) { try { await client.query('ROLLBACK'); } catch (_) { /* noop */ } }
+    if (client && write) { try { await client.query('ROLLBACK'); } catch (_) { /* noop */ } }
     const msg = String((e && e.message) || e);
     console.error('[api]', method, pathname, msg);
     // 진단을 위해 실제 에러 메시지를 노출 (비밀번호는 pg 에러에 포함되지 않음)

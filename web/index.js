@@ -76,6 +76,7 @@ async function handler(req, res) {
     const token = req.headers['x-token'] || url.searchParams.get('token') || '';
     const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()
       || (req.socket && req.socket.remoteAddress) || '';
+    const write = req.method !== 'GET';   // 읽기 전용 GET 은 트랜잭션 없이(autocommit)
     let client;
     try {
       // Vercel 이 이미 본문을 파싱했으면 그걸 쓰고(스트림이 소진돼 readBody 가 멈추는 것 방지),
@@ -84,13 +85,13 @@ async function handler(req, res) {
         ? ((req.body && typeof req.body === 'object') ? req.body : await readBody(req))
         : {};
       client = await getPool().connect();
-      await client.query('BEGIN');
+      if (write) await client.query('BEGIN');
       const q = async (text, params) => (await client.query(text, params || [])).rows;
       const out = await handle(req.method, p, { token, body, query: url.searchParams, q, ip });
-      await client.query('COMMIT');
+      if (write) await client.query('COMMIT');
       sendJson(res, out.status, out.body);
     } catch (e) {
-      if (client) { try { await client.query('ROLLBACK'); } catch (_) { /* noop */ } }
+      if (client && write) { try { await client.query('ROLLBACK'); } catch (_) { /* noop */ } }
       console.error('[api]', req.method, p, e && e.message);
       sendJson(res, 500, { ok: false, error: String((e && e.message) || e) });
     } finally {

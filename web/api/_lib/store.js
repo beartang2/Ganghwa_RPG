@@ -25,25 +25,30 @@ async function loadAllDb(q, { withLogs = false } = {}) {
   const day = game.today();
   const db = { players: {}, parties: {}, log: [], logSeq: 0 };
 
-  const dailies = {};
-  for (const r of await q('SELECT * FROM player_daily WHERE day = $1', [day])) dailies[r.player_id] = r;
-
-  const limits = {};
-  for (const r of await q('SELECT * FROM player_limits', [])) {
-    const l = {};
-    if (r.daily_hunts != null) l.dailyHunts = r.daily_hunts;
-    if (r.daily_fights != null) l.dailyFights = r.daily_fights;
-    if (r.daily_raids != null) l.dailyRaids = r.daily_raids;
-    limits[r.player_id] = Object.keys(l).length ? l : null;
-  }
-
-  for (const r of await q('SELECT id, nick, level, gold, data FROM players', [])) {
+  // players + 오늘자 일일카운터 + 유저별 상한을 한 방(JOIN)에 로드 (왕복 3→1)
+  const rows = await q(
+    `SELECT p.id, p.nick, p.level, p.gold, p.data,
+            d.hunts_used, d.fights_used, d.raids_used, d.destroys, d.attended,
+            l.daily_hunts, l.daily_fights, l.daily_raids
+       FROM players p
+       LEFT JOIN player_daily d ON d.player_id = p.id AND d.day = $1
+       LEFT JOIN player_limits l ON l.player_id = p.id`, [day]);
+  for (const r of rows) {
     const p = asObj(r.data);
     if (r.nick != null) p.nick = r.nick;
     if (r.level != null) p.level = r.level;
     if (r.gold != null) p.gold = Number(r.gold);
-    game.applyDaily(p, dailies[r.id]);   // 일일 카운터는 player_daily 가 유일한 진실
-    p._lim = limits[r.id] || null;
+    // 일일 카운터: 조인된 행이 있으면 그 값, 없으면 null(=오늘 리셋 상태)
+    const hasDaily = r.hunts_used != null || r.fights_used != null || r.raids_used != null || r.destroys != null || r.attended != null;
+    game.applyDaily(p, hasDaily ? {
+      hunts_used: r.hunts_used || 0, fights_used: r.fights_used || 0, raids_used: r.raids_used || 0,
+      destroys: r.destroys || 0, attended: r.attended || false,
+    } : null);
+    const l = {};
+    if (r.daily_hunts != null) l.dailyHunts = r.daily_hunts;
+    if (r.daily_fights != null) l.dailyFights = r.daily_fights;
+    if (r.daily_raids != null) l.dailyRaids = r.daily_raids;
+    p._lim = Object.keys(l).length ? l : null;
     db.players[r.id] = p;
   }
   for (const r of await q('SELECT id, data FROM parties', [])) db.parties[r.id] = asObj(r.data);
@@ -104,7 +109,8 @@ async function persistDiff(q, db, before) {
   // 로그: 변경 컨텍스트는 빈 배열로 로드하므로 db.log 에 남은 건 전부 이번에 새로 쌓인 것
   let logged = 0;
   for (const l of db.log) { await q('INSERT INTO logs (ts, text) VALUES ($1,$2)', [l.t, l.text]); logged++; }
-  if (logged) await q('DELETE FROM logs WHERE seq <= (SELECT COALESCE(MAX(seq),0) - 500 FROM logs)', []);
+  // 오래된 로그 정리는 매번 하지 않고 가끔만(왕복 절약) — 상한 500 근처만 유지되면 충분
+  if (logged && Math.random() < 0.05) await q('DELETE FROM logs WHERE seq <= (SELECT COALESCE(MAX(seq),0) - 500 FROM logs)', []);
 }
 
 /* ---------- 고수준 실행 ---------- */
@@ -126,12 +132,15 @@ async function readDb(q, opts = {}) { return loadAllDb(q, opts); }
 
 /* ---------- 세션 ---------- */
 const SESSION_TTL = 7 * 24 * 3600 * 1000;
+const SESSION_TOUCH = 30 * 60 * 1000; // seen 갱신 최소 간격(30분) — 매 요청 UPDATE 왕복 제거
 async function getSession(q, token) {
   if (!token) return null;
   const rows = await q('SELECT player_id, seen FROM sessions WHERE token = $1', [token]);
   if (!rows.length) return null;
-  if (Date.now() - Number(rows[0].seen) > SESSION_TTL) { await q('DELETE FROM sessions WHERE token = $1', [token]); return null; }
-  await q('UPDATE sessions SET seen = $2 WHERE token = $1', [token, Date.now()]);
+  const seen = Number(rows[0].seen), now = Date.now();
+  if (now - seen > SESSION_TTL) { await q('DELETE FROM sessions WHERE token = $1', [token]); return null; }
+  // TTL 연장은 가끔만(30분 지났을 때만) — 폴링/연타마다 쓰기 왕복하지 않도록
+  if (now - seen > SESSION_TOUCH) await q('UPDATE sessions SET seen = $2 WHERE token = $1', [token, now]);
   return rows[0].player_id;
 }
 async function putSession(q, token, id) {
@@ -144,14 +153,24 @@ async function deleteSession(q, token) { if (token) await q('DELETE FROM session
  * cap=버스트 상한, refillPerSec=초당 토큰 회복. 통과 시 1 소모하고 true. */
 async function rateAllow(q, key, cap, refillPerSec) {
   const now = Date.now();
-  const rows = await q('SELECT tokens, updated FROM rate_buckets WHERE key = $1 FOR UPDATE', [key]);
-  let tokens = cap;
-  if (rows.length) tokens = Math.min(cap, Number(rows[0].tokens) + (now - Number(rows[0].updated)) / 1000 * refillPerSec);
-  const allowed = tokens >= 1;
-  if (allowed) tokens -= 1;
-  await q('INSERT INTO rate_buckets (key, tokens, updated) VALUES ($1,$2,$3) ON CONFLICT (key) DO UPDATE SET tokens = $2, updated = $3', [key, tokens, now]);
-  if (Math.random() < 0.02) await q('DELETE FROM rate_buckets WHERE updated < $1', [now - 3600000]); // 오래된 버킷 정리
-  return allowed;
+  // 토큰버킷을 단일 upsert 로 원자 처리(왕복 2→1). cur=리필된 토큰, 통과 시 1 소모.
+  const rows = await q(
+    `WITH cur AS (
+       SELECT LEAST($2::float8,
+         COALESCE((SELECT tokens FROM rate_buckets WHERE key = $1), $2::float8)
+         + (($3::float8 - COALESCE((SELECT updated FROM rate_buckets WHERE key = $1), $3::float8)) / 1000.0) * $4::float8
+       ) AS t
+     ),
+     up AS (
+       INSERT INTO rate_buckets (key, tokens, updated)
+       SELECT $1, CASE WHEN (SELECT t FROM cur) >= 1 THEN (SELECT t FROM cur) - 1 ELSE (SELECT t FROM cur) END, $3
+       ON CONFLICT (key) DO UPDATE SET tokens = EXCLUDED.tokens, updated = EXCLUDED.updated
+       RETURNING 1
+     )
+     SELECT ((SELECT t FROM cur) >= 1) AS allowed FROM up`,
+    [key, cap, now, refillPerSec]);
+  if (Math.random() < 0.01) await q('DELETE FROM rate_buckets WHERE updated < $1', [now - 3600000]); // 오래된 버킷 정리(가끔)
+  return !!(rows[0] && rows[0].allowed);
 }
 
 module.exports = { loadAllDb, readDb, runGame, snapshot, persistDiff, lockPlayer, getSession, putSession, deleteSession, playerData, rateAllow };
