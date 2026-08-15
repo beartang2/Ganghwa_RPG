@@ -169,7 +169,7 @@ const ACHIEVEMENTS = [
   // 레이드 피해
   { id: 'threatdmg', title: '위협적인 피해량', grade: 'epic',  desc: '단일 레이드 3만 피해',    check: p => (p.raidDmg || 0) >= 30000 },
   // 염색
-  { id: 'colormage', title: '색채 마술사',  grade: 'rare',     desc: '염색약 15회 사용',       check: p => (p.dyeCount || 0) >= 15 },
+  { id: 'colormage', title: '색채 마술사',  grade: 'epic',     desc: '염색약 40회 사용',       check: p => (p.dyeCount || 0) >= 40 },
   { id: 'fashion',  title: '패션의 완성',   grade: 'transcend', desc: '염색에서 무지개 획득',   check: p => !!p.gotRainbow },
 ];
 // 현재 스탯 기준으로 획득한 칭호 목록(높은 등급 우선). 단조 증가 스탯이라 저장 불필요.
