@@ -504,6 +504,9 @@ async function openProfile(nick) {
   const isMe = me && p.nick === me.nick;
   el('modalBody').innerHTML =
     `<h3>${p.classEmoji || '📇'} ${nickSpan(p.nick, p.nickColor)} <small style="color:var(--muted)">${esc(p.className || '')}</small></h3>
+     ${p.titles && p.titles.length
+      ? `<div class="titles-row">${p.titles.map(t => `<span class="title-chip" style="color:${t.color};border-color:${t.color}" title="${esc(t.desc)}">${esc(t.title)}</span>`).join('')}</div>`
+      : `<div class="titles-empty">아직 획득한 칭호가 없어요</div>`}
      <div class="pf-line"><span>무기</span><b>${esc(p.weapon)}</b></div>
      <div class="pf-line"><span>속성</span><b>${p.elementEmoji || ''} ${esc(p.elementName || '-')}</b></div>
      <div class="pf-line"><span>골드</span><b>${p.gold.toLocaleString()}G</b></div>

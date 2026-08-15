@@ -119,6 +119,45 @@ const ELEMENTS = [
 function randomElementKey() { return ELEMENTS[randInt(0, ELEMENTS.length - 1)].key; }
 function elementOf(key) { return ELEMENTS.find(e => e.key === key) || ELEMENTS[0]; }
 
+/* ---------- 도전과제 / 칭호 ----------
+ * 단조 증가 스탯(최고강화·파괴·승·채굴레벨)에만 걸어 한 번 달성하면 사라지지 않는다.
+ * 등급 색상: 일반 흰 · 희귀 채도낮은파랑 · 에픽 보라 · 전설 노랑 · 초월 빨강 */
+const TITLE_GRADES = {
+  common:    { rank: 0, color: '#f0f2f7' },
+  rare:      { rank: 1, color: '#7ba3c7' },
+  epic:      { rank: 2, color: '#a770ef' },
+  legend:    { rank: 3, color: '#ffd93d' },
+  transcend: { rank: 4, color: '#ff5d6c' },
+};
+const ACHIEVEMENTS = [
+  // 강화 최고기록
+  { id: 'enh25',  title: '강화 입문자',    grade: 'common',    desc: '무기 +25 달성',   check: p => (p.best || 0) >= 25 },
+  { id: 'enh50',  title: '전설 강화사',    grade: 'rare',      desc: '무기 +50 달성',   check: p => (p.best || 0) >= 50 },
+  { id: 'enh70',  title: '초월자',         grade: 'epic',      desc: '무기 +70 달성',   check: p => (p.best || 0) >= 70 },
+  { id: 'enh90',  title: '강화 장인',      grade: 'legend',    desc: '무기 +90 달성',   check: p => (p.best || 0) >= 90 },
+  { id: 'enh99',  title: '강화의 신',      grade: 'transcend', desc: '무기 +99 달성',   check: p => (p.best || 0) >= 99 },
+  // 파괴
+  { id: 'brk20',  title: '오늘의 호구',    grade: 'common',    desc: '무기 파괴 20회',  check: p => (p.breaks || 0) >= 20 },
+  { id: 'brk77',  title: '파괴왕',         grade: 'rare',      desc: '무기 파괴 77회',  check: p => (p.breaks || 0) >= 77 },
+  { id: 'brk200', title: '박살의 화신',    grade: 'epic',      desc: '무기 파괴 200회', check: p => (p.breaks || 0) >= 200 },
+  // 싸움
+  { id: 'win10',  title: '싸움꾼',         grade: 'common',    desc: '싸움 10승',       check: p => (p.wins || 0) >= 10 },
+  { id: 'win50',  title: '검투사',         grade: 'rare',      desc: '싸움 50승',       check: p => (p.wins || 0) >= 50 },
+  { id: 'win150', title: '무패의 전설',    grade: 'legend',    desc: '싸움 150승',      check: p => (p.wins || 0) >= 150 },
+  // 채굴
+  { id: 'mine10', title: '광부',           grade: 'common',    desc: '채굴 Lv.10',      check: p => (p.mineLevel || 1) >= 10 },
+  { id: 'mine30', title: '채굴 장인',      grade: 'rare',      desc: '채굴 Lv.30',      check: p => (p.mineLevel || 1) >= 30 },
+  { id: 'mine50', title: '대지의 지배자',  grade: 'epic',      desc: '채굴 Lv.50(만렙)', check: p => (p.mineLevel || 1) >= 50 },
+  // 패배(재미)
+  { id: 'lose30', title: '동네북',         grade: 'common',    desc: '싸움 30패',       check: p => (p.losses || 0) >= 30 },
+];
+// 현재 스탯 기준으로 획득한 칭호 목록(높은 등급 우선). 단조 증가 스탯이라 저장 불필요.
+function earnedTitles(p) {
+  return ACHIEVEMENTS.filter(a => a.check(p))
+    .map(a => ({ id: a.id, title: a.title, grade: a.grade, color: TITLE_GRADES[a.grade].color, desc: a.desc }))
+    .sort((x, y) => TITLE_GRADES[y.grade].rank - TITLE_GRADES[x.grade].rank);
+}
+
 /* ---------- 닉네임 염색(가챠) ---------- */
 const DYE_BASIC = [
   { name: '빨강', hex: '#ff5d6c' }, { name: '주황', hex: '#ff9f45' }, { name: '노랑', hex: '#ffd93d' },
@@ -337,6 +376,7 @@ function publicView(db, id) {
     weapon: weaponName(p.level, p.class),
     grade: { name: g.name, key: g.key, emoji: g.emoji, color: g.color },
     element: p.element, elementName: em.name, elementEmoji: em.emoji, elementColor: em.color,
+    titles: earnedTitles(p),
     maxLevel: CONFIG.maxLevel,
     nextCost: p.level >= CONFIG.maxLevel ? null : enhanceCost(p.level),
     odds: od, enhanceBoost: p.enhanceBoost || 0, pity: p.pity || 0, nickColor: p.nickColor || null,
@@ -558,9 +598,9 @@ function hunt(db, id) {
   if (!overtime) {
     const pc = CONFIG.dropProtectChance * (1 + m.tier * 0.35);
     const gc = CONFIG.dropGoldChance * (1 + m.tier * 0.2);
-    if (Math.random() < pc) { p.protects++; drop = { type: 'protect', text: '🛡️ 파괴방지권 1개!' }; addLog(db, '🎁 ' + p.nick + ' ' + m.name + '에게서 방지권 드랍!'); }
+    if (Math.random() < pc) { p.protects++; drop = { type: 'protect', text: '🛡️ 파괴방지권 1개!' }; addLog(db, '🎁 ' + p.nick + ' [' + m.name + ']에게서 방지권 드랍!'); }
     else if (Math.random() < gc) { const bonus = Math.round(randInt(200, 600) * m.gpp); p.gold += bonus; drop = { type: 'gold', amount: bonus, text: '💰 골드뭉치 +' + bonus }; }
-    addLog(db, '🗡️ ' + p.nick + ' ' + m.emoji + m.name + '(' + m.rarity + ') ' + (slain ? '처치' : '사냥') + ' +' + gold + 'G');
+    addLog(db, '🗡️ ' + p.nick + ' ' + m.emoji + '[' + m.name + '](' + m.rarity + ') ' + (slain ? '처치' : '사냥') + ' +' + gold + 'G');
   }
   return { ok: true, monster: { name: m.name, emoji: m.emoji, hp: m.hp, rarity: m.rarity, tier: m.tier }, dmg, dealt, slain, crit, gold, drop, overtime };
 }
@@ -777,9 +817,9 @@ function raidStart(db, id, bossId) {
       if (Math.random() < boss.dropChance) { mp.protects++; drop = '🛡️ 방지권'; }
       rewards.push({ nick: mp.nick, gold: each, drop });
     });
-    addLog(db, '🏆 ' + (db.players[pt.leader] ? db.players[pt.leader].nick : '?') + ' 파티가 ' + boss.emoji + boss.name + ' 레이드 성공! (' + participants.length + '명)');
+    addLog(db, '🏆 ' + (db.players[pt.leader] ? db.players[pt.leader].nick : '?') + ' 파티가 ' + boss.emoji + '[' + boss.name + '] 레이드 성공! (' + participants.length + '명)');
   } else {
-    addLog(db, '☠️ ' + (db.players[pt.leader] ? db.players[pt.leader].nick : '?') + ' 파티가 ' + boss.emoji + boss.name + ' 레이드 실패...');
+    addLog(db, '☠️ ' + (db.players[pt.leader] ? db.players[pt.leader].nick : '?') + ' 파티가 ' + boss.emoji + '[' + boss.name + '] 레이드 실패...');
   }
   const topNick = Object.keys(sim.contrib).sort((a, b) => sim.contrib[b] - sim.contrib[a])[0];
   // 라이브 관전용 상태를 파티에 저장 (전원이 폴링해서 함께 관전)
