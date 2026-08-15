@@ -80,7 +80,9 @@ async function initRealtime() {
   try {
     const cfg = await api('config');
     if (!cfg || !cfg.realtime || !cfg.supabaseUrl || !cfg.supabaseAnonKey) return; // 폴백: 폴링
-    sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: false } });
+    // 실수로 REST 엔드포인트(.../rest/v1/)를 넣어도 베이스 URL 로 정규화
+    const base = String(cfg.supabaseUrl).replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+    sb = window.supabase.createClient(base, cfg.supabaseAnonKey, { auth: { persistSession: false } });
     sbChannel = sb.channel('rt:logs')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'logs' }, () => onRefresh())
       .subscribe((status) => { if (status === 'SUBSCRIBED') realtimeOn = true; });
