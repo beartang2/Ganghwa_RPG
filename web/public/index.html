@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>⚔️ 강화 RPG</title>
-<link rel="stylesheet" href="/style.css?v=19">
+<link rel="stylesheet" href="/style.css?v=20">
 </head>
 <body>
 
@@ -65,7 +65,7 @@
 
       <section class="actions">
         <button id="huntBtn" class="btn action">🗡️ 사냥 <small id="huntLeft"></small></button>
-        <button id="mineBtn" class="btn action">🕳️ 자동채굴 <small id="mineAmt"></small></button>
+        <button id="mineBtn" class="btn action">⛏️ 채굴 <small id="mineAmt"></small></button>
       </section>
       <section class="actions">
         <button id="attendBtn" class="btn action">📅 출석</button>
@@ -83,7 +83,6 @@
       <nav class="tabs">
         <button class="tab active" data-tab="rank">🏅 랭킹</button>
         <button class="tab" data-tab="goldrank">💰 부자</button>
-        <button class="tab" data-tab="mine">⛏️ 채굴장</button>
         <button class="tab" data-tab="shop">🛒 상점</button>
         <button class="tab" data-tab="raid">🐉 레이드</button>
         <button class="tab" data-tab="fight">⚔️ 싸움</button>
@@ -131,6 +130,14 @@
   </div>
 </div>
 
+<!-- 채굴장 (돌 깨기 + 자동채굴 수령) -->
+<div id="mineModal" class="modal" hidden>
+  <div class="card modal-card mine-card">
+    <button id="mineClose" class="btn ghost sm close">✕</button>
+    <div id="mineBody"></div>
+  </div>
+</div>
+
 <!-- 프로필 모달 -->
 <div id="modal" class="modal" hidden>
   <div class="card modal-card">
@@ -141,6 +148,6 @@
 
 <!-- Supabase Realtime (선택) — 로드 실패해도 게임은 폴링으로 동작 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/app.js?v=19"></script>
+<script src="/app.js?v=20"></script>
 </body>
 </html>

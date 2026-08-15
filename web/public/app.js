@@ -202,7 +202,7 @@ function render() {
   el('huntLeft').textContent = me.huntsLeft > 0 ? '(' + me.huntsLeft + '/' + me.dailyHunts + ')' : '♾️';
   el('huntBtn').disabled = false;   // 무한 사냥: 항상 가능(소진 후엔 보상 축소)
   el('mineAmt').textContent = me.mine > 0 ? '(+' + me.mine.toLocaleString() + ')' : '';
-  el('mineBtn').disabled = me.mine <= 0;
+  el('mineBtn').disabled = false;   // 채굴 모달 열기 — 항상 가능(누적 없어도 돌 깨기)
 
   el('sBest').textContent = '+' + me.best;
   el('sBreaks').textContent = me.breaks + '회';
@@ -409,28 +409,35 @@ function spawnHuntReward(text, crit) {
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 1000);
 }
-async function doMine() {
-  const r = await api('mine', 'POST');
-  if (!r.ok) return toast(r.error, 'bad');
-  me = r.me; mineSession += r.amount; render();
-  toast('🕳️ 자동채굴 보상 +' + r.amount.toLocaleString() + 'G', 'ok');
-  if (currentTab === 'mine') renderMinePanel();
-}
-/* ---------- 채굴장(능동): 돌 깨기 미니게임 ----------
- * 돌을 연타(최소 0.1초 간격)해서 깨면 곡괭이질 1회(mine/swing) 발동.
+/* ---------- 채굴장(모달): 돌 깨기(능동) + 자동채굴 누적 수령 ----------
+ * 돌을 연타(최소 0.1초 간격)해서 깨면 곡괭이질 1회(mine-swing) 발동.
  * 돌 하나 = 서버 요청 1회로 묶어 연타해도 속도제한(초당 3)에 안 걸리게 한다. */
-let mineSession = 0, lastMineFb;
+let mineSession = 0, lastMineFb, mineOpen = false;
 const MINE_TAP_MS = 100;   // 최소 연타 간격(0.1초) — 이보다 빠른 탭은 무시
 const ROCK_TAPS = 5;       // 돌 하나 깨는 데 필요한 타격 수
 let rockHits = 0, rockBusy = false, lastTapTs = 0;
+function openMine() {
+  if (!me) return;
+  mineOpen = true; mineSession = 0; lastMineFb = null; rockHits = 0; rockBusy = false;
+  el('mineModal').hidden = false;
+  renderMinePanel();
+}
+function closeMine() { mineOpen = false; el('mineModal').hidden = true; }
+// 자동채굴 누적 골드 수령
+async function doMineCollect() {
+  const r = await withLoad(() => api('mine', 'POST'));
+  if (!r.ok) return toast(r.error, 'bad');
+  me = r.me; mineSession += r.amount; render(); vibe(12); sfx('coin');
+  renderMinePanel({ text: '🕳️ 자동채굴 수령 +' + r.amount.toLocaleString() + 'G', kind: 'ok' });
+}
 function renderMinePanel(fb) {
-  if (currentTab !== 'mine' || !me) return;
+  if (!mineOpen || !me) return;
   if (fb !== undefined) lastMineFb = fb;
   const f = lastMineFb;
   const stPct = Math.round(me.stamina / me.staminaMax * 100);
   const xpPct = Math.round(me.mineXp / me.mineXpNext * 100);
   const tired = me.stamina < 8;
-  el('panel').innerHTML =
+  el('mineBody').innerHTML =
     `<div class="mine-top">
        <span class="mine-lv">⛏️ 채굴 <b>Lv.${me.mineLevel}</b></span>
        <span class="mine-xptxt">${me.mineXp}/${me.mineXpNext} XP</span>
@@ -448,9 +455,15 @@ function renderMinePanel(fb) {
      <div class="mine-fb ${f ? f.kind : ''}">${f ? f.text : (tired
         ? '기력이 바닥이라 지친 곡괭이질만 돼요.'
         : '돌을 깨면 골드·숙련도 획득.<br>기력이 있으면 💥노다지·💎원석 찬스!')}</div>
+     <div class="mine-auto">
+       <span>🕳️ 자동채굴 누적 <b>+${(me.mine || 0).toLocaleString()}G</b></span>
+       <button class="btn sm primary" id="mineCollectBtn" ${(me.mine || 0) <= 0 ? 'disabled' : ''}>수령</button>
+     </div>
      <div class="mine-session">이번 세션 획득 💰 <b>+${mineSession.toLocaleString()}G</b></div>`;
   const rock = document.getElementById('rock');
   if (rock) rock.addEventListener('pointerdown', tapRock);
+  const cb = document.getElementById('mineCollectBtn');
+  if (cb) cb.onclick = doMineCollect;
   updateRockVisual();
 }
 function updateRockVisual() {
@@ -461,7 +474,7 @@ function updateRockVisual() {
 }
 function tapRock(e) {
   if (e) e.preventDefault();
-  if (currentTab !== 'mine') return;
+  if (!mineOpen) return;
   const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
   if (rockBusy || now - lastTapTs < MINE_TAP_MS) return;  // 처리 중이거나 0.1초 이내 연타 → 무시
   lastTapTs = now;
@@ -777,7 +790,7 @@ function paintParty(panel) {
 // tabHtmlCache: 한 번 본 탭은 마지막 화면을 즉시 보여주고(로딩 표시 없이) 뒤에서 갱신.
 let tabLoadSeq = 0;
 const tabHtmlCache = {};
-function cacheableTab(t) { return t !== 'raid' && t !== 'mine'; }
+function cacheableTab(t) { return t !== 'raid'; }
 async function loadTab() {
   const panel = el('panel');
   const seq = ++tabLoadSeq;
@@ -790,8 +803,6 @@ async function loadTab() {
       `<div class="row"><span class="rk">${medal(i)}</span>
         <span class="nm" data-nick="${esc(p.nick)}">${p.classEmoji || ''} ${nickSpan(p.nick, p.nickColor)}${titleTag(p.title)}</span>
         <span class="val">${esc(p.weapon)} · ${p.wins}승${p.losses}패</span></div>`).join('') : emptyMsg('아직 참가자가 없어요');
-  } else if (currentTab === 'mine') {
-    renderMinePanel();
   } else if (currentTab === 'goldrank') {
     const { list } = await api('goldrank'); if (stale()) return;
     panel.innerHTML = list.length ? list.map((p, i) =>
@@ -954,7 +965,7 @@ async function act(fn, btn) {
 }
 el('enhanceBtn').onclick = () => act(doEnhance, el('enhanceBtn'));
 el('huntBtn').onclick = openHunt;   // 사냥터(연타 처치) 모달 열기
-el('mineBtn').onclick = () => act(doMine, el('mineBtn'));
+el('mineBtn').onclick = openMine;   // 채굴장(돌 깨기 + 자동채굴 수령) 모달
 el('attendBtn').onclick = () => act(doAttend, el('attendBtn'));
 // 상단바 내 닉네임 클릭 → 내 프로필(닉변경 가능)
 el('hNick').onclick = () => { if (me) openProfile(me.nick); };
@@ -963,7 +974,6 @@ document.querySelectorAll('.tab').forEach(btn => {
   btn.onclick = () => {
     document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
     btn.classList.add('active'); currentTab = btn.dataset.tab;
-    if (currentTab === 'mine') { mineSession = 0; lastMineFb = null; }
     // 본 적 있는 탭이면 캐시를 즉시 표시(로딩 없이), 처음이면 로딩 표시. 그다음 loadTab 이 갱신.
     if (cacheableTab(currentTab)) el('panel').innerHTML = tabHtmlCache[currentTab] || '<div class="empty">불러오는 중…</div>';
     withLoad(loadTab);
@@ -988,6 +998,9 @@ el('modalClose').onclick = () => { el('modal').hidden = true; };
 el('huntMon').addEventListener('pointerdown', tapMonster);
 el('huntClose').onclick = closeHunt;
 el('huntModal').addEventListener('click', e => { if (e.target === el('huntModal')) closeHunt(); });
+// 채굴장 모달: 닫기
+el('mineClose').onclick = closeMine;
+el('mineModal').addEventListener('click', e => { if (e.target === el('mineModal')) closeMine(); });
 el('modal').addEventListener('click', e => { if (e.target === el('modal')) el('modal').hidden = true; });
 el('guideClose').onclick = () => { el('guide').hidden = true; localStorage.setItem('guideSeen', '1'); };
 el('helpBtn').onclick = () => { el('guide').hidden = false; };
