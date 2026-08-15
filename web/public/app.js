@@ -223,6 +223,53 @@ function toast(msg, kind) {
  * (iOS 17.4+ <input switch> 편법도 시도해봤으나 실기기에서 동작 안 해 제거) */
 function vibe(pattern) { try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) { /* noop */ } }
 
+/* ---------- 효과음 (Web Audio, 파일 없이 합성) ----------
+ * iOS 주의: 무음 스위치가 켜져 있으면 Web Audio 도 막힌다(하드웨어 제약).
+ * 오디오는 사용자 제스처 후에만 시작 가능 → 첫 터치에서 컨텍스트 unlock. */
+let audioCtx = null;
+let soundOn = localStorage.getItem('soundOff') !== '1';
+function ensureAudio() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch (e) { audioCtx = null; }
+  return audioCtx;
+}
+// 톤 1개: 주파수·길이·파형·볼륨, freqTo 주면 스윕
+function tone(freq, dur, type, vol, freqTo, delay) {
+  const ctx = audioCtx; if (!ctx) return;
+  const t0 = ctx.currentTime + (delay || 0);
+  const osc = ctx.createOscillator(), g = ctx.createGain();
+  osc.type = type || 'sine';
+  osc.frequency.setValueAtTime(freq, t0);
+  if (freqTo) osc.frequency.exponentialRampToValueAtTime(Math.max(1, freqTo), t0 + dur);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(vol, t0 + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(g); g.connect(ctx.destination);
+  osc.start(t0); osc.stop(t0 + dur + 0.03);
+}
+function sfx(name) {
+  if (!soundOn || !ensureAudio()) return;
+  switch (name) {
+    case 'click':   tone(300, 0.035, 'square', 0.06); break;                 // 버튼 누름
+    case 'mine':    tone(150, 0.05, 'square', 0.10, 80); break;              // 곡괭이질
+    case 'break':   tone(210, 0.12, 'triangle', 0.16, 90); break;           // 돌 파괴
+    case 'jackpot': [523, 659, 880].forEach((f, i) => tone(f, 0.13, 'triangle', 0.16, null, i * 0.06)); break;
+    case 'hit':     tone(170, 0.06, 'square', 0.12, 95); break;             // 타격
+    case 'kill':    tone(300, 0.13, 'triangle', 0.17, 150); break;          // 처치
+    case 'crit':    tone(540, 0.16, 'sawtooth', 0.2, 200); tone(820, 0.12, 'square', 0.14, null, 0.05); break;
+    case 'success': tone(620, 0.14, 'triangle', 0.18, 940); break;          // 강화 성공(상승)
+    case 'guaranteed': [523, 784, 1046].forEach((f, i) => tone(f, 0.14, 'triangle', 0.18, null, i * 0.07)); break;
+    case 'destroy': tone(200, 0.4, 'sawtooth', 0.24, 45); break;            // 파괴(하강 붕괴)
+    case 'protect': tone(520, 0.1, 'sine', 0.18); tone(720, 0.1, 'sine', 0.16, null, 0.08); break;
+    case 'fail':    tone(150, 0.06, 'sine', 0.08); break;
+    case 'coin':    tone(900, 0.08, 'square', 0.12, 1250); break;
+  }
+}
+// 첫 사용자 제스처에서 오디오 unlock (iOS 자동재생 정책)
+document.addEventListener('pointerdown', () => ensureAudio(), { once: true, capture: true });
+
 /* ---------- 전역 로딩 표시 ----------
  * 사용자 동작(액션·탭전환·프로필·직업선택 등)이 서버 응답을 기다리는 동안 상단에
  * 진행바 + "로딩 중…" 표시. 아주 짧은 요청은 깜빡임 방지를 위해 살짝 지연 후 표시. */
@@ -263,10 +310,10 @@ async function doEnhance() {
   const r = await api('enhance', 'POST');
   if (!r.ok) return toast(r.error, 'bad');
   me = r.me; render();
-  if (r.result === 'success') { toast(r.msg, 'ok'); flashWeapon('ok'); vibe(r.guaranteed ? [18, 40, 30] : 16); }
-  else if (r.result === 'destroy') { toast(r.msg, 'bad'); flashWeapon('bad'); vibe([30, 50, 30, 50, 40]); } // 파괴는 길고 강하게
-  else if (r.result === 'protected') { toast(r.msg, 'info'); flashWeapon('ok'); vibe([20, 35, 20]); }
-  else { toast(r.msg, ''); vibe(5); } // 실패는 짧게
+  if (r.result === 'success') { toast(r.msg, 'ok'); flashWeapon('ok'); vibe(r.guaranteed ? [18, 40, 30] : 16); sfx(r.guaranteed ? 'guaranteed' : 'success'); }
+  else if (r.result === 'destroy') { toast(r.msg, 'bad'); flashWeapon('bad'); vibe([30, 50, 30, 50, 40]); sfx('destroy'); } // 파괴는 길고 강하게
+  else if (r.result === 'protected') { toast(r.msg, 'info'); flashWeapon('ok'); vibe([20, 35, 20]); sfx('protect'); }
+  else { toast(r.msg, ''); vibe(5); sfx('fail'); } // 실패는 짧게
   if (['rank', 'log', 'hogu'].includes(currentTab)) loadTab();
 }
 /* ---------- 사냥터: 몬스터 연타 처치 ----------
@@ -320,6 +367,7 @@ function tapMonster(e) {
   const last = c.taps >= c.need;
   const isCrit = last && c.r.crit;                 // 실제 치명타는 마지막 타격에 표시
   vibe(isCrit ? [12, 28, 22] : last ? 18 : 7);     // 타격 햅틱(처치·치명타는 강하게)
+  sfx(isCrit ? 'crit' : last ? 'kill' : 'hit');
   const monEl = el('huntMon');
   if (monEl) { monEl.classList.remove('hit'); void monEl.offsetWidth; monEl.classList.add('hit'); }
   spawnHuntDmg(isCrit ? c.dmgPerTap * 2 : c.dmgPerTap, isCrit);
@@ -418,7 +466,7 @@ function tapRock(e) {
   if (rockBusy || now - lastTapTs < MINE_TAP_MS) return;  // 처리 중이거나 0.1초 이내 연타 → 무시
   lastTapTs = now;
   rockHits++;
-  vibe(7);          // 곡괭이질 햅틱
+  vibe(7); sfx('mine');    // 곡괭이질 피드백
   const rock = document.getElementById('rock');
   if (rock) { rock.classList.remove('hit'); void rock.offsetWidth; rock.classList.add('hit'); }
   updateRockVisual();
@@ -437,6 +485,7 @@ async function breakRock() {
   }
   me = r.me; mineSession += r.gold; render();
   vibe(r.jackpot || r.gem ? [14, 30, 20] : 16);   // 돌 파괴 햅틱(노다지·원석은 강하게)
+  sfx(r.jackpot || r.gem ? 'jackpot' : 'break');
   spawnRockReward(r);
   setTimeout(() => {
     rockHits = 0; rockBusy = false;
@@ -774,7 +823,7 @@ let busy = false;
 async function act(fn, btn) {
   if (busy) return;
   busy = true;
-  vibe(6);          // 버튼 누름 햅틱(안드로이드)
+  vibe(6); sfx('click');   // 버튼 누름 피드백(진동+효과음)
   loadStart();
   if (btn) btn.classList.add('acting');   // 클릭 즉시 버튼에 처리중 표시(서버 응답 지연 체감↓)
   try { await fn(); }
@@ -819,6 +868,9 @@ el('huntModal').addEventListener('click', e => { if (e.target === el('huntModal'
 el('modal').addEventListener('click', e => { if (e.target === el('modal')) el('modal').hidden = true; });
 el('guideClose').onclick = () => { el('guide').hidden = true; localStorage.setItem('guideSeen', '1'); };
 el('helpBtn').onclick = () => { el('guide').hidden = false; };
+function updateSoundBtn() { el('soundBtn').textContent = soundOn ? '🔊' : '🔇'; el('soundBtn').style.opacity = soundOn ? '' : '.5'; }
+el('soundBtn').onclick = () => { soundOn = !soundOn; localStorage.setItem('soundOff', soundOn ? '0' : '1'); updateSoundBtn(); if (soundOn) { ensureAudio(); sfx('click'); } };
+updateSoundBtn();
 
 /* ---------- 자동 로그인 ---------- */
 (async function init() {
