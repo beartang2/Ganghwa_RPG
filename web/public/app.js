@@ -69,7 +69,27 @@ function show(which) {
   ['login', 'classSelect', 'game'].forEach(s => { el(s).hidden = (s !== which); });
 }
 function maybeShowGuide() { if (!sessionStorage.getItem('guideSeen')) el('guide').hidden = false; }
-function enterGame() { show('game'); render(); loadTab(); maybeShowGuide(); openEvents(); }
+function enterGame() { show('game'); render(); loadTab(); maybeShowGuide(); openEvents(); initRealtime(); }
+
+/* ---------- Supabase Realtime (선택) — logs INSERT 구독 → 즉시 갱신 ----------
+ * 환경변수(SUPABASE_URL/ANON_KEY)가 있고 supabase-js 가 로드됐을 때만.
+ * 실패하면 조용히 폴링(setInterval)에 맡긴다. */
+let sb = null, sbChannel = null, realtimeOn = false;
+async function initRealtime() {
+  if (sb || realtimeOn || !window.supabase) return;
+  try {
+    const cfg = await api('config');
+    if (!cfg || !cfg.realtime || !cfg.supabaseUrl || !cfg.supabaseAnonKey) return; // 폴백: 폴링
+    sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: false } });
+    sbChannel = sb.channel('rt:logs')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'logs' }, () => onRefresh())
+      .subscribe((status) => { if (status === 'SUBSCRIBED') realtimeOn = true; });
+  } catch (e) { /* 폴백: 폴링 */ }
+}
+function closeRealtime() {
+  try { if (sbChannel) sb.removeChannel(sbChannel); } catch (e) { /* noop */ }
+  sbChannel = null; realtimeOn = false;
+}
 
 /* ---------- 실시간 이벤트 (SSE) ---------- */
 let es = null, refreshT = null;
@@ -505,7 +525,7 @@ el('loginBtn').onclick = async () => {
   enterGame();
 };
 el('pin').addEventListener('keydown', e => { if (e.key === 'Enter') el('loginBtn').click(); });
-el('logoutBtn').onclick = () => { stopRaidLoop(); closeEvents(); token = null; me = null; curRaid = null; localStorage.removeItem('token'); show('login'); };
+el('logoutBtn').onclick = () => { stopRaidLoop(); closeEvents(); closeRealtime(); token = null; me = null; curRaid = null; localStorage.removeItem('token'); show('login'); };
 
 // 버튼 연타 방지: 액션 사이 최소 간격
 const COOLDOWN = 450;

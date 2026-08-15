@@ -41,6 +41,13 @@ async function handle(method, pathname, ctx) {
         return bad({ ok: false, db: false, error: String(e && e.message || e) }, 500);
       }
     }
+    // 프론트가 Realtime 붙일 때 쓰는 공개 설정 (anon 키는 공개용이라 노출 OK)
+    if (pathname === '/api/config') return ok({
+      ok: true,
+      supabaseUrl: process.env.SUPABASE_URL || null,
+      supabaseAnonKey: process.env.SUPABASE_ANON_KEY || null,
+      realtime: !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY),
+    });
     if (pathname === '/api/classes') return ok({ ok: true, classes: game.CLASSES });
     if (pathname === '/api/shop') return ok({ ok: true, items: game.shopItems() });
     if (pathname === '/api/bosses') return ok({ ok: true, bosses: game.BOSSES });

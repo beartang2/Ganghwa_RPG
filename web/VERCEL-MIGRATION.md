@@ -55,7 +55,8 @@
 - ✅ **속도제한(Postgres 토큰버킷)**: `rate_buckets` 테이블 + `store.rateAllow()`.
   계정별 액션(버스트8+초당3), 로그인 닉별(버스트6+10초당1)·IP별(분당30) → 스크립트 파밍·
   PIN 무차별 대입 차단. 정상 플레이(450ms 쿨다운)는 통과. test 40/40.
-- ⬜ (선택) 즉시성 원하면 **Supabase Realtime** 로 refresh/알림 브로드캐스트
+- ✅ **Supabase Realtime**: logs INSERT 구독 → 즉시 갱신. 안 되면 폴링 폴백(무중단).
+  필요 env: SUPABASE_URL, SUPABASE_ANON_KEY. 마이그레이션이 RLS+퍼블리케이션 처리.
 - ⬜ (선택) 관리자 API(`/api/admin/*`) 이식
 
 ## 배포 방법 (1단계 시험 배포용)
