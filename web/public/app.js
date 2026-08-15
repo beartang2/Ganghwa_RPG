@@ -429,7 +429,10 @@ function paintParty(panel) {
 /* ---------- 탭 ---------- */
 // 탭 로드 순서 가드: 빠르게 탭을 바꾸면 먼저 시작한 fetch 가 늦게 도착해 나중 탭을
 // 덮어쓰는 레이스가 생긴다. 매 로드에 seq 를 찍고, await 후 최신이 아니면 렌더를 버린다.
+// tabHtmlCache: 한 번 본 탭은 마지막 화면을 즉시 보여주고(로딩 표시 없이) 뒤에서 갱신.
 let tabLoadSeq = 0;
+const tabHtmlCache = {};
+function cacheableTab(t) { return t !== 'raid' && t !== 'mine'; }
 async function loadTab() {
   const panel = el('panel');
   const seq = ++tabLoadSeq;
@@ -475,6 +478,8 @@ async function loadTab() {
         `<div class="fightrow"><span class="nm" data-nick="${esc(n)}">${esc(n)}</span>
           <button class="btn sm primary" data-fight="${esc(n)}" ${me.fightsLeft <= 0 ? 'disabled' : ''}>싸움</button></div>`).join('') : emptyMsg('상대가 없어요'));
   }
+  // 렌더 완료분을 캐시 — 다음에 그 탭 누르면 즉시 표시(뒤에서 갱신)
+  if (cacheableTab(currentTab)) tabHtmlCache[currentTab] = panel.innerHTML;
 }
 function medal(i) { return i < 3 ? ['🥇', '🥈', '🥉'][i] : (i + 1); }
 function emptyMsg(m) { return `<div class="empty">${m}</div>`; }
@@ -553,8 +558,8 @@ document.querySelectorAll('.tab').forEach(btn => {
     document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
     btn.classList.add('active'); currentTab = btn.dataset.tab;
     if (currentTab === 'mine') { mineSession = 0; lastMineFb = null; }
-    // 클릭 즉시 로딩 표시(이전 탭 내용이 남아 헷갈리는 것 방지). 배경 갱신엔 안 함.
-    if (currentTab !== 'raid' && currentTab !== 'mine') el('panel').innerHTML = '<div class="empty">불러오는 중…</div>';
+    // 본 적 있는 탭이면 캐시를 즉시 표시(로딩 없이), 처음이면 로딩 표시. 그다음 loadTab 이 갱신.
+    if (cacheableTab(currentTab)) el('panel').innerHTML = tabHtmlCache[currentTab] || '<div class="empty">불러오는 중…</div>';
     loadTab();
   };
 });
