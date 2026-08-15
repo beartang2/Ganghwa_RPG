@@ -75,7 +75,11 @@ async function handler(req, res) {
       || (req.socket && req.socket.remoteAddress) || '';
     let client;
     try {
-      const body = req.method === 'POST' ? await readBody(req) : {};
+      // Vercel 이 이미 본문을 파싱했으면 그걸 쓰고(스트림이 소진돼 readBody 가 멈추는 것 방지),
+      // 아니면 원본 스트림에서 읽는다.
+      const body = req.method === 'POST'
+        ? ((req.body && typeof req.body === 'object') ? req.body : await readBody(req))
+        : {};
       client = await getPool().connect();
       await client.query('BEGIN');
       const q = async (text, params) => (await client.query(text, params || [])).rows;

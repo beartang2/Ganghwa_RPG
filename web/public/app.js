@@ -11,8 +11,13 @@ async function api(pathName, method = 'GET', body) {
   const opt = { method, headers: {} };
   if (token) opt.headers['x-token'] = token;
   if (body) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
-  const res = await fetch('/api/' + pathName, opt);
-  return res.json();
+  let res;
+  try { res = await fetch('/api/' + pathName, opt); }
+  catch (e) { return { ok: false, error: '네트워크 오류: ' + (e && e.message || e) }; }
+  const text = await res.text();
+  // 응답이 JSON 이 아니면(서버 크래시·타임아웃 등) throw 대신 보이는 에러로 돌려준다
+  try { return JSON.parse(text); }
+  catch (e) { return { ok: false, error: '서버 오류 (' + res.status + ')' + (text ? ': ' + text.slice(0, 120) : '') }; }
 }
 
 /* ---------- 무기 SVG (직업별 모양 + 등급별 장식 업그레이드) ---------- */
