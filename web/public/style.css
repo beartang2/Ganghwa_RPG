@@ -170,7 +170,7 @@ body.loading-on #globalLoading{opacity:1}
 .raid-boss-name{font-size:14px}
 .raid-timer b{color:#ffd93d;font-variant-numeric:tabular-nums}
 .raid-stage{position:relative;display:flex;align-items:center;justify-content:center;height:130px;overflow:visible}
-.raid-mon{position:relative;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;will-change:transform}
+.raid-mon{position:relative;cursor:pointer;touch-action:none;-webkit-tap-highlight-color:transparent;will-change:transform}
 .raid-mon .rmon-emoji{display:block;font-size:88px;filter:drop-shadow(0 6px 12px rgba(0,0,0,.5))}
 .raid-mon.hit{animation:monHit .12s ease-out}
 .raid-mon.dead{filter:grayscale(.7);opacity:.55;cursor:default;pointer-events:none;transform:rotate(8deg)}
@@ -278,7 +278,7 @@ body.loading-on #globalLoading{opacity:1}
 /* 채굴장 돌 깨기 미니게임 */
 .rock-stage{position:relative;display:flex;align-items:center;justify-content:center;
   height:150px;margin:12px 0 6px;-webkit-user-select:none;user-select:none;overflow:visible}
-.rock{position:relative;cursor:pointer;line-height:1;touch-action:manipulation;
+.rock{position:relative;cursor:pointer;line-height:1;touch-action:none;
   -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;
   transition:transform .05s ease-out;will-change:transform}
 .rock .rock-emoji{display:block;font-size:96px;
@@ -311,7 +311,7 @@ body.loading-on #globalLoading{opacity:1}
 .hunt-top small{color:var(--muted);font-weight:800;font-size:12.5px;margin-left:6px}
 .hunt-stage{position:relative;display:flex;align-items:center;justify-content:center;
   height:170px;margin:6px 0;-webkit-user-select:none;user-select:none;overflow:visible}
-.hunt-mon{position:relative;cursor:pointer;line-height:1;touch-action:manipulation;
+.hunt-mon{position:relative;cursor:pointer;line-height:1;touch-action:none;
   -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;will-change:transform}
 .hunt-mon .hunt-emoji{display:block;font-size:104px;filter:drop-shadow(0 8px 12px rgba(0,0,0,.5))}
 .hunt-mon.t2 .hunt-emoji{filter:drop-shadow(0 0 12px #a770ef)}

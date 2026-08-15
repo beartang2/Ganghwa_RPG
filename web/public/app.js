@@ -7,6 +7,9 @@ let currentTab = 'rank';
 const el = id => document.getElementById(id);
 
 /* ---------- API ---------- */
+// meGen: 뮤테이션(POST) 완료 때마다 증가. 백그라운드 폴링(GET me)이 요청 직전 값을 기억했다가
+// 응답 시점에 값이 바뀌었으면(그 사이 액션이 있었으면) 낡은 me 로 덮어쓰지 않도록 버린다.
+let meGen = 0;
 async function api(pathName, method = 'GET', body) {
   const opt = { method, headers: {} };
   if (token) opt.headers['x-token'] = token;
@@ -15,9 +18,17 @@ async function api(pathName, method = 'GET', body) {
   try { res = await fetch('/api/' + pathName, opt); }
   catch (e) { return { ok: false, error: '네트워크 오류: ' + (e && e.message || e) }; }
   const text = await res.text();
+  if (method !== 'GET') meGen++;   // 뮤테이션 완료 표시
   // 응답이 JSON 이 아니면(서버 크래시·타임아웃 등) throw 대신 보이는 에러로 돌려준다
   try { return JSON.parse(text); }
   catch (e) { return { ok: false, error: '서버 오류 (' + res.status + ')' + (text ? ': ' + text.slice(0, 120) : '') }; }
+}
+// 폴링용: 요청 사이 뮤테이션이 없었을 때만 me 적용(낡은 폴링 응답이 최신 액션 결과를 덮는 것 방지)
+async function pollMe() {
+  const g = meGen;
+  const r = await api('me');
+  if (r && r.ok && g === meGen) { me = r.me; render(); checkInvites(); return true; }
+  return false;
 }
 
 /* ---------- 무기 SVG (직업별 모양 + 등급별 장식 업그레이드) ---------- */
@@ -70,7 +81,36 @@ function show(which) {
 }
 // 안내창은 한 번 닫으면 다시 안 뜬다(기기에 영구 저장). ❔ 버튼으로 다시 열 수 있음.
 function maybeShowGuide() { if (!localStorage.getItem('guideSeen')) el('guide').hidden = false; }
-function enterGame() { show('game'); render(); withLoad(loadTab); maybeShowGuide(); openEvents(); initRealtime(); }
+function enterGame() { show('game'); seedInvites(); seedTitles(); render(); withLoad(loadTab); maybeShowGuide(); openEvents(); initRealtime(); }
+
+/* 파티 레이드 초대 알림 — 어느 탭에 있어도 새 초대가 오면 토스트로 띄운다.
+ * 폴링(api('me'))으로 me.invites 가 갱신될 때마다 새로 생긴 초대를 감지. */
+let seenInvites = new Set();
+function seedInvites() { seenInvites = new Set(((me && me.invites) || []).map(iv => iv.partyId)); }
+function checkInvites() {
+  if (!me || !me.invites) return;
+  me.invites.forEach(iv => {
+    if (!seenInvites.has(iv.partyId)) {
+      toast('📨 ' + iv.leaderNick + ' 님이 파티 레이드에 초대했어요! 🐉 레이드 탭에서 수락하세요', 'info');
+      vibe([10, 30, 12]); sfx('coin');
+    }
+  });
+  seenInvites = new Set(me.invites.map(iv => iv.partyId));
+}
+
+/* 칭호 획득 알림 — me.titles 에 새 칭호가 생기면 토스트. render() 에서 매번 확인(중복은 seen 으로 방지). */
+let seenTitles = new Set();
+function seedTitles() { seenTitles = new Set(((me && me.titles) || []).map(t => t.id)); }
+function checkTitles() {
+  if (!me || !me.titles) return;
+  me.titles.forEach(t => {
+    if (!seenTitles.has(t.id)) {
+      seenTitles.add(t.id);
+      toast('🏆 새 칭호 획득!  「' + t.title + '」', 'ok');
+      vibe([15, 45, 25]); sfx('guaranteed');
+    }
+  });
+}
 
 /* ---------- Supabase Realtime (선택) — logs INSERT 구독 → 즉시 갱신 ----------
  * 환경변수(SUPABASE_URL/ANON_KEY)가 있고 supabase-js 가 로드됐을 때만.
@@ -100,7 +140,7 @@ function onRefresh() {
   if (!me || el('game').hidden || currentTab === 'raid') return; // 레이드 탭은 자체 루프가 담당
   clearTimeout(refreshT);
   refreshT = setTimeout(async () => {
-    try { const r = await api('me'); if (r.ok) { me = r.me; render(); } } catch (e) { /* 무시 */ }
+    try { await pollMe(); } catch (e) { /* 무시 */ }
     // 채굴장(mine)은 돌 깨기 연타 중 리렌더되면 진행이 끊겨 제외 — 곡괭이질마다 자체 갱신
     if (['rank', 'goldrank', 'hogu', 'log', 'fight', 'shop'].includes(currentTab)) loadTab();
   }, 250);
@@ -208,6 +248,7 @@ function render() {
   el('sBreaks').textContent = me.breaks + '회';
   el('sRecord').textContent = me.wins + '승 ' + me.losses + '패';
   el('sRank').textContent = me.rank.rank ? me.rank.rank + '/' + me.rank.total + '위' : '-';
+  checkTitles();   // 새 칭호 획득 시 알림
 }
 
 /* ---------- 토스트 ---------- */
@@ -711,7 +752,7 @@ function updateBattleUI() {
         `<div class="raid-mvp">기여: ${parts2.map(p => esc(p.nick) + ' ' + p.contrib.toLocaleString()).join(' · ')}</div>` +
         `</div><button class="btn ghost sm" id="closeRaidBtn" style="margin-top:8px">닫기</button>`;
       sfx(raid.win ? 'jackpot' : 'destroy'); vibe(raid.win ? [15, 40, 25] : [40, 60, 40]);
-      api('me').then(mr => { if (mr && mr.ok) { me = mr.me; render(); } });   // 보상 반영(상단바 골드)
+      pollMe();   // 보상 반영(상단바 골드) — 낡은 폴링 가드 포함
     }
   }
 }
@@ -774,8 +815,9 @@ async function refreshRaidData() {
   lastFetch = Date.now();
   try {
     if (!BOSS_CACHE.length) { const br = await api('bosses'); BOSS_CACHE = br.bosses || []; }
+    const g = meGen;
     const [meR, raidR, partiesR, playersR] = await Promise.all([api('me'), api('party-raid'), api('parties'), api('players')]);
-    if (meR.ok) { me = meR.me; render(); }
+    if (meR.ok && g === meGen) { me = meR.me; render(); seedInvites(); } // 낡은 폴링 방지 + 초대 seen 처리
     curRaid = raidR.raid; cacheParties = partiesR.list || []; cachePlayers = playersR.list || [];
   } catch (e) { /* 네트워크 순간 오류 무시 */ }
 }
@@ -1093,7 +1135,7 @@ updateSoundBtn();
    (레이드 탭은 자체 폴링 루프가 담당) */
 setInterval(async () => {
   if (!me || el('game').hidden || currentTab === 'raid') return;
-  try { const r = await api('me'); if (r.ok) { me = r.me; render(); } } catch (e) { /* 무시 */ }
+  try { await pollMe(); } catch (e) { /* 무시 */ }
   // 채굴장 제외(위와 동일 이유): 연타 중 돌 리셋 방지
   if (['rank', 'log', 'hogu', 'goldrank', 'shop'].includes(currentTab)) loadTab();
 }, 5000);
