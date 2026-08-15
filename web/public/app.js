@@ -427,12 +427,17 @@ function paintParty(panel) {
 }
 
 /* ---------- 탭 ---------- */
+// 탭 로드 순서 가드: 빠르게 탭을 바꾸면 먼저 시작한 fetch 가 늦게 도착해 나중 탭을
+// 덮어쓰는 레이스가 생긴다. 매 로드에 seq 를 찍고, await 후 최신이 아니면 렌더를 버린다.
+let tabLoadSeq = 0;
 async function loadTab() {
   const panel = el('panel');
+  const seq = ++tabLoadSeq;
+  const stale = () => seq !== tabLoadSeq;   // 그 사이 새 loadTab 이 시작됐으면 true
   if (currentTab === 'raid') { startRaidLoop(); return; }
   stopRaidLoop();
   if (currentTab === 'rank') {
-    const { list } = await api('rank');
+    const { list } = await api('rank'); if (stale()) return;
     panel.innerHTML = list.length ? list.map((p, i) =>
       `<div class="row"><span class="rk">${medal(i)}</span>
         <span class="nm" data-nick="${esc(p.nick)}">${p.classEmoji || ''} ${nickSpan(p.nick, p.nickColor)}</span>
@@ -440,13 +445,13 @@ async function loadTab() {
   } else if (currentTab === 'mine') {
     renderMinePanel();
   } else if (currentTab === 'goldrank') {
-    const { list } = await api('goldrank');
+    const { list } = await api('goldrank'); if (stale()) return;
     panel.innerHTML = list.length ? list.map((p, i) =>
       `<div class="row"><span class="rk">${medal(i)}</span>
         <span class="nm" data-nick="${esc(p.nick)}">${nickSpan(p.nick, p.nickColor)}</span>
         <span class="val gold">${p.gold.toLocaleString()}G</span></div>`).join('') : emptyMsg('아직 참가자가 없어요');
   } else if (currentTab === 'shop') {
-    const { items } = await api('shop');
+    const { items } = await api('shop'); if (stale()) return;
     panel.innerHTML = `<p class="hint" style="margin:0 0 10px">보유 💰${me.gold.toLocaleString()}G${me.enhanceBoost > 0 ? ' · 🍀 강화부스트 ' + me.enhanceBoost + '회' : ''}</p>` +
       items.map(it =>
         `<div class="raid-boss"><span class="bemoji">${it.emoji}</span>
@@ -454,16 +459,16 @@ async function loadTab() {
             <div class="bstat">${esc(it.desc)}</div></div>
           <button class="btn sm primary" data-buy="${it.id}" ${me.gold < it.price ? 'disabled' : ''}>구매</button></div>`).join('');
   } else if (currentTab === 'hogu') {
-    const { list } = await api('hogu');
+    const { list } = await api('hogu'); if (stale()) return;
     panel.innerHTML = list.length ? list.map((p, i) =>
       `<div class="row"><span class="rk">${i < 3 ? ['👑', '🥈', '🥉'][i] : (i + 1)}</span>
         <span class="nm" data-nick="${esc(p.nick)}">${esc(p.nick)}</span>
         <span class="val">${p.c}번 파괴 🤡</span></div>`).join('') : emptyMsg('😌 오늘은 아직 아무도 안 깨졌어요');
   } else if (currentTab === 'log') {
-    const { list } = await api('log');
+    const { list } = await api('log'); if (stale()) return;
     panel.innerHTML = list.length ? list.map(l => `<div class="logline">${esc(l.text)}</div>`).join('') : emptyMsg('기록 없음');
   } else if (currentTab === 'fight') {
-    const { list } = await api('players');
+    const { list } = await api('players'); if (stale()) return;
     const others = list.filter(n => n !== me.nick);
     panel.innerHTML = `<p class="hint" style="margin:0 0 8px">이기면 상대 골드 20% 획득. (남은 싸움 ${me.fightsLeft}/${me.dailyFights})</p>` +
       (others.length ? others.map(n =>
@@ -548,6 +553,8 @@ document.querySelectorAll('.tab').forEach(btn => {
     document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
     btn.classList.add('active'); currentTab = btn.dataset.tab;
     if (currentTab === 'mine') { mineSession = 0; lastMineFb = null; }
+    // 클릭 즉시 로딩 표시(이전 탭 내용이 남아 헷갈리는 것 방지). 배경 갱신엔 안 함.
+    if (currentTab !== 'raid' && currentTab !== 'mine') el('panel').innerHTML = '<div class="empty">불러오는 중…</div>';
     loadTab();
   };
 });
