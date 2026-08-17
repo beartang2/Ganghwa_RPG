@@ -169,7 +169,7 @@ const ACHIEVEMENTS = [
   { id: 'lose100', title: '물몸',          grade: 'rare',      desc: '싸움 100패',      check: p => (p.losses || 0) >= 100 },
   // 골드 — 많이 쓴 사람 / 많이 번 사람
   { id: 'flex',   title: 'Flex',           grade: 'epic',      desc: '누적 2천만 골드 소모',   check: p => (p.goldSpent || 0) >= 20000000 },
-  { id: 'billion', title: '억만장자',      grade: 'legend',    desc: '누적 1억 골드 획득',     check: p => (p.goldEarned || 0) >= 100000000 },
+  { id: 'billion', title: '억만장자',      grade: 'legend',    desc: '누적 5천만 골드 획득',   check: p => (p.goldEarned || 0) >= 50000000 },
   // 싸움 많이 건 사람
   { id: 'maddog', title: '광견',           grade: 'epic',      desc: '싸움 300회 도전',       check: p => (p.fightsTotal || 0) >= 300 },
   // 한 직업으로 +99 달성 (직업의 달인)
@@ -684,7 +684,7 @@ function hunt(db, id) {
   if (overtime) gold = Math.max(1, Math.round(gold * CONFIG.huntOvertimeMult));
   p.gold += gold;
   p.goldEarned = (p.goldEarned || 0) + gold;
-  if (slain) p.kills = (p.kills || 0) + 1;         // 도전과제: 처치 수
+  p.kills = (p.kills || 0) + 1;   // 도전과제: 사냥 1회 = 몬스터 1마리 처치(탭 UI에선 항상 잡음)
   // 희귀할수록(=tier↑) 드랍 확률 상승. 무한 사냥은 아이템 대신 가끔 '채광 물약'(채굴 기력 회복)
   let drop = null;
   if (!overtime) {
