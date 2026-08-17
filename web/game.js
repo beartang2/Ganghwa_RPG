@@ -25,13 +25,13 @@ const CONFIG = {
   raidHealPctPerHealer: 2.6, // 힐러 1인당 파티HP 회복(%/초)
   raidDRCapSkill: 0.6,       // 탱커 스킬로 올라갈 수 있는 피해감소 상한
   // 상점
-  boostAmount: 0.10,         // 강화 부스트권: 성공률 +10%p
+  boostMult: 2.0,            // 강화 부스트권: 성공률 배율(×2) — 고레벨 평탄화 방지
   boostCount: 10,            // 강화 부스트권: 지속 횟수
   boostPrice: 8000,
   classChangePrice: 30000,
   dyePrice: 2000,
   // 강화(로스트아크식) — 파괴 시 완전 초기화(+0)
-  pityBase: 0.02,       // 장인의 기운 기본 상승폭(실패당) — 저확률에서도 결국 참
+  pityBase: 0.015,      // 장인의 기운 기본 상승폭(실패당) — 저확률에서도 결국 참
   pityScale: 0.34,      // + 성공률 비례분(성공률 높을수록 살짝 더 빨리 참)
   // 사냥
   huntOvertimeMult: 0.15,   // 일일 사냥 소진 후 '무한 사냥' 골드 배율(채굴이 주 수급이라 낮게)
@@ -118,6 +118,13 @@ const GRADES = [
   { min: 0,  name: '일반', key: 'common',    emoji: '⚪', color: '#9aa0b0' },
 ];
 function grade(level) { for (const g of GRADES) { if (level >= g.min) return g; } return GRADES[GRADES.length - 1]; }
+// 파괴 시 강등 바닥: 한 등급 아래 등급의 '시작 레벨'로 떨어짐(안전선).
+// 초월→전설(50) · 전설→에픽(26) · 에픽→희귀(16) · 희귀/일반→0(완전 초기화=진짜 파괴)
+function destroyFloor(level) {
+  const gi = GRADES.findIndex(g => level >= g.min); // GRADES는 min 내림차순
+  const prev = GRADES[gi + 1];
+  return prev ? prev.min : 0;
+}
 
 /* ---------- 무기 속성(원소) ---------- */
 const ELEMENTS = [
@@ -238,7 +245,7 @@ function rollDye() {
 function shopItems() {
   return [
     { id: 'protect', emoji: '🛡️', name: '파괴방지권', price: CONFIG.protectPrice, desc: '파괴를 1회 자동으로 막아줍니다' },
-    { id: 'boost', emoji: '🍀', name: '강화 부스트권', price: CONFIG.boostPrice, desc: '다음 ' + CONFIG.boostCount + '회 강화 성공률 +' + Math.round(CONFIG.boostAmount * 100) + '%p' },
+    { id: 'boost', emoji: '🍀', name: '강화 부스트권', price: CONFIG.boostPrice, desc: '다음 ' + CONFIG.boostCount + '회 강화 성공률 ' + CONFIG.boostMult + '배' },
     { id: 'dye', emoji: '🎨', name: '염색약', price: CONFIG.dyePrice, desc: '닉네임 색상을 랜덤으로 뽑아요 (레어일수록 희귀)' },
     { id: 'classchange', emoji: '🔄', name: '직업 변경권', price: CONFIG.classChangePrice, desc: '직업을 다시 선택합니다 (레벨·골드 유지)' },
   ];
@@ -254,7 +261,7 @@ function weaponName(level, cls) {
 // 파괴는 낮고 산 모양(65 근처 피크→초월 완화), 나머지는 전부 실패.
 // ⚠️ 파괴 = 완전 초기화(+0)라서 확률을 낮게 잡고 시작 구간도 +20 이후로 미룸.
 const SUCC_ANCHORS = [[0, .97], [15, .90], [25, .62], [40, .20], [50, .08], [60, .03], [70, .012], [85, .004], [99, .0015]];
-const DESTROY_ANCHORS = [[20, 0], [35, .003], [50, .006], [65, .010], [80, .007], [99, .004]];
+const DESTROY_ANCHORS = [[20, 0], [35, .004], [50, .007], [65, .010], [80, .013], [99, .016]];
 function interpAnchor(A, L, log) {
   if (L <= A[0][0]) return A[0][1];
   for (let i = 1; i < A.length; i++) {
@@ -434,7 +441,7 @@ function publicView(db, id) {
   const c = classOf(p);
   const em = elementOf(p.element);
   let od = odds(p.level);
-  if ((p.enhanceBoost || 0) > 0) { const s = Math.min(0.97, od.success + CONFIG.boostAmount); od = { success: s, destroy: od.destroy, fail: Math.max(0, 1 - s - od.destroy) }; }
+  if ((p.enhanceBoost || 0) > 0) { const s = Math.min(0.97, od.success * CONFIG.boostMult); od = { success: s, destroy: od.destroy, fail: Math.max(0, 1 - s - od.destroy) }; }
   let party = null;
   if (p.party && db.parties[p.party]) {
     const pt = db.parties[p.party];
@@ -568,7 +575,7 @@ function enhance(db, id) {
   // 강화 부스트권(성공률 +)
   let o = base, boosted = false;
   if (p.enhanceBoost > 0) {
-    const s = Math.min(0.97, base.success + CONFIG.boostAmount);
+    const s = Math.min(0.97, base.success * CONFIG.boostMult);
     o = { success: s, destroy: base.destroy, fail: Math.max(0, 1 - s - base.destroy) };
     p.enhanceBoost--;
     boosted = true;
@@ -593,15 +600,24 @@ function enhance(db, id) {
       msg = '🛡️ 파괴 방지 발동! +' + before + ' 유지 (남은 방지권 ' + p.protects + ')';
       addLog(db, '🛡️ ' + p.nick + ' +' + before + ' 파괴방지');
     } else {
-      p.level = 0; p.breaks++; p.pity = 0; // 파괴 = 완전 초기화(+0) · 장인의 기운 초기화
+      const floor = destroyFloor(before);   // 한 등급 아래 시작 레벨로 강등(안전선)
+      p.level = floor; p.breaks++; p.pity = 0; // 파괴 = 강등 · 장인의 기운 초기화
       bumpRank(db);                         // 레벨이 바뀌었으니 랭킹 캐시 무효화
-      const newElem = randomElementKey(); p.element = newElem; // 속성 재부여
       if (p.destroyDay !== today()) { p.destroyDay = today(); p.destroysToday = 0; }
       p.destroysToday++;
       result = 'destroy';
-      msg = '💥 무기 파괴!! +' + before + ' → +0 (완전 초기화 · 장인의 기운 리셋)' +
-        '\n새 속성: ' + elementOf(newElem).emoji + ' ' + elementOf(newElem).name;
-      addLog(db, '💥 ' + p.nick + ' +' + before + ' 무기 파괴 → +0 (새속성 ' + elementOf(newElem).name + ')');
+      if (floor === 0) {
+        // +0으로 떨어지는 진짜 파괴 → 속성 재부여
+        const newElem = randomElementKey(); p.element = newElem;
+        msg = '💥 무기 완전 파괴!! +' + before + ' → +0 (초기화 · 장인의 기운 리셋)' +
+          '\n새 속성: ' + elementOf(newElem).emoji + ' ' + elementOf(newElem).name;
+        addLog(db, '💥 ' + p.nick + ' +' + before + ' 무기 완전 파괴 → +0 (새속성 ' + elementOf(newElem).name + ')');
+      } else {
+        // 등급 강등(속성 유지)
+        const gname = grade(floor).name;
+        msg = '💥 무기 파괴! +' + before + ' → +' + floor + ' (' + gname + ' 등급으로 강등 · 속성 유지)';
+        addLog(db, '💥 ' + p.nick + ' +' + before + ' 무기 파괴 → +' + floor + ' (' + gname + ' 강등)');
+      }
     }
   } else {
     // 실패 = 유지 + 장인의 기운 상승
