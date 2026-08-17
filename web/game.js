@@ -87,7 +87,7 @@ function findByNick(db, nick) {
 const CLASSES = {
   warrior: { id: 'warrior', name: '근거리 딜러', emoji: '⚔️', weapon: '검',     desc: '높은 공격력의 근접 딜러' },
   archer:  { id: 'archer',  name: '원거리 딜러', emoji: '🏹', weapon: '활',     desc: '최고 공격력의 원거리 딜러' },
-  tanker:  { id: 'tanker',  name: '탱커',       emoji: '🛡️', weapon: '대검',   desc: '체력·방어가 높고 아군 피해를 줄여줌' },
+  tanker:  { id: 'tanker',  name: '탱커',       emoji: '🛡️', weapon: '방패',   desc: '체력·방어가 높고 아군 피해를 줄여줌' },
   healer:  { id: 'healer',  name: '힐러',       emoji: '✨', weapon: '지팡이', desc: '아군을 회복하고 공격력을 올려줌' },
 };
 function classOf(p) { return CLASSES[p && p.class] || CLASSES.warrior; }

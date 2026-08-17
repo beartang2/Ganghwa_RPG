@@ -64,10 +64,13 @@ function weaponSVG(cls, level, color) {
       <circle cx="40" cy="20" r="13" fill="url(#bl)" stroke="${color}" stroke-width="2"/>
       <circle cx="40" cy="20" r="5" fill="#fff" opacity=".7"/>`;
   } else if (cls === 'tanker') {
-    inner = `<polygon points="40,2 53,22 53,64 40,82 27,64 27,22" fill="url(#bl)" stroke="${color}" stroke-width="1.5"/>
-      <polygon points="40,2 40,82 27,64 27,22" fill="#fff" opacity=".18"/>
-      <rect x="16" y="80" width="48" height="8" rx="3" fill="#c9a24a"/>
-      <rect x="35" y="88" width="10" height="17" rx="3" fill="#7a5a2c"/><circle cx="40" cy="107" r="5" fill="#c9a24a"/>`;
+    // 방패(히터 실드) — 가운데 십자 + 중앙 보스
+    inner = `<path d="M40 8 L66 17 L66 54 Q66 88 40 104 Q14 88 14 54 L14 17 Z" fill="url(#bl)" stroke="${color}" stroke-width="2"/>
+      <path d="M40 8 L40 104 Q14 88 14 54 L14 17 Z" fill="#fff" opacity=".14"/>
+      <line x1="40" y1="13" x2="40" y2="99" stroke="${color}" stroke-width="1.6" opacity=".55"/>
+      <line x1="16" y1="44" x2="64" y2="44" stroke="${color}" stroke-width="1.6" opacity=".55"/>
+      <circle cx="40" cy="44" r="8" fill="#c9a24a" stroke="${color}" stroke-width="1.2"/>
+      <circle cx="40" cy="44" r="3.2" fill="#fff" opacity=".8"/>`;
   } else {
     inner = `<polygon points="40,4 48,20 48,66 40,78 32,66 32,20" fill="url(#bl)" stroke="${color}" stroke-width="1"/>
       <polygon points="40,4 40,78 32,66 32,20" fill="#fff" opacity=".18"/>
