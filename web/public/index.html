@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>⚔️ 강화 RPG</title>
-<link rel="stylesheet" href="/style.css?v=29">
+<link rel="stylesheet" href="/style.css?v=30">
 </head>
 <body>
 
@@ -80,6 +80,8 @@
       </section>
       <section class="actions">
         <button id="attendBtn" class="btn action">📅 출석</button>
+        <button id="missionBtn" class="btn action">🎯 미션<span id="missionDot" class="dot" hidden></span></button>
+        <button id="passBtn" class="btn action">🎟️ 패스</button>
       </section>
 
       <section class="card stats">
@@ -149,6 +151,29 @@
   </div>
 </div>
 
+<!-- 미션 (일일/주간) -->
+<div id="missionModal" class="modal" hidden>
+  <div class="card modal-card mission-card">
+    <button id="missionClose" class="btn ghost sm close">✕</button>
+    <h3>🎯 미션</h3>
+    <div class="mission-tabs">
+      <button class="mission-tab active" data-scope="daily">일일</button>
+      <button class="mission-tab" data-scope="weekly">주간</button>
+    </div>
+    <div id="missionList" class="mission-list"></div>
+    <div id="missionBpFoot" class="mission-bpfoot"></div>
+  </div>
+</div>
+
+<!-- 배틀패스 -->
+<div id="passModal" class="modal" hidden>
+  <div class="card modal-card pass-card">
+    <button id="passClose" class="btn ghost sm close">✕</button>
+    <div id="passHead" class="pass-head"></div>
+    <div id="passTrack" class="pass-track"></div>
+  </div>
+</div>
+
 <!-- 이메일 계정 (Supabase Auth) -->
 <div id="authModal" class="modal" hidden>
   <div class="card modal-card auth-card">
@@ -177,6 +202,6 @@
 
 <!-- Supabase Realtime (선택) — 로드 실패해도 게임은 폴링으로 동작 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/app.js?v=29"></script>
+<script src="/app.js?v=30"></script>
 </body>
 </html>

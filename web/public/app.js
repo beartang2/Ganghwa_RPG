@@ -230,6 +230,7 @@ function render() {
   el('hNick').innerHTML = (me.classEmoji || '') + ' ' + nickSpan(me.nick, me.nickColor) + titleTag(me.equippedTitle) + ' <span class="edit-hint">✏️</span>';
   el('hGold').textContent = me.gold.toLocaleString();
   el('hProtect').textContent = me.protects;
+  updateMissionBadge();
 
   setWeaponArt(me);
   el('weaponName').textContent = me.weapon;
@@ -1272,6 +1273,97 @@ el('authSubmit').onclick = submitAuth;
 el('authPw').addEventListener('keydown', e => { if (e.key === 'Enter') submitAuth(); });
 el('authEmail').addEventListener('keydown', e => { if (e.key === 'Enter') { if (authMode === 'reset') submitAuth(); else el('authPw').focus(); } });
 document.querySelectorAll('.auth-tab').forEach(b => { b.onclick = () => openAuth(b.dataset.mode); });
+
+/* ---------- 미션 & 배틀패스 ---------- */
+let missionScope = 'daily';
+function updateMissionBadge() {
+  const n = (me && me.missionAlert) || 0;
+  const dot = el('missionDot'); if (dot) dot.hidden = !(n > 0);
+}
+async function openMissions() { el('missionModal').hidden = false; await renderMissions(); }
+function closeMissions() { el('missionModal').hidden = true; }
+async function renderMissions() {
+  const r = await api('missions');
+  if (!r.ok) { el('missionList').innerHTML = '<div class="empty">불러오기 실패</div>'; return; }
+  const list = missionScope === 'daily' ? r.daily : r.weekly;
+  document.querySelectorAll('.mission-tab').forEach(b => b.classList.toggle('active', b.dataset.scope === missionScope));
+  el('missionList').innerHTML = list.map(m => {
+    const pct = Math.min(100, Math.round(m.progress / m.target * 100));
+    const btn = m.claimed
+      ? '<button class="btn sm mission-claim" disabled>완료 ✓</button>'
+      : m.done
+        ? '<button class="btn sm primary mission-claim" data-id="' + m.id + '">받기</button>'
+        : '<button class="btn sm mission-claim" disabled>' + m.progress + '/' + m.target + '</button>';
+    return '<div class="mission-row' + (m.done && !m.claimed ? ' ready' : '') + (m.claimed ? ' claimed' : '') + '">'
+      + '<div class="mission-info"><div class="mission-desc">' + esc(m.desc) + '</div>'
+      + '<div class="mission-bar"><div class="mission-fill" style="width:' + pct + '%"></div></div>'
+      + '<div class="mission-reward">💰' + m.gold.toLocaleString() + ' · 🎟️ XP ' + m.xp + '</div></div>'
+      + btn + '</div>';
+  }).join('');
+  const bp = r.bp;
+  el('missionBpFoot').innerHTML = '🎟️ 시즌 패스 Lv.' + bp.level + ' <span class="bpfoot-open" id="missionOpenPass">패스 보기 ›</span>';
+  document.querySelectorAll('.mission-claim[data-id]').forEach(b => b.onclick = () => claimMission(b.dataset.id));
+  const op = el('missionOpenPass'); if (op) op.onclick = () => { closeMissions(); openPass(); };
+}
+async function claimMission(id) {
+  const r = await api('mission-claim', 'POST', { id });
+  if (!r.ok) { toast(r.error, 'bad'); return; }
+  applyMe(r.me); sfx('coin'); toast(r.msg, 'ok'); updateMissionBadge();
+  await renderMissions();
+}
+
+function bpRewardText(r) {
+  const parts = [];
+  if (r.gold) parts.push('💰' + r.gold.toLocaleString());
+  if (r.protect) parts.push('🛡️×' + r.protect);
+  if (r.boost) parts.push('🍀×' + r.boost);
+  return parts.join(' ') || '-';
+}
+async function openPass() { el('passModal').hidden = false; await renderPass(); }
+function closePass() { el('passModal').hidden = true; }
+async function renderPass() {
+  const r = await api('battlepass');
+  if (!r.ok) { el('passTrack').innerHTML = '<div class="empty">불러오기 실패</div>'; return; }
+  const pct = r.atMax ? 100 : Math.round(r.xpInLevel / r.xpPerLevel * 100);
+  el('passHead').innerHTML =
+    '<div class="pass-title">🎟️ 시즌 패스 <span class="pass-season">' + esc(r.season) + '</span></div>'
+    + '<div class="pass-lv">Lv.' + r.level + ' / ' + r.maxLevel + '</div>'
+    + '<div class="pass-xpbar"><div class="pass-xpfill" style="width:' + pct + '%"></div></div>'
+    + '<div class="pass-xptxt">' + (r.atMax ? '최대 레벨 달성' : (r.xpInLevel + ' / ' + r.xpPerLevel + ' XP')) + '</div>'
+    + (r.premium ? '<div class="pass-premium-on">✨ 프리미엄 활성화됨</div>'
+                 : '<button class="btn primary sm pass-buy" id="passBuy">시즌 패스 구매</button>');
+  el('passTrack').innerHTML =
+    '<div class="pass-cols"><span>Lv</span><span>무료</span><span>프리미엄</span></div>'
+    + r.track.map(t => {
+      const cell = (rw, claimed, claimable, track) => claimed
+        ? '<div class="pass-cell claimed">' + bpRewardText(rw) + ' <span class="pass-got">✓</span></div>'
+        : '<div class="pass-cell' + (claimable ? ' claimable' : '') + '">' + bpRewardText(rw)
+          + (claimable ? ' <button class="btn sm primary pass-claim" data-lv="' + t.level + '" data-track="' + track + '">받기</button>' : '') + '</div>';
+      return '<div class="pass-tier' + (t.unlocked ? ' unlocked' : '') + '">'
+        + '<div class="pass-tierlv">' + t.level + '</div>'
+        + cell(t.free, t.freeClaimed, t.freeClaimable, 'free')
+        + cell(t.paid, t.paidClaimed, t.paidClaimable, 'paid')
+        + '</div>';
+    }).join('');
+  const buy = el('passBuy'); if (buy) buy.onclick = buyPassPremium;
+  document.querySelectorAll('.pass-claim').forEach(b => b.onclick = () => claimPass(+b.dataset.lv, b.dataset.track));
+}
+async function claimPass(level, track) {
+  const r = await api('bp-claim', 'POST', { level, track });
+  if (!r.ok) { toast(r.error, 'bad'); return; }
+  applyMe(r.me); sfx('coin'); toast(r.msg, 'ok'); updateMissionBadge();
+  await renderPass();
+}
+async function buyPassPremium() {
+  const r = await api('bp-premium', 'POST', {});
+  if (!r.ok) { toast(r.error, 'bad'); return; }   // 현재는 '준비중' 안내
+  applyMe(r.me); await renderPass();
+}
+el('missionBtn').onclick = () => { ensureAudio(); openMissions(); };
+el('missionClose').onclick = closeMissions;
+el('passBtn').onclick = () => { ensureAudio(); openPass(); };
+el('passClose').onclick = closePass;
+document.querySelectorAll('.mission-tab').forEach(b => { b.onclick = () => { missionScope = b.dataset.scope; renderMissions(); }; });
 
 /* ---------- 자동 로그인 ---------- */
 (async function init() {

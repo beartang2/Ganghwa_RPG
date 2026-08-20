@@ -488,6 +488,7 @@ function publicView(db, id) {
     party,
     invites: myInvites(db, id),
     rank: enhanceRank(db, id),
+    missionAlert: missionAlert(p),   // 미션·패스에서 받을 수 있는 보상 개수(빨간점)
   };
 }
 
@@ -579,6 +580,7 @@ function enhance(db, id) {
   if (p.gold < cost) return { ok: false, error: '골드 부족! (필요 ' + cost + ' / 보유 ' + p.gold + ')' };
   p.gold -= cost;
   p.goldSpent = (p.goldSpent || 0) + cost;   // 도전과제: 누적 소모 골드
+  bumpMstat(p, 'enh');                        // 미션: 강화 시도
   const before = p.level;
   const base = odds(before);
 
@@ -588,6 +590,7 @@ function enhance(db, id) {
     p.level = Math.min(CONFIG.maxLevel, before + gain);
     if (p.level > p.best) p.best = p.level;
     markMastery(p);
+    bumpMstat(p, 'enhWin');                   // 미션: 강화 성공
     p.pity = 0;
     bumpRank(db);
     addLog(db, '🔨 ' + p.nick + ' 장인의 기운 확정성공 +' + before + '→+' + p.level);
@@ -610,6 +613,7 @@ function enhance(db, id) {
     p.level = Math.min(CONFIG.maxLevel, before + gain);
     if (p.level > p.best) p.best = p.level;
     markMastery(p);
+    bumpMstat(p, 'enhWin');                   // 미션: 강화 성공
     p.pity = 0;
     bumpRank(db);
     result = 'success';
@@ -653,6 +657,7 @@ function attend(db, id) {
   const p = norm(db.players[id]);
   if (p.attendDay === today()) return { ok: false, error: '오늘은 이미 출석했어요!' };
   p.attendDay = today(); p.gold += CONFIG.attendGold;
+  bumpMstat(p, 'attend');                     // 미션: 출석
   p.goldEarned = (p.goldEarned || 0) + CONFIG.attendGold;
   return { ok: true, gained: CONFIG.attendGold, msg: '출석 완료! +' + CONFIG.attendGold + 'G' };
 }
@@ -695,6 +700,7 @@ function mineSwing(db, id) {
   }
   p.gold += gold;
   p.mineSwings = (p.mineSwings || 0) + 1;          // 도전과제: 곡괭이질 횟수
+  bumpMstat(p, 'mine');                            // 미션: 채굴
   p.goldEarned = (p.goldEarned || 0) + gold;
   let msg = (tired ? '💤 지친 곡괭이질' : jackpot ? '💥 노다지!!' : '⛏️ 채굴') + ' +' + gold + 'G';
   if (gem) msg += '  ' + gem.text;
@@ -723,6 +729,7 @@ function hunt(db, id) {
   p.gold += gold;
   p.goldEarned = (p.goldEarned || 0) + gold;
   p.kills = (p.kills || 0) + 1;   // 도전과제: 사냥 1회 = 몬스터 1마리 처치(탭 UI에선 항상 잡음)
+  bumpMstat(p, 'hunt');           // 미션: 사냥
   // 희귀할수록(=tier↑) 드랍 확률 상승. 무한 사냥은 아이템 대신 가끔 '채광 물약'(채굴 기력 회복)
   let drop = null;
   if (!overtime) {
@@ -793,6 +800,7 @@ function fight(db, id, targetNick) {
   let pWin = 0.5 + (atk.level - def.level) * 0.05;
   pWin = Math.max(0.1, Math.min(0.9, pWin));
   const atkWin = Math.random() < pWin;
+  bumpMstat(atk, 'fight'); if (atkWin) bumpMstat(atk, 'fightWin');   // 미션: 싸움/승리
   const winP = atkWin ? atk : def, loseP = atkWin ? def : atk;
   const winner = atkWin ? atk.nick : def.nick, loser = atkWin ? def.nick : atk.nick;
   winP.wins++; loseP.losses++;
@@ -933,7 +941,7 @@ function raidStart(db, id, bossId) {
   }
   if (participants.length === 0) return { ok: false, error: '파티원 모두 오늘 레이드 횟수를 소진했어요.' };
   if (participants.length < CONFIG.raidMinMembers) return { ok: false, error: '레이드는 최소 ' + CONFIG.raidMinMembers + '명이 필요해요. (혼자서는 불가 — 동료를 초대하세요)' };
-  participants.forEach(k => { db.players[k].raidsUsed++; });
+  participants.forEach(k => { db.players[k].raidsUsed++; bumpMstat(db.players[k], 'raid'); });   // 미션: 레이드 참여
   // 파티 집계: 탱커 피해감소, 힐러 회복
   let dr = 0, healPct = 0;
   participants.forEach(k => {
@@ -1109,8 +1117,185 @@ function hogu(db) {
 function recentLog(db) { return db.log.slice(-20).reverse(); }
 function playerList(db) { return Object.values(db.players).filter(p => p.class).map(p => p.nick).sort(); }
 
+/* ---------- 미션 & 배틀패스 ----------
+ * 전부 요청 기반(백그라운드 잡 없음). 진행도는 플레이어 카운터로 쌓고, 일일/주간/시즌
+ * 리셋은 today()/weekStart()/thisSeason() 로 '읽을 때 지연 리셋'(일일 사냥 리셋과 동일).
+ * 상태(mstat/mclaim/bp)는 players.data JSON 에 저장 → 스키마 변경 없음. */
+function kstNow() { return new Date(Date.now() + KST_OFFSET_MS); }
+// 주(week) 버킷 = 그 주 월요일의 날짜키(KST). 매주 월요일 00시 KST 에 바뀐다.
+function weekStart() {
+  const d = kstNow();
+  const dow = (d.getUTCDay() + 6) % 7;               // 월=0 … 일=6
+  const mon = new Date(d.getTime() - dow * 86400000);
+  return mon.getUTCFullYear() + '-' + pad2(mon.getUTCMonth() + 1) + '-' + pad2(mon.getUTCDate());
+}
+function thisSeason() { const d = kstNow(); return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1); } // 월 단위 시즌
+
+const MSTAT_KEYS = ['hunt', 'enh', 'enhWin', 'mine', 'fight', 'fightWin', 'raid', 'attend'];
+function emptyStat() { const o = {}; for (const k of MSTAT_KEYS) o[k] = 0; return o; }
+function ensureMstat(p) {
+  if (!p.mstat) p.mstat = { day: today(), week: weekStart(), d: emptyStat(), w: emptyStat() };
+  if (p.mstat.day !== today()) { p.mstat.day = today(); p.mstat.d = emptyStat(); }
+  if (p.mstat.week !== weekStart()) { p.mstat.week = weekStart(); p.mstat.w = emptyStat(); }
+  return p.mstat;
+}
+// 액션 함수들이 호출 — 일일·주간 버킷 동시 증가
+function bumpMstat(p, key, n) { const m = ensureMstat(p); n = n || 1; m.d[key] = (m.d[key] || 0) + n; m.w[key] = (m.w[key] || 0) + n; }
+
+const DAILY_POOL = [
+  { id: 'd_hunt',   stat: 'hunt',   target: 15, gold: 1200, xp: 30, desc: '몬스터 15마리 사냥' },
+  { id: 'd_enh',    stat: 'enh',    target: 20, gold: 1000, xp: 30, desc: '강화 20회 시도' },
+  { id: 'd_mine',   stat: 'mine',   target: 12, gold: 1000, xp: 30, desc: '곡괭이질 12회' },
+  { id: 'd_attend', stat: 'attend', target: 1,  gold: 800,  xp: 20, desc: '출석하기' },
+  { id: 'd_fight',  stat: 'fight',  target: 1,  gold: 800,  xp: 20, desc: '싸움 1회 도전' },
+  { id: 'd_raid',   stat: 'raid',   target: 1,  gold: 1500, xp: 40, desc: '레이드 1회 참여' },
+];
+const WEEKLY_POOL = [
+  { id: 'w_enhwin',   stat: 'enhWin',   target: 25,  gold: 6000, xp: 120, desc: '강화 성공 25회' },
+  { id: 'w_hunt',     stat: 'hunt',     target: 150, gold: 6000, xp: 120, desc: '몬스터 150마리 처치' },
+  { id: 'w_fightwin', stat: 'fightWin', target: 10,  gold: 6000, xp: 120, desc: '싸움 10승' },
+  { id: 'w_raid',     stat: 'raid',     target: 5,   gold: 8000, xp: 150, desc: '레이드 5회 참여' },
+  { id: 'w_mine',     stat: 'mine',     target: 80,  gold: 6000, xp: 120, desc: '곡괭이질 80회' },
+];
+const DAILY_COUNT = 4, WEEKLY_COUNT = 4;
+function seedNum(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
+// 날짜/주 시드로 결정적 선택 → 모든 유저가 같은 '오늘의 미션'을 본다(재현 가능·소셜).
+function pickMissions(pool, n, seedStr) {
+  if (n >= pool.length) return pool.slice();
+  const start = seedNum(seedStr) % pool.length, out = [];
+  for (let i = 0; i < n; i++) out.push(pool[(start + i) % pool.length]);
+  return out;
+}
+function currentDaily() { return pickMissions(DAILY_POOL, DAILY_COUNT, today()); }
+function currentWeekly() { return pickMissions(WEEKLY_POOL, WEEKLY_COUNT, weekStart()); }
+
+function ensureMclaim(p) {
+  if (!p.mclaim) p.mclaim = { day: today(), week: weekStart(), d: [], w: [] };
+  if (p.mclaim.day !== today()) { p.mclaim.day = today(); p.mclaim.d = []; }
+  if (p.mclaim.week !== weekStart()) { p.mclaim.week = weekStart(); p.mclaim.w = []; }
+  return p.mclaim;
+}
+function missionRow(p, m, scope) {
+  const st = ensureMstat(p), cl = ensureMclaim(p);
+  const prog = Math.min(m.target, (scope === 'daily' ? st.d : st.w)[m.stat] || 0);
+  const claimed = (scope === 'daily' ? cl.d : cl.w).includes(m.id);
+  return { id: m.id, desc: m.desc, target: m.target, progress: prog, done: prog >= m.target, claimed, gold: m.gold, xp: m.xp };
+}
+function missionAlert(p) { // 받을 수 있는 보상 개수(빨간점 배지용)
+  let n = 0;
+  for (const m of currentDaily()) { const r = missionRow(p, m, 'daily'); if (r.done && !r.claimed) n++; }
+  for (const m of currentWeekly()) { const r = missionRow(p, m, 'weekly'); if (r.done && !r.claimed) n++; }
+  n += bpAlert(p);
+  return n;
+}
+function missionView(db, id) {
+  const p = norm(db.players[id]);
+  return {
+    ok: true,
+    daily: currentDaily().map(m => missionRow(p, m, 'daily')),
+    weekly: currentWeekly().map(m => missionRow(p, m, 'weekly')),
+    resetDaily: today(), resetWeek: weekStart(),
+    bp: bpSummary(p),
+  };
+}
+function missionClaim(db, id, missionId) {
+  const p = norm(db.players[id]);
+  const inDaily = currentDaily().find(m => m.id === missionId);
+  const inWeekly = inDaily ? null : currentWeekly().find(m => m.id === missionId);
+  const m = inDaily || inWeekly;
+  if (!m) return { ok: false, error: '없는 미션이에요.' };
+  const scope = inDaily ? 'daily' : 'weekly';
+  const row = missionRow(p, m, scope);
+  if (row.claimed) return { ok: false, error: '이미 받은 보상이에요.' };
+  if (!row.done) return { ok: false, error: '아직 완료하지 않았어요.' };
+  const cl = ensureMclaim(p);
+  (scope === 'daily' ? cl.d : cl.w).push(m.id);
+  p.gold += m.gold; p.goldEarned = (p.goldEarned || 0) + m.gold;
+  addBpXp(p, m.xp);
+  return { ok: true, gold: m.gold, xp: m.xp, msg: '미션 완료! +' + m.gold + 'G · 패스 XP +' + m.xp };
+}
+
+// ----- 배틀패스 -----
+const BP_XP_PER_LEVEL = 100, BP_MAX_LEVEL = 30;
+function buildBpTrack() {
+  const t = [];
+  for (let lv = 1; lv <= BP_MAX_LEVEL; lv++) {
+    const free = { gold: 500 + lv * 100 };
+    if (lv % 5 === 0) free.protect = 1;                 // 5레벨마다 방지권
+    const paid = { gold: 1500 + lv * 200 };
+    if (lv % 3 === 0) paid.boost = 5;                   // 3레벨마다 부스트 5회
+    if (lv % 5 === 0) paid.protect = 2;
+    t.push({ level: lv, free, paid });
+  }
+  return t;
+}
+const BP_TRACK = buildBpTrack();
+function ensureBp(p) {
+  if (!p.bp || p.bp.season !== thisSeason()) p.bp = { season: thisSeason(), xp: 0, free: [], paid: [], premium: false };
+  return p.bp;
+}
+function bpLevelOf(xp) { return Math.max(0, Math.min(BP_MAX_LEVEL, Math.floor(xp / BP_XP_PER_LEVEL))); }
+function addBpXp(p, xp) { const bp = ensureBp(p); bp.xp = Math.min(BP_MAX_LEVEL * BP_XP_PER_LEVEL, (bp.xp || 0) + (xp || 0)); }
+function bpAlert(p) {
+  const bp = ensureBp(p), lv = bpLevelOf(bp.xp); let n = 0;
+  for (const t of BP_TRACK) {
+    if (t.level <= lv && !bp.free.includes(t.level)) n++;
+    if (t.level <= lv && bp.premium && !bp.paid.includes(t.level)) n++;
+  }
+  return n;
+}
+function bpSummary(p) {
+  const bp = ensureBp(p), lv = bpLevelOf(bp.xp);
+  return {
+    season: bp.season, level: lv, maxLevel: BP_MAX_LEVEL, premium: !!bp.premium,
+    xp: bp.xp, xpPerLevel: BP_XP_PER_LEVEL,
+    xpInLevel: bp.xp - lv * BP_XP_PER_LEVEL, atMax: lv >= BP_MAX_LEVEL,
+  };
+}
+function bpView(db, id) {
+  const p = norm(db.players[id]);
+  const bp = ensureBp(p), lv = bpLevelOf(bp.xp);
+  return {
+    ok: true, ...bpSummary(p),
+    track: BP_TRACK.map(t => ({
+      level: t.level, free: t.free, paid: t.paid,
+      unlocked: t.level <= lv,
+      freeClaimed: bp.free.includes(t.level),
+      paidClaimed: bp.paid.includes(t.level),
+      freeClaimable: t.level <= lv && !bp.free.includes(t.level),
+      paidClaimable: t.level <= lv && bp.premium && !bp.paid.includes(t.level),
+    })),
+  };
+}
+function grantBundle(p, r) { // 배틀패스 보상 지급
+  if (r.gold) { p.gold += r.gold; p.goldEarned = (p.goldEarned || 0) + r.gold; }
+  if (r.protect) p.protects = (p.protects || 0) + r.protect;
+  if (r.boost) p.enhanceBoost = (p.enhanceBoost || 0) + r.boost;
+}
+function bpClaim(db, id, level, track) {
+  const p = norm(db.players[id]);
+  const bp = ensureBp(p), lv = bpLevelOf(bp.xp);
+  const t = BP_TRACK.find(x => x.level === level);
+  if (!t) return { ok: false, error: '없는 보상이에요.' };
+  if (level > lv) return { ok: false, error: '아직 도달하지 않은 레벨이에요.' };
+  if (track === 'paid') {
+    if (!bp.premium) return { ok: false, error: '시즌 패스(유료 트랙)가 필요해요.' };
+    if (bp.paid.includes(level)) return { ok: false, error: '이미 받았어요.' };
+    bp.paid.push(level); grantBundle(p, t.paid);
+    return { ok: true, reward: t.paid, msg: '패스 보상 수령! (Lv.' + level + ' 프리미엄)' };
+  }
+  if (bp.free.includes(level)) return { ok: false, error: '이미 받았어요.' };
+  bp.free.push(level); grantBundle(p, t.free);
+  return { ok: true, reward: t.free, msg: '패스 보상 수령! (Lv.' + level + ')' };
+}
+// 시즌 패스(유료) 구매 — 결제 연동 전까지 '준비중'. 결제 붙으면 여기서 bp.premium=true 로.
+function bpBuyPremium(db, id) {
+  return { ok: false, error: '시즌 패스는 곧 출시됩니다! (준비중)' };
+}
+
 module.exports = {
   CONFIG, GRADES, RARITIES, CLASSES, BOSSES, odds, enhanceCost, weaponName, grade,
+  missionView, missionClaim, bpView, bpClaim, bpBuyPremium,
   login, setClass, rename, publicView, enhance, attend, mine, mineSwing, hunt, buyProtect, fight,
   partyCreate, partyJoin, partyLeave, partyList, partyView, raidStart,
   partyInvite, partyAccept, partyReject, myInvites, raidState,

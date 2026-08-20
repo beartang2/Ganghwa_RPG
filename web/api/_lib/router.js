@@ -138,6 +138,16 @@ async function handle(method, pathname, ctx) {
     const db = await store.readDb(q);
     return ok(game.raidState(db, id));
   }
+  if (method === 'GET' && pathname === '/api/missions') {
+    if (!id) return bad({ ok: false, error: '로그인이 필요합니다.' }, 401);
+    const db = await store.readDb(q);
+    return ok(game.missionView(db, id));
+  }
+  if (method === 'GET' && pathname === '/api/battlepass') {
+    if (!id) return bad({ ok: false, error: '로그인이 필요합니다.' }, 401);
+    const db = await store.readDb(q);
+    return ok(game.bpView(db, id));
+  }
 
   if (method === 'POST') {
     if (pathname === '/api/logout') { await store.deleteSession(q, ctx.token); return ok({ ok: true }); }
@@ -204,6 +214,9 @@ async function handle(method, pathname, ctx) {
     else if (pathname === '/api/hunt') fn = (db) => game.hunt(db, id);
     else if (pathname === '/api/title') fn = (db) => game.equipTitle(db, id, b.title || null);
     else if (pathname === '/api/protect') fn = (db) => game.buyProtect(db, id, b.qty);
+    else if (pathname === '/api/mission-claim') fn = (db) => game.missionClaim(db, id, b.id);
+    else if (pathname === '/api/bp-claim') fn = (db) => game.bpClaim(db, id, b.level, b.track);
+    else if (pathname === '/api/bp-premium') fn = (db) => game.bpBuyPremium(db, id);
     else if (pathname === '/api/shop-buy') {
       fn = (db) => b.item === 'protect' ? game.buyProtect(db, id, 1)
         : b.item === 'boost' ? game.buyBoost(db, id)

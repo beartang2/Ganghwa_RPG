@@ -523,6 +523,8 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && p === '/api/me') return sendJson(res, 200, { ok: true, me: game.publicView(db, id) });
     if (req.method === 'GET' && p === '/api/party-raid') return sendJson(res, 200, game.raidState(db, id));
+    if (req.method === 'GET' && p === '/api/missions') return sendJson(res, 200, game.missionView(db, id));
+    if (req.method === 'GET' && p === '/api/battlepass') return sendJson(res, 200, game.bpView(db, id));
 
     if (req.method === 'POST') {
       if (!allowAction(id)) return sendJson(res, 429, { ok: false, error: '너무 빠릅니다. 잠시 후 다시 시도하세요.' });
@@ -536,6 +538,9 @@ const server = http.createServer(async (req, res) => {
       else if (p === '/api/hunt') r = game.hunt(db, id);
       else if (p === '/api/title') { const b = await readBody(req); r = game.equipTitle(db, id, b.title || null); }
       else if (p === '/api/protect') { const b = await readBody(req); r = game.buyProtect(db, id, b.qty); }
+      else if (p === '/api/mission-claim') { const b = await readBody(req); r = game.missionClaim(db, id, b.id); }
+      else if (p === '/api/bp-claim') { const b = await readBody(req); r = game.bpClaim(db, id, b.level, b.track); }
+      else if (p === '/api/bp-premium') r = game.bpBuyPremium(db, id);
       else if (p === '/api/shop-buy') {
         const b = await readBody(req);
         if (b.item === 'protect') r = game.buyProtect(db, id, 1);

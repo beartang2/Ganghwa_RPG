@@ -178,6 +178,32 @@ async function main() {
   ok(loginBlocked, '로그인 무차별 대입 시 429(닉별 상한 → PIN 브루트포스 차단)');
   // 정상 플레이(rateLimit 미적용)는 위 38개 테스트가 영향 없음을 이미 증명
 
+  // 미션 & 배틀패스 (저장 왕복·라우팅·클레임 게이팅)
+  console.log('\n[미션/배틀패스]');
+  await q("UPDATE players SET gold = 1000000, level = 0 WHERE nick = '검사'");
+  for (let i = 0; i < 6; i++) await req('POST', '/api/enhance', { token: tok });
+  const enhProg = Number((await q("SELECT data->'mstat'->'d'->>'enh' AS enh FROM players WHERE nick='검사'"))[0].enh);
+  ok(enhProg >= 6, 'mstat.enh 저장 왕복(강화 진행 ' + enhProg + ')');
+
+  let mv = (await req('GET', '/api/missions', { token: tok })).body;
+  ok(mv.ok && mv.daily.length === 4 && mv.weekly.length === 4, '미션 조회(일일 4·주간 4)');
+  ok(mv.bp && typeof mv.bp.level === 'number', '미션 응답에 배틀패스 요약 포함');
+  ok(!(await req('POST', '/api/mission-claim', { token: tok, body: { id: 'nope' } })).body.ok, '없는 미션 클레임 거부');
+
+  let bpv = (await req('GET', '/api/battlepass', { token: tok })).body;
+  ok(bpv.ok && bpv.track.length === 30, '배틀패스 트랙 30레벨');
+  await q("UPDATE players SET data = jsonb_set(data, '{bp}', $1::jsonb) WHERE nick='검사'",
+    [JSON.stringify({ season: bpv.season, xp: 550, free: [], paid: [], premium: false })]);
+  bpv = (await req('GET', '/api/battlepass', { token: tok })).body;
+  ok(bpv.level === 5, 'xp 550 → 배틀패스 Lv5');
+  const prBefore = Number((await q("SELECT COALESCE((data->>'protects')::int,0) AS p FROM players WHERE nick='검사'"))[0].p);
+  ok((await req('POST', '/api/bp-claim', { token: tok, body: { level: 5, track: 'free' } })).body.ok, 'BP Lv5 무료 보상 수령');
+  const prAfter = Number((await q("SELECT COALESCE((data->>'protects')::int,0) AS p FROM players WHERE nick='검사'"))[0].p);
+  ok(prAfter > prBefore, '무료 보상(방지권) 지급·저장 (' + prBefore + '→' + prAfter + ')');
+  ok(!(await req('POST', '/api/bp-claim', { token: tok, body: { level: 5, track: 'free' } })).body.ok, '중복 수령 거부');
+  ok(!(await req('POST', '/api/bp-claim', { token: tok, body: { level: 5, track: 'paid' } })).body.ok, '프리미엄 없이 유료 트랙 거부');
+  ok(!(await req('POST', '/api/bp-premium', { token: tok })).body.ok, '시즌 패스 구매 준비중');
+
   console.log('\n결과: ' + pass + ' pass, ' + fail + ' fail');
   process.exit(fail ? 1 : 0);
 }
