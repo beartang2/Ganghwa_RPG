@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>⚔️ 강화 RPG</title>
-<link rel="stylesheet" href="/style.css?v=28">
+<link rel="stylesheet" href="/style.css?v=29">
 </head>
 <body>
 
@@ -15,9 +15,14 @@
     <p class="sub">닉네임과 PIN으로 시작하세요</p>
     <input id="nick" placeholder="닉네임 (1~12자)" maxlength="12" autocomplete="off">
     <input id="pin" type="password" placeholder="PIN 숫자 8자리" maxlength="8" inputmode="numeric" autocomplete="off">
-    <button id="loginBtn" class="btn primary big">시작</button>
+    <button id="loginBtn" class="btn primary big">게스트로 시작</button>
     <p id="loginErr" class="err"></p>
-    <p class="hint">PIN 8자리가 계정입니다. 같은 PIN이면 같은 계정이고, 로그인 시 닉네임+PIN이 일치해야 해요.<br>PIN을 꼭 기억하세요! (닉네임은 로그인 후 프로필에서 변경 가능)</p>
+    <p class="hint">PIN 8자리가 게스트 계정입니다. 같은 PIN이면 같은 계정이고, 로그인 시 닉네임+PIN이 일치해야 해요.<br>PIN을 꼭 기억하세요! (닉네임은 로그인 후 프로필에서 변경 가능)</p>
+    <div id="emailLoginWrap" class="email-login" hidden>
+      <div class="or-divider"><span>또는</span></div>
+      <button id="emailAuthBtn" class="btn ghost big">✉️ 이메일로 로그인 / 회원가입</button>
+      <p class="hint" style="margin-top:6px">이메일 계정은 기기가 바뀌어도 캐릭터를 지켜줘요.</p>
+    </div>
   </div>
 </div>
 
@@ -41,6 +46,7 @@
     <div class="menu-wrap">
       <button id="menuBtn" class="btn ghost sm" aria-label="메뉴">☰</button>
       <div id="menuDrop" class="menu-drop" hidden>
+        <button class="menu-item" id="accountItem">✉️ 계정 만들기</button>
         <button class="menu-item" id="soundItem">🔊 효과음 ON</button>
         <button class="menu-item" id="helpItem">❔ 플레이 방법</button>
         <button class="menu-item" id="logoutItem">🚪 로그아웃</button>
@@ -143,6 +149,24 @@
   </div>
 </div>
 
+<!-- 이메일 계정 (Supabase Auth) -->
+<div id="authModal" class="modal" hidden>
+  <div class="card modal-card auth-card">
+    <button id="authClose" class="btn ghost sm close">✕</button>
+    <h3 id="authTitle">이메일 계정</h3>
+    <div id="authTabs" class="auth-tabs">
+      <button class="auth-tab active" data-mode="login">로그인</button>
+      <button class="auth-tab" data-mode="register">회원가입</button>
+    </div>
+    <p id="authIntro" class="auth-intro" hidden></p>
+    <input id="authEmail" type="email" placeholder="이메일" autocomplete="email" inputmode="email" maxlength="120">
+    <input id="authPw" type="password" placeholder="비밀번호 (6자 이상)" autocomplete="current-password" maxlength="72">
+    <button id="authSubmit" class="btn primary big">로그인</button>
+    <p id="authMsg" class="auth-msg"></p>
+    <button id="authForgot" class="btn ghost sm auth-link">비밀번호를 잊으셨나요?</button>
+  </div>
+</div>
+
 <!-- 프로필 모달 -->
 <div id="modal" class="modal" hidden>
   <div class="card modal-card">
@@ -153,6 +177,6 @@
 
 <!-- Supabase Realtime (선택) — 로드 실패해도 게임은 폴링으로 동작 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/app.js?v=28"></script>
+<script src="/app.js?v=29"></script>
 </body>
 </html>

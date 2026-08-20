@@ -1059,7 +1059,7 @@ el('loginBtn').onclick = async () => {
   }
 };
 el('pin').addEventListener('keydown', e => { if (e.key === 'Enter') el('loginBtn').click(); });
-function doLogout() { stopRaidLoop(); closeEvents(); closeRealtime(); token = null; me = null; curRaid = null; localStorage.removeItem('token'); show('login'); }
+function doLogout() { stopRaidLoop(); closeEvents(); closeRealtime(); if (sbAuth) sbAuth.auth.signOut().catch(() => {}); token = null; me = null; curRaid = null; localStorage.removeItem('token'); show('login'); }
 
 // 버튼 연타 방지: 액션 사이 최소 간격
 const COOLDOWN = 450;
@@ -1116,16 +1116,166 @@ el('guideClose').onclick = () => { el('guide').hidden = true; localStorage.setIt
 /* ---------- 상단바 메뉴(☰) ---------- */
 function updateSoundBtn() { el('soundItem').textContent = (soundOn ? '🔊' : '🔇') + ' 효과음 ' + (soundOn ? 'ON' : 'OFF'); }
 function closeMenu() { el('menuDrop').hidden = true; }
-el('menuBtn').onclick = (e) => { e.stopPropagation(); el('menuDrop').hidden = !el('menuDrop').hidden; };
+el('menuBtn').onclick = (e) => { e.stopPropagation(); updateAccountItem(); el('menuDrop').hidden = !el('menuDrop').hidden; };
 el('soundItem').onclick = () => { soundOn = !soundOn; localStorage.setItem('soundOff', soundOn ? '0' : '1'); updateSoundBtn(); if (soundOn) { ensureAudio(); sfx('click'); } };
 el('helpItem').onclick = () => { closeMenu(); el('guide').hidden = false; };
+el('accountItem').onclick = () => {
+  closeMenu();
+  if (me && me.linked) { toast('✉️ ' + (me.email || '') + ' 계정에 연결돼 있어요', 'ok'); return; }
+  openAuth('register');   // 게스트 → 이메일 계정 만들어 캐릭터 저장(연결)
+};
 el('logoutItem').onclick = () => { closeMenu(); doLogout(); };
 // 메뉴 바깥 클릭 시 닫기
 document.addEventListener('click', (e) => { if (!el('menuDrop').hidden && !e.target.closest('.menu-wrap')) closeMenu(); });
 updateSoundBtn();
 
+/* ---------- 이메일 계정 (Supabase Auth) ----------
+ * 게스트(닉+PIN)는 기존 그대로. 이메일 계정은 '선택 업그레이드'로, 현재 캐릭터를
+ * Supabase Auth 계정에 연결(auth-link)하거나, 다른 기기에서 복원(auth-login)한다.
+ * 회원가입·이메일 인증·비밀번호 재설정은 Supabase 가 처리. 미설정 환경이면 조용히 숨김. */
+let sbAuth = null, authMode = 'login', authBusy = false, authManual = false;
+
+async function initAuth() {
+  if (sbAuth || !window.supabase) return;
+  try {
+    const cfg = await (await fetch('/api/config')).json();
+    if (!cfg || !cfg.supabaseUrl || !cfg.supabaseAnonKey) return; // Supabase 미설정 → 게스트 전용
+    const base = String(cfg.supabaseUrl).replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+    sbAuth = window.supabase.createClient(base, cfg.supabaseAnonKey, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'sb-auth' },
+    });
+    el('emailLoginWrap').hidden = false;   // 로그인 화면에 이메일 버튼 노출
+    updateAccountItem();
+    sbAuth.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') { openAuth('recovery'); return; }
+      // 이메일 인증/재설정 링크로 돌아온 경우(우리가 직접 로그인한 게 아닐 때) 자동 완료
+      if (event === 'SIGNED_IN' && session && !authManual) afterSupabaseSignIn();
+    });
+  } catch (_) { /* Supabase 없으면 게스트 전용으로 동작 */ }
+}
+
+function updateAccountItem() {
+  const it = el('accountItem'); if (!it) return;
+  if (!sbAuth) { it.hidden = true; return; }
+  it.hidden = false;
+  it.textContent = (me && me.linked) ? ('✉️ ' + (me.email || '연결됨')) : '✉️ 계정 만들기';
+}
+
+function authSay(text, kind) { const m = el('authMsg'); m.textContent = text || ''; m.className = 'auth-msg' + (kind ? ' ' + kind : ''); }
+function setAuthTab() { document.querySelectorAll('.auth-tab').forEach(b => b.classList.toggle('active', b.dataset.mode === authMode)); }
+
+function openAuth(mode) {
+  if (!sbAuth) return;
+  authMode = mode || 'login';
+  authSay('');
+  const linking = !!(token && me && !me.linked); // 현재 게스트가 있으면 '연결' 모드
+  el('authTabs').hidden = (authMode === 'recovery' || authMode === 'reset');
+  el('authForgot').hidden = (authMode !== 'login');
+  el('authEmail').style.display = (authMode === 'recovery') ? 'none' : '';
+  el('authPw').style.display = (authMode === 'reset') ? 'none' : '';
+  const intro = el('authIntro');
+  intro.hidden = !(linking && (authMode === 'login' || authMode === 'register'));
+  if (!intro.hidden) intro.textContent = '현재 캐릭터 「' + (me.nick || '') + '」를 이 이메일 계정에 저장해요.';
+  const pw = el('authPw');
+  if (authMode === 'login')    { el('authTitle').textContent = linking ? '캐릭터 저장 · 로그인' : '이메일 로그인'; el('authSubmit').textContent = '로그인'; pw.placeholder = '비밀번호'; pw.autocomplete = 'current-password'; }
+  if (authMode === 'register') { el('authTitle').textContent = linking ? '캐릭터 저장 · 회원가입' : '이메일 회원가입'; el('authSubmit').textContent = '회원가입'; pw.placeholder = '비밀번호 (6자 이상)'; pw.autocomplete = 'new-password'; }
+  if (authMode === 'reset')    { el('authTitle').textContent = '비밀번호 재설정'; el('authSubmit').textContent = '재설정 메일 보내기'; }
+  if (authMode === 'recovery') { el('authTitle').textContent = '새 비밀번호 설정'; el('authSubmit').textContent = '비밀번호 변경'; pw.placeholder = '새 비밀번호 (6자 이상)'; pw.autocomplete = 'new-password'; }
+  setAuthTab();
+  el('authModal').hidden = false;
+  if (authMode !== 'recovery') el('authEmail').focus();
+}
+function closeAuth() { el('authModal').hidden = true; }
+
+// Supabase 로그인 성공 후 처리.
+// 1) 항상 복원(auth-login) 먼저 — 이 이메일에 이미 캐릭터가 있으면 그걸 불러온다.
+// 2) 캐릭터가 없고(needLink) 현재 게스트가 있으면 → 그 게스트를 이 계정에 연결한다.
+// (이메일 인증/재설정 링크로 돌아온 경우 me 가 아직 로드 전일 수 있어 순서를 이렇게 둔다)
+async function afterSupabaseSignIn() {
+  try {
+    const { data } = await sbAuth.auth.getSession();
+    const at = data && data.session && data.session.access_token;
+    if (!at) { authSay('세션을 가져오지 못했어요. 다시 시도해 주세요.', 'err'); return; }
+    const r = await api('auth-login', 'POST', { access_token: at });
+    if (!r.ok) { authSay(r.error || '로그인에 실패했어요.', 'err'); return; }
+    if (!r.needLink) {                       // 이미 캐릭터 있음 → 복원(로그인)
+      token = r.token; localStorage.setItem('token', token); applyMe(r.me);
+      closeAuth();
+      if (r.needClass) showClassSelect(); else { enterGame(); updateAccountItem(); }
+      return;
+    }
+    // 캐릭터 없음 → 현재 게스트가 있으면 연결. me 미로드면 먼저 불러온다.
+    if (token && !me) { const r0 = await api('me'); if (r0 && r0.ok) applyMe(r0.me); }
+    if (token && me && !me.linked) {
+      const rl = await api('auth-link', 'POST', { access_token: at });
+      if (!rl.ok) { authSay(rl.error || '연결에 실패했어요.', 'err'); return; }
+      applyMe(rl.me); closeAuth(); render(); updateAccountItem();
+      toast('✉️ 이메일 계정에 캐릭터를 저장했어요!', 'ok');
+      return;
+    }
+    // 게스트도 없고 이 이메일에 캐릭터도 없음
+    if (el('authModal').hidden) openAuth('login');
+    authSay('이 이메일에 연결된 캐릭터가 없어요. 먼저 "게스트로 시작"해 캐릭터를 만든 뒤 메뉴의 "계정 만들기"로 연결해 주세요.', 'err');
+  } finally { authManual = false; }
+}
+
+async function submitAuth() {
+  if (authBusy || !sbAuth) return;
+  const email = el('authEmail').value.trim().toLowerCase();
+  const pw = el('authPw').value;
+  const emailOk = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
+  const btn = el('authSubmit'); const lbl = btn.textContent;
+  authBusy = true; btn.disabled = true;
+  try {
+    if (authMode === 'reset') {
+      if (!emailOk) { authSay('이메일을 확인해 주세요.', 'err'); return; }
+      const { error } = await sbAuth.auth.resetPasswordForEmail(email, { redirectTo: location.origin });
+      if (error) { authSay(error.message, 'err'); return; }
+      authSay('재설정 메일을 보냈어요. 메일함을 확인해 주세요.', 'ok'); return;
+    }
+    if (authMode === 'recovery') {
+      if ((pw || '').length < 6) { authSay('비밀번호는 6자 이상이어야 해요.', 'err'); return; }
+      authManual = true;
+      const { error } = await sbAuth.auth.updateUser({ password: pw });
+      if (error) { authManual = false; authSay(error.message, 'err'); return; }
+      authSay('비밀번호를 변경했어요.', 'ok');
+      await afterSupabaseSignIn(); return;
+    }
+    if (!emailOk) { authSay('이메일을 확인해 주세요.', 'err'); return; }
+    if ((pw || '').length < 6) { authSay('비밀번호는 6자 이상이어야 해요.', 'err'); return; }
+    if (authMode === 'register') {
+      authManual = true;
+      const { data, error } = await sbAuth.auth.signUp({ email, password: pw, options: { emailRedirectTo: location.origin } });
+      if (error) { authManual = false; authSay(/registered|exists/i.test(error.message) ? '이미 가입된 이메일이에요. "로그인" 해주세요.' : error.message, 'err'); return; }
+      if (data && data.session) { await afterSupabaseSignIn(); return; } // 이메일 확인 꺼진 경우 즉시 세션
+      authManual = false;
+      authSay('인증 메일을 보냈어요! 메일의 링크로 인증한 뒤 "로그인" 해주세요.', 'ok'); return;
+    }
+    // login
+    authManual = true;
+    const { error } = await sbAuth.auth.signInWithPassword({ email, password: pw });
+    if (error) {
+      authManual = false;
+      const msg = /confirm/i.test(error.message) ? '이메일 인증을 먼저 완료해 주세요.'
+        : /invalid/i.test(error.message) ? '이메일 또는 비밀번호가 올바르지 않아요.' : error.message;
+      authSay(msg, 'err'); return;
+    }
+    await afterSupabaseSignIn();
+  } catch (e) { authManual = false; authSay('오류: ' + (e && e.message || e), 'err'); }
+  finally { authBusy = false; btn.disabled = false; btn.textContent = lbl; }
+}
+
+el('emailAuthBtn').onclick = () => openAuth('login');
+el('authClose').onclick = closeAuth;
+el('authForgot').onclick = () => openAuth('reset');
+el('authSubmit').onclick = submitAuth;
+el('authPw').addEventListener('keydown', e => { if (e.key === 'Enter') submitAuth(); });
+el('authEmail').addEventListener('keydown', e => { if (e.key === 'Enter') { if (authMode === 'reset') submitAuth(); else el('authPw').focus(); } });
+document.querySelectorAll('.auth-tab').forEach(b => { b.onclick = () => openAuth(b.dataset.mode); });
+
 /* ---------- 자동 로그인 ---------- */
 (async function init() {
+  initAuth();   // 이메일 로그인 UI 준비(토큰 유무와 무관하게 항상)
   if (!token) return;
   const r = await api('me');
   if (r.ok) {

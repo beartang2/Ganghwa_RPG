@@ -82,6 +82,13 @@ function findByNick(db, nick) {
   const id = nickIndex(db).get(nick);
   return id && db.players[id] && db.players[id].nick === nick ? id : null;
 }
+// Supabase Auth uid → accountId. 연결된 이메일 계정 로그인 시 캐릭터를 찾는다.
+// (uid 는 계정당 하나뿐 → 소규모에선 인메모리 스캔으로 충분, findByNick 과 동일한 패턴)
+function findByAuthUid(db, uid) {
+  if (!uid) return null;
+  for (const id in db.players) if (db.players[id].authUid === uid) return id;
+  return null;
+}
 
 /* ---------- 직업 ---------- */
 const CLASSES = {
@@ -450,6 +457,7 @@ function publicView(db, id) {
   return {
     ts: Date.now(),   // 응답 생성 시각 — 클라가 더 오래된 스냅샷을 버리는 데 사용(숫자 깜빡임 방지)
     nick: p.nick,
+    email: p.email || null, linked: !!p.authUid,   // 이메일 계정 연결 여부(게스트=false)
     class: p.class, className: c.name, classEmoji: c.emoji, weaponBase: c.weapon,
     level: p.level, best: p.best, breaks: p.breaks,
     wins: p.wins, losses: p.losses, winRate: winRate(p),
@@ -523,6 +531,20 @@ function login(db, nick, pin) {
   indexNick(db, nick, key);
   bumpRank(db); // 총원 변동
   return { ok: true, id: key, isNew: true, needClass: true };
+}
+// 게스트(PIN) 캐릭터를 Supabase Auth 계정(uid+email)에 연결 = '계정 만들기'.
+// 이후 다른 기기에서 이메일 로그인하면 authLogin 이 이 캐릭터를 복원한다.
+function authLink(db, playerId, uid, email) {
+  const p = db.players[playerId];
+  if (!p) return { ok: false, error: '캐릭터를 찾을 수 없어요.' };
+  const owner = findByAuthUid(db, uid);
+  if (owner && owner !== playerId) return { ok: false, error: '이 이메일은 이미 다른 캐릭터에 연결돼 있어요.' };
+  if (p.authUid && p.authUid !== uid) return { ok: false, error: '이 캐릭터는 이미 다른 이메일에 연결돼 있어요.' };
+  const already = !!p.authUid;
+  p.authUid = uid;
+  p.email = (email || '').trim().toLowerCase() || null;
+  if (!already) addLog(db, '🔗 ' + p.nick + ' 님이 이메일 계정을 연결했어요.');
+  return { ok: true, id: playerId, linked: true };
 }
 function setClass(db, id, cls) {
   const p = norm(db.players[id]);
@@ -1095,6 +1117,7 @@ module.exports = {
   raidHit, raidSkill, raidFinish,
   buyBoost, buyDye, buyClassChange, shopItems, equipTitle,
   profile, ranking, goldRanking, hogu, recentLog, playerList, findByNick,
+  findByAuthUid, authLink,
   // 저장 계층(server.js)용 — 일일 카운터 / 유저별 상한
   today, normalizeDay, LIMIT_KEYS, DAILY_FIELDS, limitOf, setLimits, dailyUsage, applyDaily, norm,
   // 서버리스(Vercel/Supabase) 어댑터용

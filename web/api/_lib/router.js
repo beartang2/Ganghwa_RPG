@@ -16,6 +16,24 @@ const ok = (body) => ({ status: 200, body });
 const bad = (body, status = 400) => ({ status, body });
 function newToken() { return crypto.randomBytes(16).toString('hex'); }
 
+// Supabase Auth 액세스 토큰(JWT) 검증 — 서명 검증 대신 Supabase 에 유저 조회를 위임한다.
+// 별도 시크릿 없이 이미 있는 SUPABASE_URL/ANON_KEY 만으로 처리(로그인 때만 호출, 왕복 1회).
+// { uid, email, verified } 또는 null(무효) 반환.
+async function verifySupabaseAuth(accessToken) {
+  const url = process.env.SUPABASE_URL, anon = process.env.SUPABASE_ANON_KEY;
+  if (!url || !anon || !accessToken || typeof accessToken !== 'string') return null;
+  try {
+    const base = String(url).replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+    const res = await fetch(base + '/auth/v1/user', {
+      headers: { Authorization: 'Bearer ' + accessToken, apikey: anon },
+    });
+    if (!res.ok) return null;
+    const u = await res.json();
+    if (!u || !u.id) return null;
+    return { uid: u.id, email: u.email || null, verified: !!(u.email_confirmed_at || u.confirmed_at) };
+  } catch (_) { return null; }
+}
+
 // 속도제한 파라미터 (상시서버 server.js 와 유사: 정상 플레이 450ms 쿨다운은 통과)
 const RL = {
   action: { cap: 8, refill: 3 },     // 계정별 액션: 버스트 8 + 초당 3
@@ -89,6 +107,23 @@ async function handle(method, pathname, ctx) {
     return ok({ ok: true, token, isNew: r.isNew, needClass: r.needClass, me: game.publicView(db, r.id) });
   }
 
+  // ---- 이메일 계정 로그인(Supabase Auth) → 연결된 캐릭터 복원, 우리 세션 토큰 발급 ----
+  if (method === 'POST' && pathname === '/api/auth-login') {
+    const b = ctx.body || {};
+    if (ctx.rateLimit !== false && !await store.rateAllow(q, 'lip:' + (ctx.ip || '?'), RL.loginIp.cap, RL.loginIp.refill)) {
+      return tooFast('로그인 시도가 너무 잦아요. 잠시 후 다시 시도하세요.');
+    }
+    const au = await verifySupabaseAuth(b.access_token);
+    if (!au) return bad({ ok: false, error: '인증 정보가 유효하지 않아요. 다시 로그인해 주세요.' }, 401);
+    if (!au.verified) return bad({ ok: false, error: '이메일 인증을 먼저 완료해 주세요.' }, 403);
+    const db = await store.readDb(q);
+    const id = game.findByAuthUid(db, au.uid);
+    if (!id) return ok({ ok: true, needLink: true, email: au.email }); // 아직 연결된 캐릭터 없음
+    const token = newToken();
+    await store.putSession(q, token, id);
+    return ok({ ok: true, token, needClass: !db.players[id].class, me: game.publicView(db, id) });
+  }
+
   // ---- 인증 필요 ----
   const id = await store.getSession(q, ctx.token);
 
@@ -107,6 +142,16 @@ async function handle(method, pathname, ctx) {
   if (method === 'POST') {
     if (pathname === '/api/logout') { await store.deleteSession(q, ctx.token); return ok({ ok: true }); }
     if (!id) return bad({ ok: false, error: '로그인이 필요합니다.' }, 401);
+    // 이메일 계정 연결('계정 만들기') — 현재 게스트 캐릭터를 Supabase Auth 계정에 묶는다.
+    if (pathname === '/api/auth-link') {
+      const b = ctx.body || {};
+      const au = await verifySupabaseAuth(b.access_token);
+      if (!au) return bad({ ok: false, error: '인증 정보가 유효하지 않아요. 다시 로그인해 주세요.' }, 401);
+      if (!au.verified) return bad({ ok: false, error: '이메일 인증을 먼저 완료해 주세요.' }, 403);
+      const { r, db } = await store.runGame(q, { lockId: id }, (d) => game.authLink(d, id, au.uid, au.email));
+      if (!r.ok) return bad(r);
+      return ok({ ok: true, me: game.publicView(db, id) });
+    }
     if (ctx.rateLimit !== false && !await store.rateAllow(q, 'act:' + id, RL.action.cap, RL.action.refill)) return tooFast();
     if (NOT_YET.has(pathname)) return bad({ ok: false, error: '이 기능은 아직 서버리스 버전으로 이식 중이에요. (곧 지원)' }, 501);
 
