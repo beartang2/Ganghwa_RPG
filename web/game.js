@@ -1151,7 +1151,7 @@ const DAILY_POOL = [
   { id: 'd_raid',   stat: 'raid',   target: 1,  gold: 1500, xp: 40, desc: '레이드 1회 참여' },
 ];
 const WEEKLY_POOL = [
-  { id: 'w_enhwin',   stat: 'enhWin',   target: 25,  gold: 6000, xp: 120, desc: '강화 성공 25회' },
+  { id: 'w_enh',      stat: 'enh',      target: 100, gold: 6000, xp: 120, desc: '강화 100회 시도' },
   { id: 'w_hunt',     stat: 'hunt',     target: 150, gold: 6000, xp: 120, desc: '몬스터 150마리 처치' },
   { id: 'w_fightwin', stat: 'fightWin', target: 10,  gold: 6000, xp: 120, desc: '싸움 10승' },
   { id: 'w_raid',     stat: 'raid',     target: 5,   gold: 8000, xp: 150, desc: '레이드 5회 참여' },
