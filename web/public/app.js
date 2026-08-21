@@ -1185,7 +1185,7 @@ updateSoundBtn();
  * 게스트(닉+PIN)는 기존 그대로. 이메일 계정은 '선택 업그레이드'로, 현재 캐릭터를
  * Supabase Auth 계정에 연결(auth-link)하거나, 다른 기기에서 복원(auth-login)한다.
  * 회원가입·이메일 인증·비밀번호 재설정은 Supabase 가 처리. 미설정 환경이면 조용히 숨김. */
-let sbAuth = null, authMode = 'login', authBusy = false, authManual = false;
+let sbAuth = null, authMode = 'login', authBusy = false, authManual = false, authPendingEmail = '';
 
 async function initAuth() {
   if (sbAuth || !window.supabase) return;
@@ -1221,21 +1221,30 @@ function openAuth(mode) {
   authMode = mode || 'login';
   authSay('');
   const linking = !!(token && me && !me.linked); // 현재 게스트가 있으면 '연결' 모드
-  el('authTabs').hidden = (authMode === 'recovery' || authMode === 'reset');
-  el('authForgot').hidden = (authMode !== 'login');
-  el('authEmail').style.display = (authMode === 'recovery') ? 'none' : '';
-  el('authPw').style.display = (authMode === 'reset') ? 'none' : '';
-  const intro = el('authIntro');
-  intro.hidden = !(linking && (authMode === 'login' || authMode === 'register'));
-  if (!intro.hidden) intro.textContent = '현재 캐릭터 「' + (me.nick || '') + '」를 이 이메일 계정에 저장해요.';
-  const pw = el('authPw');
-  if (authMode === 'login')    { el('authTitle').textContent = linking ? '캐릭터 저장 · 로그인' : '이메일 로그인'; el('authSubmit').textContent = '로그인'; pw.placeholder = '비밀번호'; pw.autocomplete = 'current-password'; }
-  if (authMode === 'register') { el('authTitle').textContent = linking ? '캐릭터 저장 · 회원가입' : '이메일 회원가입'; el('authSubmit').textContent = '회원가입'; pw.placeholder = '비밀번호 (6자 이상)'; pw.autocomplete = 'new-password'; }
-  if (authMode === 'reset')    { el('authTitle').textContent = '비밀번호 재설정'; el('authSubmit').textContent = '재설정 메일 보내기'; }
-  if (authMode === 'recovery') { el('authTitle').textContent = '새 비밀번호 설정'; el('authSubmit').textContent = '비밀번호 변경'; pw.placeholder = '새 비밀번호 (6자 이상)'; pw.autocomplete = 'new-password'; }
+  const isSent = authMode === 'sent';
+  const intro = el('authIntro'), pw = el('authPw');
+  el('authTabs').hidden = !(authMode === 'login' || authMode === 'register');
+  el('authForgot').hidden = !(authMode === 'login' || isSent);
+  el('authForgot').textContent = isSent ? '이미 인증했어요 · 로그인하기' : '비밀번호를 잊으셨나요?';
+  el('authEmail').style.display = (authMode === 'recovery' || isSent) ? 'none' : '';
+  el('authPw').style.display = (authMode === 'reset' || isSent) ? 'none' : '';
+  if (isSent) {
+    // 회원가입 후 '메일 확인 대기' 화면
+    el('authTitle').textContent = '📩 인증 메일을 확인하세요';
+    el('authSubmit').textContent = '인증 메일 재발송';
+    intro.hidden = false;
+    intro.innerHTML = '<b>' + esc(authPendingEmail || '') + '</b> 로 인증 메일을 보냈어요.<br>메일의 <b>링크를 누르면 자동으로 로그인</b>돼요. 안 오면 스팸함도 확인하세요!';
+  } else {
+    intro.hidden = !(linking && (authMode === 'login' || authMode === 'register'));
+    if (!intro.hidden) intro.textContent = '현재 캐릭터 「' + (me.nick || '') + '」를 이 이메일 계정에 저장해요.';
+    if (authMode === 'login')    { el('authTitle').textContent = linking ? '캐릭터 저장 · 로그인' : '이메일 로그인'; el('authSubmit').textContent = '로그인'; pw.placeholder = '비밀번호'; pw.autocomplete = 'current-password'; }
+    if (authMode === 'register') { el('authTitle').textContent = linking ? '캐릭터 저장 · 회원가입' : '이메일 회원가입'; el('authSubmit').textContent = '회원가입'; pw.placeholder = '비밀번호 (6자 이상)'; pw.autocomplete = 'new-password'; }
+    if (authMode === 'reset')    { el('authTitle').textContent = '비밀번호 재설정'; el('authSubmit').textContent = '재설정 메일 보내기'; }
+    if (authMode === 'recovery') { el('authTitle').textContent = '새 비밀번호 설정'; el('authSubmit').textContent = '비밀번호 변경'; pw.placeholder = '새 비밀번호 (6자 이상)'; pw.autocomplete = 'new-password'; }
+  }
   setAuthTab();
   el('authModal').hidden = false;
-  if (authMode !== 'recovery') el('authEmail').focus();
+  if (!isSent && authMode !== 'recovery') el('authEmail').focus();
 }
 function closeAuth() { el('authModal').hidden = true; }
 
@@ -1279,6 +1288,11 @@ async function submitAuth() {
   const btn = el('authSubmit'); const lbl = btn.textContent;
   authBusy = true; btn.disabled = true;
   try {
+    if (authMode === 'sent') {   // 인증 메일 재발송
+      const { error } = await sbAuth.auth.resend({ type: 'signup', email: authPendingEmail });
+      if (error) { authSay(/rate|seconds|only request|too many/i.test(error.message) ? '너무 자주 요청했어요. 1분 뒤 다시 시도해 주세요.' : error.message, 'err'); return; }
+      authSay('인증 메일을 다시 보냈어요. 메일함(스팸함)을 확인하세요.', 'ok'); return;
+    }
     if (authMode === 'reset') {
       if (!emailOk) { authSay('이메일을 확인해 주세요.', 'err'); return; }
       const { error } = await sbAuth.auth.resetPasswordForEmail(email, { redirectTo: location.origin });
@@ -1301,7 +1315,8 @@ async function submitAuth() {
       if (error) { authManual = false; authSay(/registered|exists/i.test(error.message) ? '이미 가입된 이메일이에요. "로그인" 해주세요.' : error.message, 'err'); return; }
       if (data && data.session) { await afterSupabaseSignIn(); return; } // 이메일 확인 꺼진 경우 즉시 세션
       authManual = false;
-      authSay('인증 메일을 보냈어요! 메일의 링크로 인증한 뒤 "로그인" 해주세요.', 'ok'); return;
+      authPendingEmail = email;
+      openAuth('sent'); return;   // 인증 대기 화면으로 전환(재발송·로그인 안내)
     }
     // login
     authManual = true;
@@ -1314,12 +1329,13 @@ async function submitAuth() {
     }
     await afterSupabaseSignIn();
   } catch (e) { authManual = false; authSay('오류: ' + (e && e.message || e), 'err'); }
-  finally { authBusy = false; btn.disabled = false; btn.textContent = lbl; }
+  // 버튼 텍스트는 openAuth 가 모드별로 설정하므로 여기서 lbl 로 되돌리지 않는다(sent 전환 시 덮어쓰기 방지)
+  finally { authBusy = false; btn.disabled = false; }
 }
 
 el('emailAuthBtn').onclick = () => openAuth('login');
 el('authClose').onclick = closeAuth;
-el('authForgot').onclick = () => openAuth('reset');
+el('authForgot').onclick = () => openAuth(authMode === 'sent' ? 'login' : 'reset');
 el('authSubmit').onclick = submitAuth;
 el('authPw').addEventListener('keydown', e => { if (e.key === 'Enter') submitAuth(); });
 el('authEmail').addEventListener('keydown', e => { if (e.key === 'Enter') { if (authMode === 'reset') submitAuth(); else el('authPw').focus(); } });
