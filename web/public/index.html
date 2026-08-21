@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>⚔️ 강화 RPG</title>
-<link rel="stylesheet" href="/style.css?v=30">
+<link rel="stylesheet" href="/style.css?v=32">
 </head>
 <body>
 
@@ -44,8 +44,9 @@
       <span class="chip">🛡️ <b id="hProtect">0</b></span>
     </span>
     <div class="menu-wrap">
-      <button id="menuBtn" class="btn ghost sm" aria-label="메뉴">☰</button>
+      <button id="menuBtn" class="btn ghost sm" aria-label="메뉴">☰<span id="menuDot" class="dot" hidden></span></button>
       <div id="menuDrop" class="menu-drop" hidden>
+        <button class="menu-item" id="noticeItem">📢 공지사항<span id="noticeDot" class="dot" hidden></span></button>
         <button class="menu-item" id="accountItem">✉️ 계정 만들기</button>
         <button class="menu-item" id="soundItem">🔊 효과음 ON</button>
         <button class="menu-item" id="helpItem">❔ 플레이 방법</button>
@@ -126,6 +127,15 @@
   </div>
 </div>
 
+<!-- 업데이트 패치노트 (버전당 1회, 닫기 버튼은 몇 초 후 활성화) -->
+<div id="patchModal" class="modal" hidden>
+  <div class="card modal-card patch-card">
+    <h3 id="patchTitle">🎉 업데이트 안내</h3>
+    <ul id="patchNotes" class="patch-notes"></ul>
+    <button id="patchClose" class="btn primary big" disabled>3초 후 닫기</button>
+  </div>
+</div>
+
 <!-- 사냥터 (몬스터 연타 처치) -->
 <div id="huntModal" class="modal" hidden>
   <div class="card modal-card hunt-card">
@@ -202,6 +212,6 @@
 
 <!-- Supabase Realtime (선택) — 로드 실패해도 게임은 폴링으로 동작 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/app.js?v=30"></script>
+<script src="/app.js?v=32"></script>
 </body>
 </html>

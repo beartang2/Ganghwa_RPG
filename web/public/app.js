@@ -4,6 +4,23 @@ let token = localStorage.getItem('token') || null;
 let me = null;
 let currentTab = 'rank';
 
+/* 업데이트 패치노트 — 업데이트할 때마다 version 을 올리고 notes 를 갱신하면
+   유저에게 '버전당 1회' 안내창이 뜬다. (닫기 버튼은 아래 PATCH_DELAY 초 후 활성화) */
+const PATCH = {
+  version: '3',
+  title: '🎉 업데이트 안내',
+  notes: [
+    '🎯 <b>일일·주간 미션</b> 추가 — 목표를 달성하고 보상을 받아요',
+    '🎟️ <b>배틀패스(시즌 패스)</b> 추가 — 미션으로 XP를 쌓아 보상 획득',
+    '🐉 <b>레이드 혼자서도 도전 가능</b> — 파티 없이도 보스 사냥',
+    '🍀 <b>강화 부스트권 강화</b> — 성공률 3배 + 실패해도 🔨장인의 기운이 훨씬 빨리 차요',
+    '⚖️ <b>강화 밸런스 개편</b> — 파괴 시 완전 초기화 → 한 등급 강등(속성 유지)으로 완화',
+    '✉️ <b>이메일 계정 연결</b> — 기기가 바뀌어도 캐릭터를 지켜줘요',
+  ],
+};
+const PATCH_DELAY = 3;   // 닫기 버튼 활성화까지 대기(초) — 실수로 닫지 않고 읽게
+let patchTimer = null;
+
 const el = id => document.getElementById(id);
 
 /* ---------- API ---------- */
@@ -85,8 +102,39 @@ function show(which) {
   ['login', 'classSelect', 'game'].forEach(s => { el(s).hidden = (s !== which); });
 }
 // 안내창은 한 번 닫으면 다시 안 뜬다(기기에 영구 저장). ❔ 버튼으로 다시 열 수 있음.
-function maybeShowGuide() { if (!localStorage.getItem('guideSeen')) el('guide').hidden = false; }
-function enterGame() { show('game'); seedInvites(); seedTitles(); render(); withLoad(loadTab); maybeShowGuide(); openEvents(); initRealtime(); }
+// 신규 유저는 가이드를 보여주고(패치노트는 건너뜀), 기존 유저는 새 버전이면 패치노트를 띄운다.
+function maybeShowGuide() {
+  if (!localStorage.getItem('guideSeen')) { el('guide').hidden = false; localStorage.setItem('patchSeen', PATCH.version); return true; }
+  return false;
+}
+function patchUnread() { return localStorage.getItem('patchSeen') !== PATCH.version; }
+function updateNoticeBadge() { const u = patchUnread(); const a = el('menuDot'), b = el('noticeDot'); if (a) a.hidden = !u; if (b) b.hidden = !u; }
+// withDelay=true(업데이트 자동 팝업): 닫기 버튼 PATCH_DELAY초 후 활성화. false(메뉴에서 다시 보기): 즉시 닫기 가능.
+function openPatch(withDelay) {
+  el('patchTitle').innerHTML = PATCH.title;
+  el('patchNotes').innerHTML = PATCH.notes.map(n => '<li>' + n + '</li>').join('');
+  el('patchModal').hidden = false;
+  const btn = el('patchClose');
+  clearInterval(patchTimer); patchTimer = null;
+  if (withDelay) {
+    let s = PATCH_DELAY;
+    btn.disabled = true; btn.textContent = s + '초 후 닫기';
+    patchTimer = setInterval(() => {
+      s--;
+      if (s > 0) { btn.textContent = s + '초 후 닫기'; }
+      else { clearInterval(patchTimer); patchTimer = null; btn.disabled = false; btn.textContent = '확인'; }
+    }, 1000);
+  } else { btn.disabled = false; btn.textContent = '확인'; }
+}
+function maybeShowPatch() { if (patchUnread()) openPatch(true); }
+function closePatch() {
+  if (el('patchClose').disabled) return;   // 아직 활성화 전엔 무시
+  clearInterval(patchTimer); patchTimer = null;
+  localStorage.setItem('patchSeen', PATCH.version);
+  el('patchModal').hidden = true;
+  updateNoticeBadge();
+}
+function enterGame() { show('game'); seedInvites(); seedTitles(); render(); withLoad(loadTab); const shownGuide = maybeShowGuide(); if (!shownGuide) maybeShowPatch(); openEvents(); initRealtime(); }
 
 /* 파티 레이드 초대 알림 — 어느 탭에 있어도 새 초대가 오면 토스트로 띄운다.
  * 폴링(api('me'))으로 me.invites 가 갱신될 때마다 새로 생긴 초대를 감지. */
@@ -231,6 +279,7 @@ function render() {
   el('hGold').textContent = me.gold.toLocaleString();
   el('hProtect').textContent = me.protects;
   updateMissionBadge();
+  updateNoticeBadge();
 
   setWeaponArt(me);
   el('weaponName').textContent = me.weapon;
@@ -884,8 +933,8 @@ function paintParty(panel) {
           <button class="btn sm primary" data-raid="${b.id}">도전</button></div>`).join('');
     } else html += `<p class="hint">파티장이 레이드를 시작할 수 있어요. 시작하면 여기서 다같이 보스를 연타해요!</p>`;
   } else {
-    html += `<p class="hint" style="margin:0 0 8px">파티를 만들어 동료를 초대하거나, 열린 파티에 참가하세요! (탱커·힐러 조합이 중요)</p>`;
-    html += `<button class="btn primary sm" id="createPartyBtn" style="margin-bottom:10px">➕ 파티 만들기</button>`;
+    html += `<p class="hint" style="margin:0 0 8px">🎯 <b>혼자서도 도전 가능!</b> 파티를 만들면 바로 보스를 고를 수 있어요. 동료를 초대하면 함께(탱커·힐러 조합) 더 강한 보스도 노려봐요.</p>`;
+    html += `<button class="btn primary sm" id="createPartyBtn" style="margin-bottom:10px">➕ 파티 만들기 (혼자도 OK)</button>`;
     html += `<div style="margin:6px 0"><b>파티 목록</b></div>`;
     html += cacheParties.length ? cacheParties.map(pt =>
       `<div class="party-member">👑 <b>${esc(pt.leaderNick)}</b> <small>${pt.count}/${pt.max}명</small>
@@ -1114,6 +1163,8 @@ el('mineClose').onclick = closeMine;
 el('mineModal').addEventListener('click', e => { if (e.target === el('mineModal')) closeMine(); });
 el('modal').addEventListener('click', e => { if (e.target === el('modal')) el('modal').hidden = true; });
 el('guideClose').onclick = () => { el('guide').hidden = true; localStorage.setItem('guideSeen', '1'); };
+el('patchClose').onclick = closePatch;
+el('noticeItem').onclick = () => { closeMenu(); openPatch(false); };
 /* ---------- 상단바 메뉴(☰) ---------- */
 function updateSoundBtn() { el('soundItem').textContent = (soundOn ? '🔊' : '🔇') + ' 효과음 ' + (soundOn ? 'ON' : 'OFF'); }
 function closeMenu() { el('menuDrop').hidden = true; }

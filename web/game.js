@@ -13,7 +13,7 @@ const CONFIG = {
   stealPct: 0.2, protectPrice: 8000,
   fightBreakChance: 0.10,    // 싸움 패배 시 무기 1단계 하락 확률(진 사람만, 확률적)
   dropProtectChance: 0.012, dropGoldChance: 0.07,
-  mineRate: 12, mineCap: 3000, partyMax: 5, raidMinMembers: 2,
+  mineRate: 12, mineCap: 3000, partyMax: 5, raidMinMembers: 1,   // 1=혼자도 레이드 가능(고레벨 솔로 딜로 잡힘, 난이도는 보스 danger가 담당)
   raidAtkBuffCap: 0.15,      // 힐러 아군 공격 버프 상한
   raidDRCap: 0.40,           // 탱커 아군 피해감소 상한
   // 인터랙티브 레이드(연타 전투)
@@ -25,7 +25,8 @@ const CONFIG = {
   raidHealPctPerHealer: 2.6, // 힐러 1인당 파티HP 회복(%/초)
   raidDRCapSkill: 0.6,       // 탱커 스킬로 올라갈 수 있는 피해감소 상한
   // 상점
-  boostMult: 2.0,            // 강화 부스트권: 성공률 배율(×2) — 고레벨 평탄화 방지
+  boostMult: 3.0,            // 강화 부스트권: 성공률 배율(×3)
+  boostPityMult: 2.5,        // 부스트 사용 시 장인의 기운 상승 배율(실패·방지 시 pity ×2.5)
   boostCount: 10,            // 강화 부스트권: 지속 횟수
   boostPrice: 8000,
   classChangePrice: 30000,
@@ -606,6 +607,8 @@ function enhance(db, id) {
     boosted = true;
   }
 
+  // 장인의 기운 상승폭 — 부스트권 사용 시 더 크게 오른다(성공률↑ + 실패해도 pity 빨리 참)
+  const pg = pityGain(o.success) * (boosted ? CONFIG.boostPityMult : 1);
   const r = Math.random();
   let result, msg;
   if (r < o.success) {
@@ -622,7 +625,7 @@ function enhance(db, id) {
   } else if (r < o.success + o.destroy) {
     if (p.protects > 0) {
       p.protects--; result = 'protected';
-      p.pity = Math.min(1, p.pity + pityGain(o.success)); // 방지도 시도로 치고 기운 상승
+      p.pity = Math.min(1, p.pity + pg); // 방지도 시도로 치고 기운 상승
       msg = '🛡️ 파괴 방지 발동! +' + before + ' 유지 (남은 방지권 ' + p.protects + ')';
       addLog(db, '🛡️ ' + p.nick + ' +' + before + ' 파괴방지');
     } else {
@@ -647,7 +650,7 @@ function enhance(db, id) {
     }
   } else {
     // 실패 = 유지 + 장인의 기운 상승
-    p.pity = Math.min(1, p.pity + pityGain(o.success));
+    p.pity = Math.min(1, p.pity + pg);
     result = 'fail';
     msg = '❌ 실패... +' + before + ' 유지 · 🔨 장인의 기운 ' + Math.round(p.pity * 100) + '%';
   }
