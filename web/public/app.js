@@ -1312,7 +1312,14 @@ async function submitAuth() {
     if (authMode === 'register') {
       authManual = true;
       const { data, error } = await sbAuth.auth.signUp({ email, password: pw, options: { emailRedirectTo: location.origin } });
-      if (error) { authManual = false; authSay(/registered|exists/i.test(error.message) ? '이미 가입된 이메일이에요. "로그인" 해주세요.' : error.message, 'err'); return; }
+      if (error) { authManual = false; authSay(/registered|exists|already/i.test(error.message) ? '이미 가입된 이메일이에요. 로그인해 주세요.' : error.message, 'err'); return; }
+      // Supabase는 이미 가입된 이메일도 (열거 방지로) 에러 없이 반환한다 → identities 가 비면 기존 계정.
+      if (data && data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        authManual = false;
+        openAuth('login'); el('authEmail').value = email;
+        authSay('이미 가입된 이메일이에요. 비밀번호로 로그인해 주세요.', 'err');
+        return;
+      }
       if (data && data.session) { await afterSupabaseSignIn(); return; } // 이메일 확인 꺼진 경우 즉시 세션
       authManual = false;
       authPendingEmail = email;
