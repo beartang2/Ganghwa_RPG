@@ -80,7 +80,7 @@ async function handle(method, pathname, ctx) {
     });
     if (pathname === '/api/classes') return ok({ ok: true, classes: game.CLASSES });
     if (pathname === '/api/shop') return ok({ ok: true, items: game.shopItems() });
-    if (pathname === '/api/bosses') return ok({ ok: true, bosses: game.BOSSES });
+    if (pathname === '/api/bosses') return ok({ ok: true, bosses: game.BOSSES, partyHpScale: game.CONFIG.raidPartyHpScale });
     if (pathname === '/api/rank') { const db = await store.readDb(q); return ok({ ok: true, list: game.ranking(db) }); }
     if (pathname === '/api/goldrank') { const db = await store.readDb(q); return ok({ ok: true, list: game.goldRanking(db) }); }
     if (pathname === '/api/hogu') { const db = await store.readDb(q); return ok({ ok: true, list: game.hogu(db) }); }
@@ -208,6 +208,8 @@ async function handle(method, pathname, ctx) {
     if (pathname === '/api/setclass') fn = (db) => game.setClass(db, id, b.class);
     else if (pathname === '/api/rename') fn = (db) => game.rename(db, id, b.nick);
     else if (pathname === '/api/enhance') fn = (db) => game.enhance(db, id);
+    else if (pathname === '/api/ascend') fn = (db) => game.ascend(db, id);
+    else if (pathname === '/api/use-item') fn = (db) => game.useItem(db, id, b.item);
     else if (pathname === '/api/attend') fn = (db) => game.attend(db, id);
     else if (pathname === '/api/mine') fn = (db) => game.mine(db, id);
     else if (pathname === '/api/mine-swing') fn = (db) => game.mineSwing(db, id);
@@ -222,6 +224,7 @@ async function handle(method, pathname, ctx) {
         : b.item === 'boost' ? game.buyBoost(db, id)
         : b.item === 'dye' ? game.buyDye(db, id)
         : b.item === 'classchange' ? game.buyClassChange(db, id)
+        : b.item === 'invpack' ? game.buyInvPack(db, id)
         : { ok: false, error: '알 수 없는 상품' };
     }
     if (!fn) return bad({ ok: false, error: 'unknown action' }, 404);

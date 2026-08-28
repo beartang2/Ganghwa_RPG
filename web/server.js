@@ -435,7 +435,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === 'GET' && p === '/api/classes') return sendJson(res, 200, { ok: true, classes: game.CLASSES });
   if (req.method === 'GET' && p === '/api/shop') return sendJson(res, 200, { ok: true, items: game.shopItems() });
-  if (req.method === 'GET' && p === '/api/bosses') return sendJson(res, 200, { ok: true, bosses: game.BOSSES });
+  if (req.method === 'GET' && p === '/api/bosses') return sendJson(res, 200, { ok: true, bosses: game.BOSSES, partyHpScale: game.CONFIG.raidPartyHpScale });
   if (req.method === 'GET' && p === '/api/parties') return sendJson(res, 200, { ok: true, list: cachedRead('parties', () => game.partyList(db)) });
 
   /* ---------- 관리자 API (ADMIN_TOKEN 설정 시에만 활성) ----------
@@ -532,6 +532,8 @@ const server = http.createServer(async (req, res) => {
       if (p === '/api/setclass') { const b = await readBody(req); r = game.setClass(db, id, b.class); }
       else if (p === '/api/rename') { const b = await readBody(req); r = game.rename(db, id, b.nick); }
       else if (p === '/api/enhance') r = game.enhance(db, id);
+      else if (p === '/api/ascend') r = game.ascend(db, id);
+      else if (p === '/api/use-item') { const b = await readBody(req); r = game.useItem(db, id, b.item); }
       else if (p === '/api/attend') r = game.attend(db, id);
       else if (p === '/api/mine') r = game.mine(db, id);
       else if (p === '/api/mine-swing') r = game.mineSwing(db, id);
@@ -547,6 +549,7 @@ const server = http.createServer(async (req, res) => {
         else if (b.item === 'boost') r = game.buyBoost(db, id);
         else if (b.item === 'dye') r = game.buyDye(db, id);
         else if (b.item === 'classchange') r = game.buyClassChange(db, id);
+        else if (b.item === 'invpack') r = game.buyInvPack(db, id);
         else r = { ok: false, error: '알 수 없는 상품' };
       }
       else if (p === '/api/fight') { const b = await readBody(req); r = game.fight(db, id, b.target); }

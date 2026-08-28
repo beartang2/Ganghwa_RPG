@@ -10,13 +10,19 @@ const crypto = require('crypto');
 const CONFIG = {
   dailyFights: 5, dailyHunts: 20, dailyRaids: 3,
   maxLevel: 99, startGold: 1000, attendGold: 1000,
+  destroyDropRatio: 0.15,    // 파괴 시 떨어지는 폭(만렙 대비). 99 기준 -15레벨
   stealPct: 0.2, protectPrice: 8000,
+  protectDailyBuy: 3,        // 🛡️ 상점 일일 구매 상한 — 나머지는 사냥 드랍으로 얻는다
   fightBreakChance: 0.10,    // 싸움 패배 시 무기 1단계 하락 확률(진 사람만, 확률적)
-  dropProtectChance: 0.012, dropGoldChance: 0.07,
+  dropProtectChance: 0.05, dropGoldChance: 0.07,   // 방지권 주 공급원이 사냥이라 확률을 올림
   mineRate: 12, mineCap: 3000, partyMax: 5, raidMinMembers: 1,   // 1=혼자도 레이드 가능(고레벨 솔로 딜로 잡힘, 난이도는 보스 danger가 담당)
   raidAtkBuffCap: 0.15,      // 힐러 아군 공격 버프 상한
   raidDRCap: 0.40,           // 탱커 아군 피해감소 상한
   // 인터랙티브 레이드(연타 전투)
+  raidPartyHpScale: 0.7,     // 인원 1명 늘 때마다 보스 체력 배수 +0.7
+                             // (파티는 탱커·힐러가 섞여 인원수만큼 딜이 늘지 않으므로 1.0 미만이어야
+                             //  '뭉칠수록 유리' 가 유지된다. 1.35 로 잡으면 5인이 솔로보다 어려워진다)
+  raidPartyDangerScale: 0.12,// 인원 1명 늘 때마다 보스 화력 +12%(탱커·힐러가 필요해지는 이유)
   raidDuration: 15000,       // 전투 지속(ms)
   raidHitDmgMult: 0.55,      // 탭 1회 데미지 = memberStats.atk * 이 배율
   raidHitBatchMax: 40,       // raidHit 한 번에 인정하는 최대 타수(치트 방지)
@@ -50,6 +56,38 @@ const CONFIG = {
   mineGemChance: 0.03,      // 원석(보너스 골드) 확률 — 기력 있을 때만
   mineProtectChance: 0.006, // 보석 원석 → 방지권 확률 — 기력 있을 때만
   mineLevelCap: 50,
+  // 초월(환생) — +99 도달 시 무기를 +0 으로 되돌리고 영구 별(★)을 하나 얻는다.
+  ascendGoldBonus: 0.05,     // ★당 골드 획득 증가(+5%/★)
+  ascendAtkBonus: 0.08,      // ★당 레이드 공격력 증가(+8%/★)
+  ascendPityBonus: 0.03,     // ★당 장인의 기운 상승폭 증가(+3%/★)
+  ascendCostMult: 0.8,       // ★당 강화 비용 증가(+80%/★, 선형)
+  ascendSuccPenalty: 0.18,   // ★당 성공률 감소(×0.82^★ — 곱연산이라 0 이 되지 않는다).
+                             // ★0 앵커를 살짝 완화한 대신 초월 회차는 그보다 확실히 낮게 잡는다.
+                             // 고레벨은 장인의 기운이 지배해서 체감이 약하므로, 실질 난이도는
+                             // 비용(★당 +80%)과 방지권 무효가 함께 만든다.
+  /* 초월 승급 재료 — ★N 로 올리는 데 필요한 양(선형 증가).
+   * 등반(0→99)은 '후퇴 없이' 가는 대신 짧아졌으므로, 회차 사이의 시간축은 재료가 잡는다.
+   * 파편은 일일 사냥 20회에서 하루 9개(+0)~32개(+99), 정수는 레이드 성공 3회에서
+   * 하루 3개(고블린)~12개(공허)가 들어온다. ★1 은 약 10일, ★5 는 약 50일 분량. */
+  ascendShardBase: 200, ascendShardStep: 200,   // 💠 초월의 파편(사냥 확률 드랍)
+  ascendEssenceBase: 20, ascendEssenceStep: 20, // 🌟 초월의 정수(레이드 확정 드랍)
+  huntShardChance: 0.35,     // 일일 사냥에서 파편이 드랍될 확률(희귀도가 높을수록 개수↑)
+  raidEssence: 1,            // 레이드 성공 시 참가자 1인당 확정 정수 개수
+  // 인벤토리 — 슬롯 = '아이템 종류' 단위(같은 종류는 한 칸에 무제한 스택)
+  /* 인벤 칸: 기본 8 → 상점 1회 한정 패키지 +4 → 배틀패스 프리미엄 중간 보상 +4 = 상한 16.
+   * 스택이 커서 재료는 1~2칸만 먹는다 — 칸이 모자라지는 건 아이템 '종류' 가 늘 때다.
+   * 지금은 6종이라 기본 8칸에 여유 2칸. 컨텐츠로 종류가 늘면 그때 확장이 필요해진다.
+   * invSlots 는 '바닥값' 이라 나중에 올리면 기존 유저도 자동으로 그만큼 받는다
+   * (추가분은 p.inv.bought 에 따로 쌓여서 사라지지 않는다). */
+  invSlots: 8, invSlotsMax: 16,
+  invPackSlots: 4,           // 상점 '가방 확장 패키지' 1회 구매로 열리는 칸수
+  invPackPrice: 500000,      // 그 가격 — 계정당 딱 한 번
+  invBpSlots: 4,             // 배틀패스 프리미엄 중간 보상으로 주는 칸수
+  invBpLevel: 15,            // 그 보상이 걸리는 패스 레벨
+  /* 한 칸에 쌓이는 최대 개수. 넘으면 다음 칸을 하나 더 먹는다.
+   * 크게 잡는 이유: 칸 압박은 '아이템 종류 수' 에서 와야 한다. 스택이 작으면
+   * 초월 재료 누적만으로 칸이 다 차서, 나중에 아이템 종류가 늘 때 넣을 자리가 없어진다. */
+  invStackMax: 999,
 };
 
 /* ---------- 유틸 ---------- */
@@ -106,7 +144,7 @@ function classOf(p) { return CLASSES[p && p.class] || CLASSES.warrior; }
 //  - 힐러: 낮은 공격, 아군 회복(heal) + 아군 공격버프(atkBuff)
 function memberStats(p) {
   const L = p.level || 0;
-  const base = 12 + L * 8;
+  const base = (12 + L * 8) * (1 + starsOf(p) * CONFIG.ascendAtkBonus);   // 초월 ★당 공격력 +8%
   switch (p.class) {
     case 'archer': return { atk: base * 1.35, hp: 80 + L * 10,  heal: 0, armor: 0, dr: 0, atkBuff: 0 };
     case 'tanker': return { atk: base * 0.6,  hp: 300 + L * 30, heal: 0, armor: 60 + L * 7, dr: 0.05 + L * 0.004, atkBuff: 0 };
@@ -117,21 +155,26 @@ function memberStats(p) {
 }
 
 /* ---------- 등급 / 무기 ---------- */
-// 점진적 등급 경계: 일반0~15, 희귀16~25, 에픽26~49, 전설50~69, 초월70~99
+/* 등급 경계는 만렙 대비 '비율'(r)로 잡는다 — CONFIG.maxLevel 만 올리면 경계가 따라 움직인다.
+ * maxLevel 99 기준: 일반0~15, 희귀16~24, 에픽25~48, 전설49~68, 초월69~99 */
 const GRADES = [
-  { min: 70, name: '초월', key: 'transcend', emoji: '🌈', color: '#c471ed' },
-  { min: 50, name: '전설', key: 'legend',    emoji: '🟠', color: '#f7971e' },
-  { min: 26, name: '에픽', key: 'epic',      emoji: '🟣', color: '#a770ef' },
-  { min: 16, name: '희귀', key: 'rare',      emoji: '🔵', color: '#4facfe' },
-  { min: 0,  name: '일반', key: 'common',    emoji: '⚪', color: '#9aa0b0' },
+  { r: 0.70, name: '초월', key: 'transcend', emoji: '🌈', color: '#c471ed' },
+  { r: 0.50, name: '전설', key: 'legend',    emoji: '🟠', color: '#f7971e' },
+  { r: 0.25, name: '에픽', key: 'epic',      emoji: '🟣', color: '#a770ef' },
+  { r: 0.16, name: '희귀', key: 'rare',      emoji: '🔵', color: '#4facfe' },
+  { r: 0,    name: '일반', key: 'common',    emoji: '⚪', color: '#9aa0b0' },
 ];
-function grade(level) { for (const g of GRADES) { if (level >= g.min) return g; } return GRADES[GRADES.length - 1]; }
-// 파괴 시 강등 바닥: 한 등급 아래 등급의 '시작 레벨'로 떨어짐(안전선).
-// 초월→전설(50) · 전설→에픽(26) · 에픽→희귀(16) · 희귀/일반→0(완전 초기화=진짜 파괴)
+function gradeMin(g) { return Math.round(CONFIG.maxLevel * g.r); }
+function grade(level) { for (const g of GRADES) { if (level >= gradeMin(g)) return g; } return GRADES[GRADES.length - 1]; }
+/* 파괴 시 떨어지는 지점 = max(한 등급 아래 시작 레벨, 현재 -15).
+ * 등급 바닥만 쓰면 +85 파괴가 +50 으로 48레벨을 날려서, 고레벨 구간의
+ * '레벨당 시도 20~65회 × 파괴율' 이 1 을 넘어 진행이 역행한다(며칠치가 증발).
+ * 상대 강등을 씌워 후퇴 폭을 묶고, 난이도는 파괴율·비용·성공률로 만든다. */
+function destroyDrop() { return Math.max(1, Math.round(CONFIG.maxLevel * CONFIG.destroyDropRatio)); }
 function destroyFloor(level) {
-  const gi = GRADES.findIndex(g => level >= g.min); // GRADES는 min 내림차순
+  const gi = GRADES.findIndex(g => level >= gradeMin(g)); // GRADES는 비율 내림차순
   const prev = GRADES[gi + 1];
-  return prev ? prev.min : 0;
+  return Math.max(prev ? gradeMin(prev) : 0, level - destroyDrop());
 }
 
 /* ---------- 무기 속성(원소) ---------- */
@@ -165,6 +208,8 @@ const ACHIEVEMENTS = [
   { id: 'enh50',  title: '전설 강화사',    grade: 'rare',      desc: '무기 +50 달성',   check: p => (p.best || 0) >= 50 },
   { id: 'enh70',  title: '초월자',         grade: 'epic',      desc: '무기 +70 달성',   check: p => (p.best || 0) >= 70 },
   { id: 'enh90',  title: '강화 장인',      grade: 'legend',    desc: '무기 +90 달성',   check: p => (p.best || 0) >= 90 },
+  // 아래 강화 마일스톤은 '역사적 기록' 이라 절대값으로 둔다 — 만렙을 올려도
+  // 이미 +99 를 찍은 사람이 칭호를 잃지 않는다. 만렙 상향 시엔 새 마일스톤을 추가할 것.
   { id: 'enh99',  title: '강화의 신',      grade: 'transcend', desc: '무기 +99 달성',   check: p => (p.best || 0) >= 99 },
   // 파괴
   { id: 'brk20',  title: '오늘의 호구',    grade: 'common',    desc: '무기 파괴 20회',  check: p => (p.breaks || 0) >= 20 },
@@ -188,16 +233,21 @@ const ACHIEVEMENTS = [
   // 싸움 많이 건 사람
   { id: 'maddog', title: '광견',           grade: 'epic',      desc: '싸움 300회 도전',       check: p => (p.fightsTotal || 0) >= 300 },
   // 한 직업으로 +99 달성 (직업의 달인)
-  { id: 'm_warrior', title: CLASSES.warrior.name + '의 달인', grade: 'legend', desc: CLASSES.warrior.name + '(으)로 +99 달성', check: p => (p.masteredClasses || []).includes('warrior') },
-  { id: 'm_archer',  title: CLASSES.archer.name  + '의 달인', grade: 'legend', desc: CLASSES.archer.name  + '(으)로 +99 달성', check: p => (p.masteredClasses || []).includes('archer') },
-  { id: 'm_tanker',  title: CLASSES.tanker.name  + '의 달인', grade: 'legend', desc: CLASSES.tanker.name  + '(으)로 +99 달성', check: p => (p.masteredClasses || []).includes('tanker') },
-  { id: 'm_healer',  title: CLASSES.healer.name  + '의 달인', grade: 'legend', desc: CLASSES.healer.name  + '(으)로 +99 달성', check: p => (p.masteredClasses || []).includes('healer') },
+  { id: 'm_warrior', title: CLASSES.warrior.name + '의 달인', grade: 'legend', desc: CLASSES.warrior.name + '(으)로 만렙(+' + CONFIG.maxLevel + ') 달성', check: p => (p.masteredClasses || []).includes('warrior') },
+  { id: 'm_archer',  title: CLASSES.archer.name  + '의 달인', grade: 'legend', desc: CLASSES.archer.name  + '(으)로 만렙(+' + CONFIG.maxLevel + ') 달성', check: p => (p.masteredClasses || []).includes('archer') },
+  { id: 'm_tanker',  title: CLASSES.tanker.name  + '의 달인', grade: 'legend', desc: CLASSES.tanker.name  + '(으)로 만렙(+' + CONFIG.maxLevel + ') 달성', check: p => (p.masteredClasses || []).includes('tanker') },
+  { id: 'm_healer',  title: CLASSES.healer.name  + '의 달인', grade: 'legend', desc: CLASSES.healer.name  + '(으)로 만렙(+' + CONFIG.maxLevel + ') 달성', check: p => (p.masteredClasses || []).includes('healer') },
   // 채굴장 노가다
   { id: 'blindmoney', title: '눈먼 돈',    grade: 'epic',      desc: '곡괭이질 5,000회',      check: p => (p.mineSwings || 0) >= 5000 },
   // 몬스터 사냥
   { id: 'monsterhunter', title: '괴물 사냥꾼', grade: 'epic',  desc: '몬스터 1,000마리 처치',  check: p => (p.kills || 0) >= 1000 },
   // 레이드 피해
   { id: 'threatdmg', title: '위협적인 피해량', grade: 'epic',  desc: '단일 레이드 3만 피해',    check: p => (p.raidDmg || 0) >= 30000 },
+  // 초월(환생) — ★은 단조 증가라 한 번 얻으면 사라지지 않는다
+  { id: 'asc1',  title: '초월의 시작',  grade: 'legend',    desc: '초월 ★1 달성',  check: p => (p.ascend || 0) >= 1 },
+  { id: 'asc3',  title: '윤회자',       grade: 'legend',    desc: '초월 ★3 달성',  check: p => (p.ascend || 0) >= 3 },
+  { id: 'asc5',  title: '초월의 화신',  grade: 'transcend', desc: '초월 ★5 달성',  check: p => (p.ascend || 0) >= 5 },
+  { id: 'asc10', title: '무의 경지',    grade: 'transcend', desc: '초월 ★10 달성', check: p => (p.ascend || 0) >= 10 },
   // 염색
   { id: 'colormage', title: '색채 마술사',  grade: 'epic',     desc: '염색약 40회 사용',       check: p => (p.dyeCount || 0) >= 40 },
   { id: 'fashion',  title: '패션의 완성',   grade: 'transcend', desc: '염색에서 무지개 획득',   check: p => !!p.gotRainbow },
@@ -250,26 +300,44 @@ function rollDye() {
   if (r < 0.40) return { kind: 'glow', color: c.hex, name: c.name + ' 빛나는', rarity: 'glow' };
   return { kind: 'solid', color: c.hex, name: c.name, rarity: '기본' };
 }
+// 상점은 이제 '인벤토리에 아이템을 넣어주는' 창구다. 염색약·직업변경권은
+// 구매 즉시 발동하지 않고 인벤토리에서 useItem 으로 써야 한다.
 function shopItems() {
   return [
-    { id: 'protect', emoji: '🛡️', name: '파괴방지권', price: CONFIG.protectPrice, desc: '파괴를 1회 자동으로 막아줍니다' },
-    { id: 'boost', emoji: '🍀', name: '강화 부스트권', price: CONFIG.boostPrice, desc: '다음 ' + CONFIG.boostCount + '회 강화 성공률 ' + CONFIG.boostMult + '배' },
-    { id: 'dye', emoji: '🎨', name: '염색약', price: CONFIG.dyePrice, desc: '닉네임 색상을 랜덤으로 뽑아요 (레어일수록 희귀)' },
-    { id: 'classchange', emoji: '🔄', name: '직업 변경권', price: CONFIG.classChangePrice, desc: '직업을 다시 선택합니다 (레벨·골드 유지)' },
+    { id: 'protect', emoji: ITEMS.protect.emoji, name: ITEMS.protect.name, price: CONFIG.protectPrice, qty: 1, desc: ITEMS.protect.desc },
+    { id: 'boost', emoji: ITEMS.boost.emoji, name: ITEMS.boost.name, price: CONFIG.boostPrice, qty: CONFIG.boostCount, desc: '강화 성공률 ' + CONFIG.boostMult + '배 · ' + CONFIG.boostCount + '개 묶음' },
+    { id: 'dye', emoji: ITEMS.dye.emoji, name: ITEMS.dye.name, price: CONFIG.dyePrice, qty: 1, desc: ITEMS.dye.desc + ' (레어일수록 희귀)' },
+    { id: 'classchange', emoji: ITEMS.classtkt.emoji, name: ITEMS.classtkt.name, price: CONFIG.classChangePrice, qty: 1, desc: ITEMS.classtkt.desc },
+    { id: 'invpack', emoji: '🎒', name: '가방 확장 패키지', price: CONFIG.invPackPrice, qty: CONFIG.invPackSlots, once: true,
+      desc: '가방 칸 +' + CONFIG.invPackSlots + ' (계정당 1회) · 나머지 ' + CONFIG.invBpSlots + '칸은 배틀패스 프리미엄 Lv.' + CONFIG.invBpLevel + ' 보상' },
   ];
 }
-function weaponName(level, cls) {
+// 상점 구매 공통 — 골드 확인 → 인벤토리 지급. 칸이 없으면 결제 전에 막는다.
+function buyIntoInv(p, itemId, qty, price) {
+  const it = ITEMS[itemId];
+  if (p.gold < price) return { ok: false, error: '골드 부족! (필요 ' + price.toLocaleString() + 'G / 보유 ' + p.gold.toLocaleString() + 'G)' };
+  if (!canHold(p, itemId)) return { ok: false, error: '🎒 인벤토리가 꽉 찼어요. 칸을 확장하거나 아이템을 쓰세요.' };
+  p.gold -= price;
+  p.goldSpent = (p.goldSpent || 0) + price;
+  addItem(p, itemId, qty);
+  return { ok: true, item: itemId, qty, spent: price, msg: it.emoji + ' ' + it.name + ' ' + qty + '개 구매! (-' + price.toLocaleString() + 'G)' };
+}
+function weaponName(level, cls, ascend) {
   const g = grade(level);
   const base = (CLASSES[cls] || CLASSES.warrior).weapon;
-  return '+' + level + ' ' + g.emoji + ' ' + g.name + ' ' + base;
+  return stars(ascend) + '+' + level + ' ' + g.emoji + ' ' + g.name + ' ' + base;
 }
 
 /* ---------- 강화 확률 / 비용 ---------- */
 // 로스트아크식: 성공률은 초반 높고 매끄럽게 급감(초월 0.n~0.0n%),
 // 파괴는 낮고 산 모양(65 근처 피크→초월 완화), 나머지는 전부 실패.
 // ⚠️ 파괴 = 완전 초기화(+0)라서 확률을 낮게 잡고 시작 구간도 +20 이후로 미룸.
-const SUCC_ANCHORS = [[0, .97], [15, .90], [25, .62], [40, .20], [50, .08], [60, .03], [70, .012], [85, .004], [99, .0015]];
-const DESTROY_ANCHORS = [[20, 0], [35, .004], [50, .007], [65, .010], [80, .013], [99, .016]];
+/* 앵커의 첫 값은 '만렙 대비 비율'(0~1) 이다 — CONFIG.maxLevel 을 올리면 곡선이 그대로 늘어난다.
+ * 파괴율 상단은 0.7% 로 잡았다. 고레벨은 장인의 기운이 지배해 레벨당 20~65회를 쓰는데,
+ * 1.3~1.6% 를 두면 '레벨당 파괴 1회' 를 넘겨 등반이 영구히 역행한다(시뮬로 확인). */
+const SUCC_ANCHORS = [[0, .97], [.15, .905], [.25, .65], [.40, .22], [.50, .088], [.60, .034], [.70, .014], [.86, .0045], [1, .0018]];
+const DESTROY_ANCHORS = [[.20, 0], [.35, .004], [.50, .006], [.66, .007], [.80, .007], [1, .007]];
+const DESTROY_FREE_RATIO = 0.20;   // 이 비율 아래에서는 파괴가 아예 없다
 function interpAnchor(A, L, log) {
   if (L <= A[0][0]) return A[0][1];
   for (let i = 1; i < A.length; i++) {
@@ -280,18 +348,200 @@ function interpAnchor(A, L, log) {
   }
   return A[A.length - 1][1];
 }
-function successRate(level) { return interpAnchor(SUCC_ANCHORS, level, true); }
-function destroyRate(level) { return level <= 20 ? 0 : interpAnchor(DESTROY_ANCHORS, level, false); }
-function odds(level) {
-  const s = successRate(level), d = destroyRate(level);
+function levelRatio(level) { return CONFIG.maxLevel > 0 ? level / CONFIG.maxLevel : 0; }
+function successRate(level, ascend) { return interpAnchor(SUCC_ANCHORS, levelRatio(level), true) * ascendSuccMult(ascend); }
+function destroyRate(level) {
+  const r = levelRatio(level);
+  return r <= DESTROY_FREE_RATIO ? 0 : interpAnchor(DESTROY_ANCHORS, r, false);
+}
+function odds(level, ascend) {
+  const s = successRate(level, ascend), d = destroyRate(level);
   return { success: s, destroy: d, fail: Math.max(0, 1 - s - d) };
 }
 // 장인의 기운 상승폭(실패당): 저확률에서도 결국 100% 도달하도록 최소치 보장
-function pityGain(success) { return CONFIG.pityBase + success * CONFIG.pityScale; }
-function enhanceCost(level) { return 20 + level * 10; }
+function pityGain(success, ascend) { return (CONFIG.pityBase + success * CONFIG.pityScale) * (1 + starsOf(ascend) * CONFIG.ascendPityBonus); }
+function enhanceCost(level, ascend) { return Math.round((20 + level * 10) * ascendCostMult(ascend)); }
 function successGain(level) {
   if (level < 20) { const r = Math.random(); if (r < 0.60) return 1; if (r < 0.90) return 2; return 3; }
   return 1;
+}
+
+/* ---------- 초월(환생) ----------
+ * 강화 루프가 이 게임의 코어라서, +99 를 천장이 아니라 관문으로 만든다.
+ * +99 에서 초월하면 무기가 +0 으로 돌아가고 영구 별(★)을 하나 얻는다.
+ * ★은 단조 증가 — 파괴로도 잃지 않으므로 칭호/랭킹의 기준이 된다.
+ *   버프   : 골드 획득 · 레이드 공격력 · 장인의 기운 상승폭
+ *   페널티 : 강화 비용↑ · 성공률↓ · 🛡️파괴방지권이 아예 통하지 않음(★1+)
+ * 별 개수는 players.data JSON 에 그대로 실려서 스키마 변경이 필요 없다. */
+// ★N 로 올리는 데 필요한 재료. 승급마다 선형으로 늘어난다.
+// 다음 승급의 재료 진행도 — UI 가 그대로 그릴 수 있는 형태로 돌려준다.
+function ascendProgress(p) {
+  const to = starsOf(p) + 1, req = ascendReq(to);
+  const have = { shard: itemCount(p, 'shard'), essence: itemCount(p, 'essence') };
+  return {
+    to, req, have, ready: have.shard >= req.shard && have.essence >= req.essence,
+    mats: [
+      { id: 'shard', emoji: ITEMS.shard.emoji, name: ITEMS.shard.name, have: have.shard, need: req.shard, from: '🗡️ 사냥' },
+      { id: 'essence', emoji: ITEMS.essence.emoji, name: ITEMS.essence.name, have: have.essence, need: req.essence, from: '🐲 레이드' },
+    ],
+  };
+}
+function ascendReady(p) { return ascendProgress(p).ready; }
+function ascendReq(to) {
+  return {
+    shard: CONFIG.ascendShardBase + CONFIG.ascendShardStep * (to - 1),
+    essence: CONFIG.ascendEssenceBase + CONFIG.ascendEssenceStep * (to - 1),
+  };
+}
+function starsOf(v) { return typeof v === 'number' ? v : (v && v.ascend) || 0; }  // 숫자 또는 플레이어 둘 다 받는다
+function stars(v) { const n = starsOf(v); return n > 0 ? '★' + n + ' ' : ''; }
+// ★1 부터는 방지권이 무효 — 초월 회차는 파괴를 그대로 맞는다.
+function protectWorks(p) { return starsOf(p) === 0; }
+function goldMult(p) { return 1 + starsOf(p) * CONFIG.ascendGoldBonus; }
+function ascendCostMult(v) { return 1 + starsOf(v) * CONFIG.ascendCostMult; }
+// 곱연산이라 ★이 아무리 높아도 성공률이 0 이 되지는 않는다(선형 감산이면 12.5★에서 0).
+function ascendSuccMult(v) { return Math.pow(1 - CONFIG.ascendSuccPenalty, starsOf(v)); }
+// 골드 획득 창구 — 초월 보너스를 적용해 지급하고 누적 획득량(도전과제)까지 기록한다.
+// raw=true 는 배수 미적용: 약탈처럼 총량이 보존돼야 하는 이전에 쓴다.
+function gainGold(p, amount, raw) {
+  const n = Math.max(0, Math.round(raw ? amount : amount * goldMult(p)));
+  p.gold += n;
+  p.goldEarned = (p.goldEarned || 0) + n;
+  return n;
+}
+
+/* ---------- 아이템 / 인벤토리 ----------
+ * 슬롯 1칸 = 아이템 '종류' 하나. 같은 종류는 한 칸에 무제한으로 쌓인다.
+ * 칸이 꽉 찬 상태에서 '갖고 있지 않은 종류' 가 들어오면 그 드랍은 버려진다 —
+ * addItem 이 0 을 돌려주므로 호출부가 안내 문구를 붙인다. 골드는 화폐라 슬롯 밖.
+ * 상태(p.inv)는 players.data JSON 에 실려서 스키마 변경이 필요 없다. */
+const ITEMS = {
+  protect:  { id: 'protect',  emoji: '🛡️', name: '파괴방지권',   kind: 'passive', desc: '파괴를 1회 자동으로 막아줍니다 (초월 ★1+ 무효)' },
+  boost:    { id: 'boost',    emoji: '🍀', name: '강화 부스트권', kind: 'passive', desc: '강화 성공률 ' + CONFIG.boostMult + '배 (1개 = 1회 소모)' },
+  dye:      { id: 'dye',      emoji: '🎨', name: '닉네임 염색약', kind: 'use',     desc: '사용하면 닉네임 색을 랜덤으로 뽑아요' },
+  classtkt: { id: 'classtkt', emoji: '🔄', name: '직업 변경권',   kind: 'use',     desc: '사용하면 직업을 다시 선택합니다 (레벨·골드 유지)' },
+  shard:    { id: 'shard',    emoji: '💠', name: '초월의 파편',   kind: 'mat',     desc: '몬스터 사냥 드랍 · 초월 승급 재료' },
+  essence:  { id: 'essence',  emoji: '🌟', name: '초월의 정수',   kind: 'mat',     desc: '보스 레이드 확정 드랍 · 초월 승급 재료' },
+};
+/* 칸수는 절대값이 아니라 '구매한 확장 횟수(bought)' 로 저장한다.
+ * 이렇게 해야 CONFIG.invSlots 를 올렸을 때 기존 유저도 자동으로 늘어나고,
+ * 이미 돈 주고 산 확장분이 사라지지 않는다. */
+function ensureInv(p) {
+  if (!p.inv || typeof p.inv !== 'object') p.inv = { bought: 0, items: {} };
+  if (!p.inv.items || typeof p.inv.items !== 'object') p.inv.items = {};
+  if (p.inv.bought == null) {   // 구버전(절대 slots 저장) 1회 이관
+    p.inv.bought = Math.max(0, (p.inv.slots || CONFIG.invSlots) - CONFIG.invSlots);
+    delete p.inv.slots;
+  }
+  return p.inv;
+}
+function invSlots(p) { return Math.min(CONFIG.invSlotsMax, CONFIG.invSlots + ensureInv(p).bought); }
+function itemCount(p, id) { return ensureInv(p).items[id] || 0; }
+// 한 종류가 몇 칸을 먹는지 — 99개마다 한 칸.
+function slotsFor(count) { return Math.ceil(count / CONFIG.invStackMax); }
+function usedSlots(p) { const it = ensureInv(p).items; let n = 0; for (const k in it) if (it[k] > 0) n += slotsFor(it[k]); return n; }
+// 지금 더 받을 수 있는 최대 개수 = 마지막 칸의 남은 자리 + 빈 칸 × 99
+function freeSpace(p, id) {
+  const inv = ensureInv(p);
+  const cur = inv.items[id] || 0;
+  const tailRoom = cur > 0 ? slotsFor(cur) * CONFIG.invStackMax - cur : 0;
+  const freeSlots = Math.max(0, invSlots(p) - usedSlots(p));
+  return tailRoom + freeSlots * CONFIG.invStackMax;
+}
+function canHold(p, id) { return freeSpace(p, id) > 0; }
+// 실제로 넣은 개수를 돌려준다(자리가 모자라면 부분 지급). 0 = 전부 버려짐.
+function addItem(p, id, n) {
+  n = n == null ? 1 : n;
+  if (!ITEMS[id] || n <= 0) return 0;
+  const put = Math.min(n, freeSpace(p, id));
+  if (put <= 0) return 0;
+  const inv = ensureInv(p);
+  inv.items[id] = (inv.items[id] || 0) + put;
+  return put;
+}
+// 0 개가 되면 키를 지워 칸을 비운다(usedSlots 가 종류 수를 세므로).
+function takeItem(p, id, n) {
+  n = n == null ? 1 : n;
+  const inv = ensureInv(p);
+  if ((inv.items[id] || 0) < n) return false;
+  inv.items[id] -= n;
+  if (inv.items[id] <= 0) delete inv.items[id];
+  return true;
+}
+/* 칸 지급 — 상한을 넘지 않게 잘라서 '실제로 늘어난 칸수' 를 돌려준다.
+ * 칸은 아이템이 아니라 계정 속성이라, 인벤이 꽉 차 있어도 유실되지 않는다
+ * (확장권을 아이템으로 만들면 그 확장권이 도로 한 칸을 먹는 모순이 생긴다). */
+function addSlots(p, n) {
+  const inv = ensureInv(p);
+  const before = invSlots(p);
+  inv.bought += Math.max(0, n | 0);
+  const after = invSlots(p);
+  if (after === before) inv.bought -= Math.max(0, n | 0);   // 상한이라 못 늘렸으면 되돌린다
+  return after - before;
+}
+function invPackBought(p) { return !!p.invPackBought; }
+function invView(p) {
+  const inv = ensureInv(p);
+  const used = usedSlots(p), slots = invSlots(p);
+  const held = Object.keys(ITEMS).filter(k => inv.items[k] > 0);
+  // 칸 단위 셀: 99개 넘는 종류는 여러 칸으로 쪼개서 내려준다
+  const cells = [];
+  for (const k of held) {
+    let left = inv.items[k];
+    while (left > 0) {
+      const n = Math.min(CONFIG.invStackMax, left);
+      cells.push({ id: k, emoji: ITEMS[k].emoji, name: ITEMS[k].name, kind: ITEMS[k].kind, desc: ITEMS[k].desc, count: n, total: inv.items[k] });
+      left -= n;
+    }
+  }
+  return {
+    slots, used, max: CONFIG.invSlotsMax, full: used >= slots, stackMax: CONFIG.invStackMax,
+    // 칸을 더 여는 경로(상점 1회 패키지 / 배틀패스 프리미엄) 안내용
+    packBought: invPackBought(p), packSlots: CONFIG.invPackSlots, packPrice: CONFIG.invPackPrice,
+    bpSlots: CONFIG.invBpSlots, bpLevel: CONFIG.invBpLevel,
+    atMaxSlots: slots >= CONFIG.invSlotsMax,
+    cells,
+    items: held.map(k => ({ id: k, emoji: ITEMS[k].emoji, name: ITEMS[k].name, kind: ITEMS[k].kind, desc: ITEMS[k].desc, count: inv.items[k] })),
+  };
+}
+// 가방 확장 패키지 — 계정당 1회, 고액 골드. 반복 구매가 아니라 '한 번 여는' 물건이다.
+function buyInvPack(db, id) {
+  const p = norm(db.players[id]);
+  if (invPackBought(p)) return { ok: false, error: '가방 확장 패키지는 계정당 한 번만 살 수 있어요.' };
+  if (invSlots(p) >= CONFIG.invSlotsMax) return { ok: false, error: '이미 최대 칸수(' + CONFIG.invSlotsMax + ')예요.' };
+  if (p.gold < CONFIG.invPackPrice) {
+    return { ok: false, error: '골드 부족! (필요 ' + CONFIG.invPackPrice.toLocaleString() + 'G / 보유 ' + p.gold.toLocaleString() + 'G)' };
+  }
+  p.gold -= CONFIG.invPackPrice;
+  p.goldSpent = (p.goldSpent || 0) + CONFIG.invPackPrice;
+  p.invPackBought = true;
+  const got = addSlots(p, CONFIG.invPackSlots);
+  addLog(db, '🎒 ' + p.nick + ' 가방 확장 패키지 구매 (+' + got + '칸)');
+  return { ok: true, slots: invSlots(p), gained: got, msg: '🎒 가방이 ' + invSlots(p) + '칸으로 늘었어요! (+' + got + '칸)' };
+}
+// 사용형 아이템 발동. 방지권·부스트권은 자동 소모라 여기서 쓰지 않는다.
+function useItem(db, id, itemId) {
+  const p = norm(db.players[id]);
+  const it = ITEMS[itemId];
+  if (!it) return { ok: false, error: '없는 아이템이에요.' };
+  if (it.kind !== 'use') return { ok: false, error: it.emoji + ' ' + it.name + '은(는) 자동으로 쓰이는 아이템이에요.' };
+  if (itemCount(p, itemId) < 1) return { ok: false, error: it.name + '이(가) 없어요.' };
+  if (itemId === 'dye') {
+    takeItem(p, 'dye', 1);
+    p.dyeCount = (p.dyeCount || 0) + 1;              // 도전과제: 염색 횟수
+    const dye = rollDye();
+    p.nickColor = dye;
+    if (dye.kind === 'rainbow') p.gotRainbow = true; // 도전과제: 무지개 획득
+    addLog(db, '🎨 ' + p.nick + ' 염색: ' + dye.name + (dye.rarity !== '기본' ? ' [' + dye.rarity + ']' : ''));
+    return { ok: true, used: 'dye', dye, msg: '🎨 염색 결과: ' + dye.name + ' [' + dye.rarity + ']' };
+  }
+  if (itemId === 'classtkt') {
+    takeItem(p, 'classtkt', 1);
+    p.class = null;                                  // 재선택 필요
+    if (p.party) partyLeave(db, id);                 // 파티에 있으면 나가기(직업 재선택 중)
+    return { ok: true, used: 'classtkt', needReselect: true, msg: '직업을 다시 선택하세요.' };
+  }
+  return { ok: false, error: '아직 쓸 수 없는 아이템이에요.' };
 }
 
 /* ---------- 몬스터 (사냥) ----------
@@ -328,35 +578,61 @@ function huntSpawn(level) {
 
 /* ---------- 보스 (레이드) ---------- */
 // danger = 타이머 동안 보스가 파티 HP(100%)에 넣는 총 피해(%). 탱커 DR·힐러 회복으로 상쇄.
+// hp/danger 는 '1인 기준' 값이고 raidScale() 이 참여 인원만큼 키운다.
+// reqLevel/reqAscend 를 모든 참가자가 만족해야 입장할 수 있다.
+// hp 는 각 보스의 reqLevel 근처 플레이어가 15초 안에 '쉬지 않고 연타 + 스킬' 로
+// 겨우 넘기는 선에 맞춰져 있다 — 대충 두들기면 못 깬다.
 const BOSSES = [
-  { id: 'goblin', name: '고블린 군주', emoji: '👺', hp: 2200,  atk: 130, reward: 5000,  dropChance: 0.10, danger: 55 },
-  { id: 'golem',  name: '스톤 골렘',   emoji: '🗿', hp: 6500,  atk: 340, reward: 15000, dropChance: 0.20, danger: 75 },
-  { id: 'dragon', name: '고대 드래곤', emoji: '🐲', hp: 10500, atk: 600, reward: 40000, dropChance: 0.35, danger: 95 },
-  { id: 'demon',  name: '마계 군주',   emoji: '😈', hp: 16000, atk: 780, reward: 90000, dropChance: 0.55, danger: 120 },
+  { id: 'goblin', name: '고블린 군주', emoji: '👺', tier: '입문',   hp: 2000,  atk: 130,  reward: 5000,   dropChance: 0.10, danger: 60,  essence: 1, reqLevel: 0,  reqAscend: 0 },
+  { id: 'golem',  name: '스톤 골렘',   emoji: '🗿', tier: '보통',   hp: 20000, atk: 340,  reward: 15000,  dropChance: 0.18, danger: 80,  essence: 1, reqLevel: 30, reqAscend: 0 },
+  { id: 'dragon', name: '고대 드래곤', emoji: '🐲', tier: '어려움', hp: 38000, atk: 600,  reward: 40000,  dropChance: 0.28, danger: 100, essence: 2, reqLevel: 60, reqAscend: 0 },
+  { id: 'demon',  name: '마계 군주',   emoji: '😈', tier: '지옥',   hp: 60000, atk: 780,  reward: 90000,  dropChance: 0.40, danger: 115, essence: 2, reqLevel: 85, reqAscend: 0 },
+  // 초월 전용 — ★ 가 있어야 입장 가능
+  { id: 'titan',  name: '초월의 거인', emoji: '🌋', tier: '초월',   hp: 43000, atk: 900,  reward: 150000, dropChance: 0.45, danger: 110, essence: 3, reqLevel: 50, reqAscend: 1 },
+  { id: 'void',   name: '공허의 군주', emoji: '🌌', tier: '초월',   hp: 76000, atk: 1200, reward: 300000, dropChance: 0.60, danger: 125, essence: 4, reqLevel: 80, reqAscend: 3 },
 ];
 function bossById(id) { return BOSSES.find(b => b.id === id); }
+// 참여 인원에 맞춘 난이도 스케일. 체력은 인원수보다 가파르게, 화력은 완만하게 올라간다
+// (인원이 늘면 총 딜도 늘고 탱커·힐러 덕에 생존 시간까지 늘기 때문).
+function raidScale(n) {
+  const k = Math.max(0, n - 1);
+  return { hp: 1 + k * CONFIG.raidPartyHpScale, danger: 1 + k * CONFIG.raidPartyDangerScale };
+}
+// 입장 조건 미달 사유. 만족하면 null.
+function bossLock(p, boss) {
+  if ((p.level || 0) < boss.reqLevel) return '무기 +' + boss.reqLevel + ' 이상 필요';
+  if (starsOf(p) < boss.reqAscend) return '초월 ★' + boss.reqAscend + ' 이상 필요';
+  return null;
+}
 
 /* ---------- 플레이어 ---------- */
 function makePlayer(nick) {
   return {
     nick, class: null, element: null, nickColor: null,
-    level: 0, best: 0, breaks: 0, wins: 0, losses: 0,
-    gold: CONFIG.startGold, protects: 0, enhanceBoost: 0, pity: 0,
+    level: 0, best: 0, breaks: 0, wins: 0, losses: 0, ascend: 0,
+    gold: CONFIG.startGold, pity: 0, inv: { bought: 0, items: {} },
     fightDay: '', fightsUsed: 0, huntDay: '', huntsUsed: 0, raidDay: '', raidsUsed: 0,
     attendDay: '', destroyDay: '', destroysToday: 0,
     lastMine: Date.now(), party: null, created: today(),
   };
 }
 function norm(p) {
-  if (p.protects == null) p.protects = 0;
+  // 구버전 필드(protects/enhanceBoost) → 인벤토리로 1회 이관 후 제거
+  if (!p.inv) {
+    p.inv = { bought: 0, items: {} };
+    if (p.protects > 0) p.inv.items.protect = p.protects;
+    if (p.enhanceBoost > 0) p.inv.items.boost = p.enhanceBoost;
+  }
+  delete p.protects; delete p.enhanceBoost;
+  ensureInv(p);
   if (p.raidDay == null) { p.raidDay = ''; p.raidsUsed = 0; }
   if (p.lastMine == null) p.lastMine = Date.now();
   if (p.party === undefined) p.party = null;
   if (p.class === undefined) p.class = null;
   if (!p.element && p.class) p.element = randomElementKey(); // 기존 데이터 보정
-  if (p.enhanceBoost == null) p.enhanceBoost = 0;
   if (p.nickColor === undefined) p.nickColor = null;
   if (p.pity == null) p.pity = 0;
+  if (p.ascend == null) p.ascend = 0;          // 초월 별(★) — 기존 데이터 보정
   if (p.stamina == null) p.stamina = CONFIG.staminaMax;
   if (p.lastStamina == null) p.lastStamina = Date.now();
   if (p.mineLevel == null) p.mineLevel = 1;
@@ -448,8 +724,8 @@ function publicView(db, id) {
   const g = grade(p.level);
   const c = classOf(p);
   const em = elementOf(p.element);
-  let od = odds(p.level);
-  if ((p.enhanceBoost || 0) > 0) { const s = Math.min(0.97, od.success * CONFIG.boostMult); od = { success: s, destroy: od.destroy, fail: Math.max(0, 1 - s - od.destroy) }; }
+  let od = odds(p.level, p.ascend);
+  if (itemCount(p, 'boost') > 0) { const s = Math.min(0.97, od.success * CONFIG.boostMult); od = { success: s, destroy: od.destroy, fail: Math.max(0, 1 - s - od.destroy) }; }
   let party = null;
   if (p.party && db.parties[p.party]) {
     const pt = db.parties[p.party];
@@ -462,8 +738,8 @@ function publicView(db, id) {
     class: p.class, className: c.name, classEmoji: c.emoji, weaponBase: c.weapon,
     level: p.level, best: p.best, breaks: p.breaks,
     wins: p.wins, losses: p.losses, winRate: winRate(p),
-    gold: p.gold, protects: p.protects,
-    weapon: weaponName(p.level, p.class),
+    gold: p.gold, protects: itemCount(p, 'protect'),   // 인벤토리에서 파생 — 표시 전용
+    weapon: weaponName(p.level, p.class, p.ascend),
     grade: { name: g.name, key: g.key, emoji: g.emoji, color: g.color },
     element: p.element, elementName: em.name, elementEmoji: em.emoji, elementColor: em.color,
     titles: earnedTitles(p).map(t => ({ id: t.id, title: t.title, grade: t.grade, color: t.color })),
@@ -477,8 +753,14 @@ function publicView(db, id) {
     }).sort((x, y) => TITLE_GRADES[y.grade].rank - TITLE_GRADES[x.grade].rank || (y.earned === x.earned ? 0 : y.earned ? 1 : -1)),
     titleTotal: ACHIEVEMENTS.length, titleEarned: earnedTitles(p).length,
     maxLevel: CONFIG.maxLevel,
-    nextCost: p.level >= CONFIG.maxLevel ? null : enhanceCost(p.level),
-    odds: od, enhanceBoost: p.enhanceBoost || 0, pity: p.pity || 0, nickColor: p.nickColor || null,
+    nextCost: p.level >= CONFIG.maxLevel ? null : enhanceCost(p.level, p.ascend),
+    // 초월 — ★, 승급 재료 진행도, 방지권이 아직 통하는지(★1+ 는 무효)
+    ascend: starsOf(p), atMax: p.level >= CONFIG.maxLevel, protectWorks: protectWorks(p),
+    canAscend: p.level >= CONFIG.maxLevel && ascendReady(p),
+    ascendNext: ascendProgress(p),
+    ascendBonus: { gold: starsOf(p) * CONFIG.ascendGoldBonus, atk: starsOf(p) * CONFIG.ascendAtkBonus, cost: starsOf(p) * CONFIG.ascendCostMult, succ: 1 - ascendSuccMult(p) },
+    odds: od, enhanceBoost: itemCount(p, 'boost'), pity: p.pity || 0, nickColor: p.nickColor || null,
+    inv: invView(p), protectBuyLeft: protectBuyLeft(p), protectDailyBuy: CONFIG.protectDailyBuy,
     huntsLeft: huntsLeft(p), dailyHunts: limitOf(p, 'dailyHunts'),
     fightsLeft: fightsLeft(p), dailyFights: limitOf(p, 'dailyFights'),
     raidsLeft: raidsLeft(p), dailyRaids: limitOf(p, 'dailyRaids'),
@@ -508,7 +790,7 @@ function enhanceRank(db, id) {
   let c = db._rank;
   if (!c || Date.now() - c.t > RANK_TTL) {
     const ks = Object.keys(db.players);
-    ks.sort((a, b) => db.players[b].level - db.players[a].level || db.players[b].best - db.players[a].best);
+    ks.sort((a, b) => starsOf(db.players[b]) - starsOf(db.players[a]) || db.players[b].level - db.players[a].level || db.players[b].best - db.players[a].best);
     c = db._rank = { t: Date.now(), map: new Map(ks.map((k, i) => [k, i + 1])) };
   }
   return { rank: c.map.get(id) || null, total: c.map.size };
@@ -576,14 +858,14 @@ function rename(db, id, newNick) {
 /* ---------- 액션 ---------- */
 function enhance(db, id) {
   const p = norm(db.players[id]);
-  if (p.level >= CONFIG.maxLevel) return { ok: false, error: '이미 만렙(+' + CONFIG.maxLevel + ' 초월)입니다!' };
-  const cost = enhanceCost(p.level);
+  if (p.level >= CONFIG.maxLevel) return { ok: false, error: '이미 만렙(+' + CONFIG.maxLevel + ')! 🌈 초월로 새 회차를 시작하세요.' };
+  const cost = enhanceCost(p.level, p.ascend);
   if (p.gold < cost) return { ok: false, error: '골드 부족! (필요 ' + cost + ' / 보유 ' + p.gold + ')' };
   p.gold -= cost;
   p.goldSpent = (p.goldSpent || 0) + cost;   // 도전과제: 누적 소모 골드
   bumpMstat(p, 'enh');                        // 미션: 강화 시도
   const before = p.level;
-  const base = odds(before);
+  const base = odds(before, p.ascend);
 
   // 장인의 기운 100% → 확정 성공 (부스트·확률 무시, 소모 없음)
   if (p.pity >= 1) {
@@ -595,20 +877,20 @@ function enhance(db, id) {
     p.pity = 0;
     bumpRank(db);
     addLog(db, '🔨 ' + p.nick + ' 장인의 기운 확정성공 +' + before + '→+' + p.level);
-    return { ok: true, result: 'success', guaranteed: true, cost, boosted: false, boostLeft: p.enhanceBoost, pity: 0, msg: '🔨 장인의 기운 100%! 확정 성공!  +' + before + ' → +' + p.level };
+    return { ok: true, result: 'success', guaranteed: true, cost, boosted: false, boostLeft: itemCount(p, 'boost'), pity: 0, msg: '🔨 장인의 기운 100%! 확정 성공!  +' + before + ' → +' + p.level };
   }
 
   // 강화 부스트권(성공률 +)
   let o = base, boosted = false;
-  if (p.enhanceBoost > 0) {
+  if (itemCount(p, 'boost') > 0) {
     const s = Math.min(0.97, base.success * CONFIG.boostMult);
     o = { success: s, destroy: base.destroy, fail: Math.max(0, 1 - s - base.destroy) };
-    p.enhanceBoost--;
+    takeItem(p, 'boost', 1);
     boosted = true;
   }
 
   // 장인의 기운 상승폭 — 부스트권 사용 시 더 크게 오른다(성공률↑ + 실패해도 pity 빨리 참)
-  const pg = pityGain(o.success) * (boosted ? CONFIG.boostPityMult : 1);
+  const pg = pityGain(o.success, p.ascend) * (boosted ? CONFIG.boostPityMult : 1);
   const r = Math.random();
   let result, msg;
   if (r < o.success) {
@@ -623,10 +905,10 @@ function enhance(db, id) {
     msg = (gain > 1 ? '💫 대성공! +' + gain + '  ' : '강화 성공! ') + '+' + before + ' → +' + p.level;
     addLog(db, '✅ ' + p.nick + ' +' + before + '→+' + p.level + (gain > 1 ? ' (+' + gain + ')' : ''));
   } else if (r < o.success + o.destroy) {
-    if (p.protects > 0) {
-      p.protects--; result = 'protected';
+    if (protectWorks(p) && takeItem(p, 'protect', 1)) {
+      result = 'protected';
       p.pity = Math.min(1, p.pity + pg); // 방지도 시도로 치고 기운 상승
-      msg = '🛡️ 파괴 방지 발동! +' + before + ' 유지 (남은 방지권 ' + p.protects + ')';
+      msg = '🛡️ 파괴 방지 발동! +' + before + ' 유지 (남은 방지권 ' + itemCount(p, 'protect') + ')';
       addLog(db, '🛡️ ' + p.nick + ' +' + before + ' 파괴방지');
     } else {
       const floor = destroyFloor(before);   // 한 등급 아래 시작 레벨로 강등(안전선)
@@ -654,22 +936,57 @@ function enhance(db, id) {
     result = 'fail';
     msg = '❌ 실패... +' + before + ' 유지 · 🔨 장인의 기운 ' + Math.round(p.pity * 100) + '%';
   }
-  return { ok: true, result, msg, cost, boosted, boostLeft: p.enhanceBoost, pity: p.pity };
+  return { ok: true, result, msg, cost, boosted, boostLeft: itemCount(p, 'boost'), pity: p.pity };
+}
+/* 초월 실행 — +99 에서만. 무기를 +0 으로 되돌리고 ★을 하나 얻는다.
+ * 골드·방지권·부스트·칭호·최고기록(best)·채굴 레벨은 전부 유지된다. */
+function ascend(db, id) {
+  const p = norm(db.players[id]);
+  if (p.level < CONFIG.maxLevel) {
+    return { ok: false, error: '+' + CONFIG.maxLevel + ' 만렙에서만 초월할 수 있어요. (현재 +' + p.level + ')' };
+  }
+  const to = starsOf(p) + 1;
+  const req = ascendReq(to);
+  const have = { shard: itemCount(p, 'shard'), essence: itemCount(p, 'essence') };
+  if (have.shard < req.shard || have.essence < req.essence) {
+    return {
+      ok: false, req, have,
+      error: '재료가 부족해요 — ' + ITEMS.shard.emoji + ' ' + have.shard + '/' + req.shard +
+        ' · ' + ITEMS.essence.emoji + ' ' + have.essence + '/' + req.essence +
+        ' (파편은 사냥, 정수는 레이드에서 나와요)',
+    };
+  }
+  takeItem(p, 'shard', req.shard);
+  takeItem(p, 'essence', req.essence);
+  markMastery(p);                          // 현재 직업을 '달인' 으로 확정 기록
+  p.ascend = to;
+  p.level = 0;
+  p.pity = 0;
+  p.element = randomElementKey();          // 새 회차 = 새 속성
+  bumpRank(db);
+  const em = elementOf(p.element);
+  addLog(db, '🌈 ' + p.nick + ' 초월! ★' + to + ' — 무기가 +0 으로 돌아갔습니다 (새속성 ' + em.name + ')');
+  return {
+    ok: true, ascend: to, element: p.element, spent: req,
+    msg: '🌈 초월 ★' + to + ' 달성!\n무기 +0 · 새 속성 ' + em.emoji + ' ' + em.name +
+      '\n영구 보너스 — 골드 +' + Math.round(to * CONFIG.ascendGoldBonus * 100) + '% · 레이드 공격 +' + Math.round(to * CONFIG.ascendAtkBonus * 100) + '%' +
+      '\n⚠️ 이제부터 🛡️ 파괴방지권은 통하지 않습니다.',
+  };
 }
 function attend(db, id) {
   const p = norm(db.players[id]);
   if (p.attendDay === today()) return { ok: false, error: '오늘은 이미 출석했어요!' };
-  p.attendDay = today(); p.gold += CONFIG.attendGold;
+  p.attendDay = today();
   bumpMstat(p, 'attend');                     // 미션: 출석
-  p.goldEarned = (p.goldEarned || 0) + CONFIG.attendGold;
-  return { ok: true, gained: CONFIG.attendGold, msg: '출석 완료! +' + CONFIG.attendGold + 'G' };
+  const gained = gainGold(p, CONFIG.attendGold);
+  return { ok: true, gained, msg: '출석 완료! +' + gained + 'G' };
 }
 function mine(db, id) {
   const p = norm(db.players[id]);
-  const amount = pendingMine(p);
-  if (amount <= 0) return { ok: false, error: '아직 채굴된 골드가 없어요. 시간이 지나면 쌓여요.' };
-  p.gold += amount; p.lastMine = Date.now();
-  p.goldEarned = (p.goldEarned || 0) + amount;
+  const pending = pendingMine(p);
+  if (pending <= 0) return { ok: false, error: '아직 채굴된 골드가 없어요. 시간이 지나면 쌓여요.' };
+  p.lastMine = Date.now();
+  const amount = gainGold(p, pending);
   return { ok: true, amount, msg: '⛏️ 채굴 +' + amount + 'G' };
 }
 // 채굴장 곡괭이질: 기력을 소모해 골드 채굴. 기력 0이면 '지친' 상태로 소량이나마 계속 가능.
@@ -688,8 +1005,10 @@ function mineSwing(db, id) {
   if (!tired) {
     if (Math.random() < CONFIG.mineJackpotChance) { gold *= CONFIG.mineJackpotMult; jackpot = true; }
     if (Math.random() < CONFIG.mineProtectChance) {
-      p.protects++; gem = { type: 'protect', text: '💎 보석 원석 발견 → 🛡️ 방지권 1개!' };
-      addLog(db, '💎 ' + p.nick + ' 채굴장에서 방지권 원석 발견!');
+      const got = addItem(p, 'protect', 1);
+      gem = got ? { type: 'protect', text: '💎 보석 원석 발견 → 🛡️ 방지권 1개!' }
+                : { type: 'full', text: '💎 원석을 찾았지만 🎒 인벤토리가 꽉 찼어요!' };
+      if (got) addLog(db, '💎 ' + p.nick + ' 채굴장에서 방지권 원석 발견!');
     } else if (Math.random() < CONFIG.mineGemChance) {
       const bonus = Math.round(randInt(200, 500) * mult); gold += bonus;
       gem = { type: 'gold', amount: bonus, text: '💎 원석 +' + bonus + 'G' };
@@ -701,10 +1020,9 @@ function mineSwing(db, id) {
     p.mineXp -= mineXpNext(p.mineLevel); p.mineLevel++; leveledTo = p.mineLevel;
     addLog(db, '⛏️ ' + p.nick + ' 채굴 레벨 ' + p.mineLevel + ' 달성!');
   }
-  p.gold += gold;
+  gold = gainGold(p, gold);                        // 초월 보너스 적용 후 실지급액
   p.mineSwings = (p.mineSwings || 0) + 1;          // 도전과제: 곡괭이질 횟수
   bumpMstat(p, 'mine');                            // 미션: 채굴
-  p.goldEarned = (p.goldEarned || 0) + gold;
   let msg = (tired ? '💤 지친 곡괭이질' : jackpot ? '💥 노다지!!' : '⛏️ 채굴') + ' +' + gold + 'G';
   if (gem) msg += '  ' + gem.text;
   if (leveledTo) msg += '  🎉 채굴Lv.' + leveledTo;
@@ -729,17 +1047,27 @@ function hunt(db, id) {
   let gold = Math.round(dealt * m.gpp);
   if (slain && !overtime) gold = Math.round(gold * 1.5);   // 처치 보너스는 일일 사냥만
   if (overtime) gold = Math.max(1, Math.round(gold * CONFIG.huntOvertimeMult));
-  p.gold += gold;
-  p.goldEarned = (p.goldEarned || 0) + gold;
+  gold = gainGold(p, gold);        // 초월 보너스 적용 후 실지급액
   p.kills = (p.kills || 0) + 1;   // 도전과제: 사냥 1회 = 몬스터 1마리 처치(탭 UI에선 항상 잡음)
   bumpMstat(p, 'hunt');           // 미션: 사냥
   // 희귀할수록(=tier↑) 드랍 확률 상승. 무한 사냥은 아이템 대신 가끔 '채광 물약'(채굴 기력 회복)
-  let drop = null;
+  let drop = null, mat = null;
   if (!overtime) {
     const pc = CONFIG.dropProtectChance * (1 + m.tier * 0.35);
     const gc = CONFIG.dropGoldChance * (1 + m.tier * 0.2);
-    if (Math.random() < pc) { p.protects++; drop = { type: 'protect', text: '🛡️ 파괴방지권 1개!' }; addLog(db, '🎁 ' + p.nick + ' [' + m.name + ']에게서 방지권 드랍!'); }
-    else if (Math.random() < gc) { const bonus = Math.round(randInt(200, 600) * m.gpp); p.gold += bonus; p.goldEarned += bonus; drop = { type: 'gold', amount: bonus, text: '💰 골드뭉치 +' + bonus }; }
+    if (Math.random() < pc) {
+      const got = addItem(p, 'protect', 1);
+      drop = got ? { type: 'protect', text: '🛡️ 파괴방지권 1개!' } : { type: 'full', text: '🎒 인벤토리가 꽉 차 방지권을 놓쳤어요!' };
+      if (got) addLog(db, '🎁 ' + p.nick + ' [' + m.name + ']에게서 방지권 드랍!');
+    }
+    else if (Math.random() < gc) { const bonus = gainGold(p, Math.round(randInt(200, 600) * m.gpp)); drop = { type: 'gold', amount: bonus, text: '💰 골드뭉치 +' + bonus }; }
+    // 💠 초월의 파편 — 방지권/골드뭉치와 배타가 아닌 별도 축(초월 승급 재료)
+    if (Math.random() < CONFIG.huntShardChance) {
+      const n = 1 + m.tier;                      // 일반 1개 … 신화 5개
+      const got = addItem(p, 'shard', n);
+      mat = got ? { type: 'shard', amount: got, text: ITEMS.shard.emoji + ' ' + ITEMS.shard.name + ' +' + got }
+                : { type: 'full', text: '🎒 인벤토리가 꽉 차 파편을 놓쳤어요!' };
+    }
     addLog(db, '🗡️ ' + p.nick + ' ' + m.emoji + '[' + m.name + '](' + m.rarity + ') ' + (slain ? '처치' : '사냥') + ' +' + gold + 'G');
   } else {
     // 무한 사냥: 기력에 여유가 있을 때만 채광 물약(꽉 차 있으면 낭비 안 함)
@@ -750,44 +1078,37 @@ function hunt(db, id) {
       drop = { type: 'potion', stamina: Math.round(ns - st), text: '⛏️ 채광 물약! 채굴 기력 +' + Math.round(ns - st) };
     }
   }
-  return { ok: true, monster: { name: m.name, emoji: m.emoji, hp: m.hp, rarity: m.rarity, tier: m.tier }, dmg, dealt, slain, crit, gold, drop, overtime };
+  return { ok: true, monster: { name: m.name, emoji: m.emoji, hp: m.hp, rarity: m.rarity, tier: m.tier }, dmg, dealt, slain, crit, gold, drop, mat, overtime };
+}
+// 방지권 상점 구매는 하루 CONFIG.protectDailyBuy 개까지. 나머지는 사냥 드랍으로 얻는다.
+// 날짜 필드는 players.data JSON 에 남아 '읽을 때 지연 리셋' 된다(일일 사냥과 같은 방식).
+function protectBuyLeft(p) {
+  return p.protectBuyDay === today() ? Math.max(0, CONFIG.protectDailyBuy - (p.protectBuyUsed || 0)) : CONFIG.protectDailyBuy;
 }
 function buyProtect(db, id, qty) {
   const p = norm(db.players[id]);
+  // 초월 회차에는 효과가 없는 물건이라 아예 팔지 않는다(골드만 태우는 걸 막는다).
+  if (!protectWorks(p)) return { ok: false, error: '초월 ★' + starsOf(p) + ' 이후에는 파괴방지권이 통하지 않아요.' };
   qty = parseInt(qty, 10); if (isNaN(qty) || qty < 1) qty = 1;
-  const total = CONFIG.protectPrice * qty;
-  if (p.gold < total) return { ok: false, error: '골드 부족! (' + qty + '개 = ' + total + 'G / 보유 ' + p.gold + ')' };
-  p.gold -= total; p.protects += qty;
-  p.goldSpent = (p.goldSpent || 0) + total;
-  return { ok: true, qty, spent: total, msg: '파괴방지권 ' + qty + '개 구매!' };
+  const left = protectBuyLeft(p);
+  if (left <= 0) return { ok: false, error: '🛡️ 방지권은 하루 ' + CONFIG.protectDailyBuy + '개까지만 살 수 있어요. 나머지는 🗡️사냥에서 얻으세요.' };
+  if (qty > left) return { ok: false, error: '오늘 남은 구매 가능 개수는 ' + left + '개예요. (하루 ' + CONFIG.protectDailyBuy + '개 제한)' };
+  const r = buyIntoInv(p, 'protect', qty, CONFIG.protectPrice * qty);
+  if (!r.ok) return r;
+  if (p.protectBuyDay !== today()) { p.protectBuyDay = today(); p.protectBuyUsed = 0; }
+  p.protectBuyUsed += qty;
+  r.buyLeft = protectBuyLeft(p);
+  r.msg += ' (오늘 남은 구매 ' + r.buyLeft + '개)';
+  return r;
 }
 function buyBoost(db, id) {
-  const p = norm(db.players[id]);
-  if (p.gold < CONFIG.boostPrice) return { ok: false, error: '골드 부족! (' + CONFIG.boostPrice + 'G)' };
-  p.gold -= CONFIG.boostPrice; p.enhanceBoost += CONFIG.boostCount;
-  p.goldSpent = (p.goldSpent || 0) + CONFIG.boostPrice;
-  return { ok: true, msg: '🍀 강화 부스트 ' + CONFIG.boostCount + '회 획득! (남은 부스트 ' + p.enhanceBoost + '회)' };
+  return buyIntoInv(norm(db.players[id]), 'boost', CONFIG.boostCount, CONFIG.boostPrice);
 }
 function buyDye(db, id) {
-  const p = norm(db.players[id]);
-  if (p.gold < CONFIG.dyePrice) return { ok: false, error: '골드 부족! (' + CONFIG.dyePrice + 'G)' };
-  p.gold -= CONFIG.dyePrice;
-  p.goldSpent = (p.goldSpent || 0) + CONFIG.dyePrice;
-  p.dyeCount = (p.dyeCount || 0) + 1;              // 도전과제: 염색 횟수
-  const dye = rollDye();
-  p.nickColor = dye;
-  if (dye.kind === 'rainbow') p.gotRainbow = true; // 도전과제: 무지개 획득
-  addLog(db, '🎨 ' + p.nick + ' 염색: ' + dye.name + (dye.rarity !== '기본' ? ' [' + dye.rarity + ']' : ''));
-  return { ok: true, dye, msg: '🎨 염색 결과: ' + dye.name + ' [' + dye.rarity + ']' };
+  return buyIntoInv(norm(db.players[id]), 'dye', 1, CONFIG.dyePrice);
 }
 function buyClassChange(db, id) {
-  const p = norm(db.players[id]);
-  if (p.gold < CONFIG.classChangePrice) return { ok: false, error: '골드 부족! (' + CONFIG.classChangePrice + 'G)' };
-  p.gold -= CONFIG.classChangePrice;
-  p.goldSpent = (p.goldSpent || 0) + CONFIG.classChangePrice;
-  p.class = null; // 재선택 필요
-  if (p.party) partyLeave(db, id); // 파티에 있으면 나가기(직업 재선택 중)
-  return { ok: true, needReselect: true, msg: '직업을 다시 선택하세요.' };
+  return buyIntoInv(norm(db.players[id]), 'classtkt', 1, CONFIG.classChangePrice);
 }
 function fight(db, id, targetNick) {
   targetNick = (targetNick || '').trim();
@@ -808,8 +1129,8 @@ function fight(db, id, targetNick) {
   const winner = atkWin ? atk.nick : def.nick, loser = atkWin ? def.nick : atk.nick;
   winP.wins++; loseP.losses++;
   const steal = Math.floor(loseP.gold * CONFIG.stealPct);
-  loseP.gold -= steal; winP.gold += steal;
-  winP.goldEarned = (winP.goldEarned || 0) + steal;
+  loseP.gold -= steal;
+  gainGold(winP, steal, true);   // 약탈 = 이전이라 초월 배수 미적용(골드 총량 보존)
   let broke = null;
   if (loseP.level > 0 && Math.random() < CONFIG.fightBreakChance) {
     const b = loseP.level; loseP.level--; broke = { who: loser, from: b, to: loseP.level };
@@ -944,7 +1265,12 @@ function raidStart(db, id, bossId) {
   }
   if (participants.length === 0) return { ok: false, error: '파티원 모두 오늘 레이드 횟수를 소진했어요.' };
   if (participants.length < CONFIG.raidMinMembers) return { ok: false, error: '레이드는 최소 ' + CONFIG.raidMinMembers + '명이 필요해요. (혼자서는 불가 — 동료를 초대하세요)' };
-  participants.forEach(k => { db.players[k].raidsUsed++; bumpMstat(db.players[k], 'raid'); });   // 미션: 레이드 참여
+  // 입장 조건은 참가자 전원이 만족해야 한다(한 명이라도 미달이면 시작 불가)
+  const blocked = participants.map(k => ({ nick: db.players[k].nick, why: bossLock(db.players[k], boss) })).filter(x => x.why);
+  if (blocked.length) {
+    return { ok: false, error: boss.emoji + ' ' + boss.name + ' 입장 조건 미달 — ' + blocked.map(b => b.nick + '(' + b.why + ')').join(', ') };
+  }
+  // 레이드 횟수는 '성공했을 때만' 차감한다(raidResolve). 실패하면 보상도 없고 횟수도 안 깎인다.
   // 파티 집계: 탱커 피해감소, 힐러 회복
   let dr = 0, healPct = 0;
   participants.forEach(k => {
@@ -953,12 +1279,17 @@ function raidStart(db, id, bossId) {
     if (mp.class === 'healer') healPct += CONFIG.raidHealPctPerHealer;
   });
   dr = Math.min(CONFIG.raidDRCap, dr);
+  // 인원 스케일 — 체력·화력·보상을 참여 인원에 맞춰 키운다
+  const sc = raidScale(participants.length);
+  const bossHp = Math.round(boss.hp * sc.hp);
+  const bossDanger = boss.danger * sc.danger;
+  const bossReward = Math.round(boss.reward * sc.hp);
   // 보스 공격 스케줄(결정적): N회, 랜덤 시각, 총 danger% 를 균등 배분
   const N = randInt(CONFIG.raidBossAttMin, CONFIG.raidBossAttMax);
   const times = [];
   for (let i = 0; i < N; i++) times.push(randInt(1000, CONFIG.raidDuration - 600));
   times.sort((a, b) => a - b);
-  const attacks = times.map(t => ({ t, pct: boss.danger / N, applied: false }));
+  const attacks = times.map(t => ({ t, pct: bossDanger / N, applied: false }));
   const parts = participants.map(k => {
     const mp = db.players[k];
     return { id: k, nick: mp.nick, class: mp.class, level: mp.level, classEmoji: classOf(mp).emoji };
@@ -966,8 +1297,9 @@ function raidStart(db, id, bossId) {
   const now = Date.now();
   pt.raid = {
     status: 'active', startTs: now, lastTick: now, duration: CONFIG.raidDuration,
-    boss: { id: boss.id, name: boss.name, emoji: boss.emoji, hp: boss.hp, atk: boss.atk, reward: boss.reward, dropChance: boss.dropChance },
-    bossHP: boss.hp, partyHP: 100, dr, drBase: dr, healPct, attacks, participants: parts,
+    boss: { id: boss.id, name: boss.name, emoji: boss.emoji, hp: bossHp, atk: boss.atk, reward: bossReward, dropChance: boss.dropChance, essence: boss.essence },
+    scale: { members: participants.length, hp: sc.hp, danger: sc.danger },
+    bossHP: bossHp, partyHP: 100, dr, drBase: dr, healPct, attacks, participants: parts,
     contrib: {}, hits: {}, skillUsed: {}, events: [{ t: 0, text: '⚔️ 전투 시작!' }], win: null, rewards: [], topContributor: null,
   };
   parts.forEach(m => { pt.raid.contrib[m.nick] = 0; pt.raid.hits[m.nick] = 0; pt.raid.skillUsed[m.nick] = false; });
@@ -1012,14 +1344,21 @@ function raidResolve(db, pt, win) {
     const each = Math.floor(boss.reward / raid.participants.length);
     raid.participants.forEach(m => {
       const mp = db.players[m.id]; if (!mp) return;
-      mp.gold += each; mp.goldEarned = (mp.goldEarned || 0) + each;
+      // 레이드 횟수는 성공했을 때만 차감한다(실패는 보상도 차감도 없음)
+      if (mp.raidDay !== today()) { mp.raidDay = today(); mp.raidsUsed = 0; }
+      mp.raidsUsed++;
+      bumpMstat(mp, 'raid');                       // 미션: 레이드 성공
+      const got = gainGold(mp, each);
       let drop = null;
-      if (Math.random() < boss.dropChance) { mp.protects++; drop = '🛡️ 방지권'; }
-      rewards.push({ nick: mp.nick, gold: each, drop });
+      if (Math.random() < boss.dropChance) drop = addItem(mp, 'protect', 1) ? '🛡️ 방지권' : null;
+      // 🌟 초월의 정수 — 레이드 성공 시 참가자 전원 확정 지급(인벤이 꽉 차면 놓친다)
+      const want = boss.essence || CONFIG.raidEssence;
+      const ess = addItem(mp, 'essence', want);
+      rewards.push({ nick: mp.nick, gold: got, drop, essence: ess, invFull: ess < want });
     });
     addLog(db, '🏆 ' + boss.emoji + '[' + boss.name + '] 레이드 성공! (' + raid.participants.length + '명)');
   } else {
-    addLog(db, '☠️ ' + boss.emoji + '[' + boss.name + '] 레이드 실패...');
+    addLog(db, '☠️ ' + boss.emoji + '[' + boss.name + '] 레이드 실패... (횟수 차감 없음)');
   }
   raid.rewards = rewards;
   raid.topContributor = Object.keys(raid.contrib).sort((a, b) => raid.contrib[b] - raid.contrib[a])[0] || null;
@@ -1078,7 +1417,7 @@ function raidView(raid) {
     remain: Math.max(0, raid.duration - (Date.now() - raid.startTs)),
     boss: { id: raid.boss.id, name: raid.boss.name, emoji: raid.boss.emoji, hp: raid.boss.hp, atk: raid.boss.atk },
     bossHP: Math.round(raid.bossHP), bossMax: raid.boss.hp, partyHP: Math.round(raid.partyHP),
-    dr: Math.round(raid.dr * 100),
+    dr: Math.round(raid.dr * 100), scale: raid.scale || null,
     participants: raid.participants.map(m => ({ nick: m.nick, classEmoji: m.classEmoji, class: m.class, hits: raid.hits[m.nick] || 0, contrib: Math.round(raid.contrib[m.nick] || 0), skillUsed: !!raid.skillUsed[m.nick] })),
     events: raid.events.slice(-8),
     win: raid.win, rewards: raid.rewards, topContributor: raid.topContributor,
@@ -1106,8 +1445,8 @@ function profile(db, nick) {
 }
 function ranking(db) {
   return Object.values(db.players).map(p => p)
-    .sort((a, b) => b.level - a.level || b.best - a.best).slice(0, 20)
-    .map(p => ({ nick: p.nick, level: p.level, weapon: weaponName(p.level, p.class), classEmoji: classOf(p).emoji, wins: p.wins, losses: p.losses, nickColor: p.nickColor || null, title: equippedTitleView(p) }));
+    .sort((a, b) => starsOf(b) - starsOf(a) || b.level - a.level || b.best - a.best).slice(0, 20)
+    .map(p => ({ nick: p.nick, level: p.level, ascend: starsOf(p), weapon: weaponName(p.level, p.class, p.ascend), classEmoji: classOf(p).emoji, wins: p.wins, losses: p.losses, nickColor: p.nickColor || null, title: equippedTitleView(p) }));
 }
 function goldRanking(db) {
   return Object.values(db.players).map(p => ({ nick: p.nick, gold: p.gold, nickColor: p.nickColor || null, title: equippedTitleView(p) })).sort((a, b) => b.gold - a.gold).slice(0, 20);
@@ -1213,9 +1552,9 @@ function missionClaim(db, id, missionId) {
   if (!row.done) return { ok: false, error: '아직 완료하지 않았어요.' };
   const cl = ensureMclaim(p);
   (scope === 'daily' ? cl.d : cl.w).push(m.id);
-  p.gold += m.gold; p.goldEarned = (p.goldEarned || 0) + m.gold;
+  const gold = gainGold(p, m.gold);
   addBpXp(p, m.xp);
-  return { ok: true, gold: m.gold, xp: m.xp, msg: '미션 완료! +' + m.gold + 'G · 패스 XP +' + m.xp };
+  return { ok: true, gold, xp: m.xp, msg: '미션 완료! +' + gold + 'G · 패스 XP +' + m.xp };
 }
 
 // ----- 배틀패스 -----
@@ -1228,6 +1567,7 @@ function buildBpTrack() {
     const paid = { gold: 1500 + lv * 200 };
     if (lv % 3 === 0) paid.boost = 5;                   // 3레벨마다 부스트 5회
     if (lv % 5 === 0) paid.protect = 2;
+    if (lv === CONFIG.invBpLevel) paid.slots = CONFIG.invBpSlots;   // 중간 보상: 가방 칸 +4
     t.push({ level: lv, free, paid });
   }
   return t;
@@ -1270,10 +1610,14 @@ function bpView(db, id) {
     })),
   };
 }
-function grantBundle(p, r) { // 배틀패스 보상 지급
-  if (r.gold) { p.gold += r.gold; p.goldEarned = (p.goldEarned || 0) + r.gold; }
-  if (r.protect) p.protects = (p.protects || 0) + r.protect;
-  if (r.boost) p.enhanceBoost = (p.enhanceBoost || 0) + r.boost;
+// 배틀패스 보상 지급. 초월 배수가 붙을 수 있어 '실제로 준 것' 을 돌려준다.
+function grantBundle(p, r) {
+  const out = {};
+  if (r.gold) out.gold = gainGold(p, r.gold);
+  if (r.protect) out.protect = addItem(p, 'protect', r.protect);
+  if (r.boost) out.boost = addItem(p, 'boost', r.boost);
+  if (r.slots) out.slots = addSlots(p, r.slots);
+  return out;
 }
 function bpClaim(db, id, level, track) {
   const p = norm(db.players[id]);
@@ -1284,12 +1628,12 @@ function bpClaim(db, id, level, track) {
   if (track === 'paid') {
     if (!bp.premium) return { ok: false, error: '시즌 패스(유료 트랙)가 필요해요.' };
     if (bp.paid.includes(level)) return { ok: false, error: '이미 받았어요.' };
-    bp.paid.push(level); grantBundle(p, t.paid);
-    return { ok: true, reward: t.paid, msg: '패스 보상 수령! (Lv.' + level + ' 프리미엄)' };
+    bp.paid.push(level);
+    return { ok: true, reward: grantBundle(p, t.paid), msg: '패스 보상 수령! (Lv.' + level + ' 프리미엄)' };
   }
   if (bp.free.includes(level)) return { ok: false, error: '이미 받았어요.' };
-  bp.free.push(level); grantBundle(p, t.free);
-  return { ok: true, reward: t.free, msg: '패스 보상 수령! (Lv.' + level + ')' };
+  bp.free.push(level);
+  return { ok: true, reward: grantBundle(p, t.free), msg: '패스 보상 수령! (Lv.' + level + ')' };
 }
 // 시즌 패스(유료) 구매 — 결제 연동 전까지 '준비중'. 결제 붙으면 여기서 bp.premium=true 로.
 function bpBuyPremium(db, id) {
@@ -1299,7 +1643,8 @@ function bpBuyPremium(db, id) {
 module.exports = {
   CONFIG, GRADES, RARITIES, CLASSES, BOSSES, odds, enhanceCost, weaponName, grade,
   missionView, missionClaim, bpView, bpClaim, bpBuyPremium,
-  login, setClass, rename, publicView, enhance, attend, mine, mineSwing, hunt, buyProtect, fight,
+  login, setClass, rename, publicView, enhance, ascend, attend, mine, mineSwing, hunt, buyProtect, fight,
+  ITEMS, useItem, buyInvPack, invView, ascendReq, ascendProgress,
   partyCreate, partyJoin, partyLeave, partyList, partyView, raidStart,
   partyInvite, partyAccept, partyReject, myInvites, raidState,
   raidHit, raidSkill, raidFinish,

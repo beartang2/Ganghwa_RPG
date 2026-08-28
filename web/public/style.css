@@ -445,3 +445,47 @@ body.loading-on #globalLoading{opacity:1}
 .patch-notes li{font-size:13.5px;line-height:1.5;padding:10px 12px;border:1px solid var(--line);
   border-radius:10px;background:var(--card2)}
 .patch-card .btn:disabled{opacity:.45;cursor:default}
+
+/* ---------- 초월 ---------- */
+.ascend-wrap { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.ascend-mats { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.amat { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 999px;
+        background: #141926; border: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.amat b { color: var(--text); }
+.amat small { color: #6b7280; font-size: 11px; margin-left: 2px; }
+.amat.done { border-color: #49d17a55; background: #49d17a14; color: #49d17a; }
+.amat.done b { color: #49d17a; }
+.btn.ascend { background: linear-gradient(135deg, #c471ed, #f7971e); color: #fff; border: none; font-weight: 700; }
+.btn.ascend:disabled { background: #232a3a; color: #5b6478; }
+
+/* ---------- 인벤토리 ---------- */
+.inv-card { max-width: 420px; }
+.inv-slotinfo { color: var(--muted); font-weight: 400; font-size: 13px; }
+.inv-slotinfo.full { color: #ff5d6c; }
+.inv-gold { margin: 2px 0 12px; color: var(--text); font-size: 14px; }
+.inv-gold small { color: #6b7280; margin-left: 6px; font-size: 11px; }
+.inv-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.inv-cell { position: relative; aspect-ratio: 1; border-radius: 12px; border: 1px solid var(--line);
+            background: #0f131c; display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; }
+.inv-cell.empty { background: #0b0e15; border-style: dashed; cursor: default; }
+.inv-cell.sel { border-color: #4facfe; background: #4facfe1a; }
+.ic-emoji { font-size: 26px; line-height: 1; }
+.ic-count { position: absolute; right: 4px; bottom: 3px; font-size: 11px; font-weight: 700; color: var(--text); }
+.inv-detail { min-height: 64px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.ivd-name { font-weight: 700; margin-bottom: 4px; }
+.ivd-desc { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+#invExpandBtn { width: 100%; margin-top: 10px; }
+
+/* 보스 잠금 / 등급 / 상점 일일 제한 */
+.raid-boss.locked { opacity: .55; }
+.btier { padding: 1px 7px; border-radius: 999px; font-size: 11px; background: #1a2030; color: var(--muted); }
+.btier.t-어려움 { background: #f7971e22; color: #f7971e; }
+.btier.t-지옥 { background: #ff5d6c22; color: #ff5d6c; }
+.btier.t-초월 { background: #c471ed22; color: #c471ed; }
+.bname .block { font-size: 11px; color: #ff5d6c; font-weight: 600; }
+.shop-lim { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: #4facfe22; color: #4facfe; font-weight: 600; }
+.shop-lim.off { background: #ff5d6c22; color: #ff5d6c; }
+.ivd-name small { color: var(--muted); font-weight: 400; font-size: 11px; }
+.inv-slothint { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line);
+  font-size: 12px; color: var(--muted); line-height: 1.7; }
+.inv-slothint b { color: var(--text); }

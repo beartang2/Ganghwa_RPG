@@ -7,15 +7,25 @@ let currentTab = 'rank';
 /* 업데이트 패치노트 — 업데이트할 때마다 version 을 올리고 notes 를 갱신하면
    유저에게 '버전당 1회' 안내창이 뜬다. (닫기 버튼은 아래 PATCH_DELAY 초 후 활성화) */
 const PATCH = {
-  version: '3',
-  title: '🎉 업데이트 안내',
+  version: '4',
+  title: '🌈 초월 업데이트',
   notes: [
-    '🎯 <b>일일·주간 미션</b> 추가 — 목표를 달성하고 보상을 받아요',
-    '🎟️ <b>배틀패스(시즌 패스)</b> 추가 — 미션으로 XP를 쌓아 보상 획득',
-    '🐉 <b>레이드 혼자서도 도전 가능</b> — 파티 없이도 보스 사냥',
-    '🍀 <b>강화 부스트권 강화</b> — 성공률 3배 + 실패해도 🔨장인의 기운이 훨씬 빨리 차요',
-    '⚖️ <b>강화 밸런스 개편</b> — 파괴 시 완전 초기화 → 한 등급 강등(속성 유지)으로 완화',
-    '✉️ <b>이메일 계정 연결</b> — 기기가 바뀌어도 캐릭터를 지켜줘요',
+    '🌈 <b>초월 시스템</b> — +99 는 더 이상 끝이 아니에요. 초월하면 무기가 +0 으로 돌아가는 대신 <b>영구 ★</b>을 얻어요 (골드 획득·레이드 공격력·🔨장인의 기운 영구 상승)',
+    '💠 <b>초월 재료</b> — ★을 올리려면 재료가 필요해요. <b>초월의 파편</b>은 🗡️사냥에서 확률로, <b>초월의 정수</b>는 🐲레이드 성공 시 확정으로 나와요',
+    '⚠️ <b>초월하면 🛡️파괴방지권이 통하지 않습니다</b> — ★1부터는 파괴를 그대로 맞아요. 초월 전에 신중히!',
+    '🎒 <b>가방(인벤토리) 추가</b> — 방지권·부스트권·염색약·직업변경권이 전부 가방으로 들어갔어요. <b>8칸</b>으로 시작해요',
+    '🎒 <b>가방 확장</b> — 상점 <b>가방 확장 패키지</b>(500,000G · 계정당 1회) +4칸, 배틀패스 프리미엄 <b>Lv.15</b> 보상 +4칸 = 최대 <b>16칸</b>',
+    '🛒 <b>상점 변경</b> — 염색약·직업변경권은 이제 사면 가방에 들어가고, <b>가방에서 "사용하기"</b> 를 눌러야 발동해요',
+    '📊 <b>랭킹 개편</b> — ★ 개수가 먼저, 그다음 강화 수치로 순위를 매겨요',
+    '⚔️ <b>강화 확률 조정</b> — 초월 전 강화는 살짝 쉬워졌고, 초월 회차(★1+)는 더 어려워졌어요',
+    '🐲 <b>레이드 전면 개편</b> — 보스마다 <b>무기 레벨·초월 ★ 입장 조건</b>이 생겼고, <b>초월 전용 보스 2종</b>(🌋초월의 거인 · 🌌공허의 군주)이 추가됐어요',
+    '🎯 <b>레이드 난이도 상향</b> — 이제 제대로 연타해야 잡혀요. 대신 <b>실패하면 횟수가 깎이지 않아요</b> (성공했을 때만 차감)',
+    '👥 <b>인원 비례 난이도</b> — 파티 인원이 늘면 보스 체력·화력도 같이 올라가고 보상도 커져요',
+    '🛡️ <b>방지권 상점 하루 3개 제한</b> — 나머지는 🗡️사냥 드랍으로 얻으세요 (드랍률 대폭 상향)',
+    '🎒 <b>한 칸당 999개</b> — 999개를 넘기면 다음 칸을 하나 더 씁니다. 칸이 모자라는 건 재료가 쌓여서가 아니라 <b>아이템 종류</b>가 늘 때예요',
+    '💥 <b>파괴 완화</b> — 파괴 시 등급 바닥까지 떨어지던 걸 <b>최대 −15레벨</b>로 묶었어요. 고레벨에서 며칠치가 한 번에 날아가지 않아요',
+    '📉 <b>고레벨 파괴율 하향</b> — 상단 1.6% → 0.7%. 대신 초월 승급 재료가 크게 늘어 <b>재료가 주 관문</b>이 됐어요',
+    '💠 <b>초월 재료 상향</b> — ★1 파편 200·정수 20 / ★5 파편 1,000·정수 100. 사냥과 레이드를 꾸준히 돌아야 ★이 올라가요',
   ],
 };
 const PATCH_DELAY = 3;   // 닫기 버튼 활성화까지 대기(초) — 실수로 닫지 않고 읽게
@@ -51,10 +61,12 @@ async function pollMe() {
 }
 
 /* ---------- 무기 SVG (직업별 모양 + 등급별 장식 업그레이드) ---------- */
-function gradeTier(level) { return level >= 70 ? 4 : level >= 50 ? 3 : level >= 26 ? 2 : level >= 16 ? 1 : 0; }
+const GRADE_TIERS = { common: 0, rare: 1, epic: 2, legend: 3, transcend: 4 };
+// 서버가 내려준 등급 key 로 판정한다(경계가 maxLevel 비율이라 레벨로 재계산하면 어긋난다)
+function gradeTier(gradeKey) { return GRADE_TIERS[gradeKey] || 0; }
 function sparkle(x, y, c) { return `<path d="M${x} ${y - 3.2} L${x + 1.8} ${y} L${x} ${y + 3.2} L${x - 1.8} ${y} Z" fill="${c}"/>`; }
-function weaponSVG(cls, level, color) {
-  const tier = gradeTier(level);
+function weaponSVG(cls, gradeKey, color) {
+  const tier = gradeTier(gradeKey);
   const glow = 3 + tier * 6;
   const defs = `<defs><linearGradient id="bl" x1="0" y1="0" x2="1" y2="1">
     <stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="${color}"/><stop offset="1" stop-color="${color}"/>
@@ -252,7 +264,7 @@ function setWeaponArt(m) {
   ];
   let i = 0;
   const tryNext = () => {
-    if (i >= candidates.length) { art.innerHTML = weaponSVG(m.class, m.level, m.grade.color); return; }
+    if (i >= candidates.length) { art.innerHTML = weaponSVG(m.class, m.grade.key, m.grade.color); return; }
     const url = candidates[i++];
     const img = new Image();
     img.onload = () => { img.className = 'weapon-img'; img.style.filter = 'drop-shadow(0 0 10px ' + m.grade.color + ')'; art.innerHTML = ''; art.appendChild(img); };
@@ -277,7 +289,6 @@ function render() {
   if (!me) return;
   el('hNick').innerHTML = (me.classEmoji || '') + ' ' + nickSpan(me.nick, me.nickColor) + titleTag(me.equippedTitle) + ' <span class="edit-hint">✏️</span>';
   el('hGold').textContent = me.gold.toLocaleString();
-  el('hProtect').textContent = me.protects;
   updateMissionBadge();
   updateNoticeBadge();
 
@@ -293,18 +304,93 @@ function render() {
   el('nextCost').textContent = me.nextCost == null ? '🌈 만렙 달성!' : '다음 강화 비용 ' + me.nextCost.toLocaleString() + 'G';
   el('enhanceBtn').textContent = '⚒️ 강화' + (me.enhanceBoost > 0 ? ' 🍀' + me.enhanceBoost : '');
   el('enhanceBtn').disabled = me.nextCost == null || me.gold < me.nextCost;
+  renderAscend();
+  el('invCount').textContent = '(' + me.inv.used + '/' + me.inv.slots + ')';
 
   el('huntLeft').textContent = me.huntsLeft > 0 ? '(' + me.huntsLeft + '/' + me.dailyHunts + ')' : '♾️';
   el('huntBtn').disabled = false;   // 무한 사냥: 항상 가능(소진 후엔 보상 축소)
   el('mineAmt').textContent = me.mine > 0 ? '(+' + me.mine.toLocaleString() + ')' : '';
   el('mineBtn').disabled = false;   // 채굴 모달 열기 — 항상 가능(누적 없어도 돌 깨기)
 
+  el('sAscend').textContent = me.ascend > 0 ? '★' + me.ascend : '-';
   el('sBest').textContent = '+' + me.best;
   el('sBreaks').textContent = me.breaks + '회';
   el('sRecord').textContent = me.wins + '승 ' + me.losses + '패';
   el('sRank').textContent = me.rank.rank ? me.rank.rank + '/' + me.rank.total + '위' : '-';
   checkTitles();   // 새 칭호 획득 시 알림
 }
+
+/* ---------- 초월 ----------
+ * +99 에서만 노출. 재료(사냥 파편 · 레이드 정수)가 다 차야 버튼이 열린다. */
+function renderAscend() {
+  const wrap = el('ascendWrap');
+  wrap.hidden = !me.atMax;
+  if (!me.atMax) return;
+  const n = me.ascendNext;
+  el('ascendMats').innerHTML = n.mats.map(m =>
+    `<span class="amat ${m.have >= m.need ? 'done' : ''}">${m.emoji} <b>${m.have}</b>/${m.need}<small>${m.from}</small></span>`).join('');
+  const btn = el('ascendBtn');
+  btn.textContent = '🌈 초월 ★' + n.to;
+  btn.disabled = !me.canAscend;
+}
+async function doAscend() {
+  if (!me.canAscend) return toast('재료가 부족해요. 🗡️사냥으로 파편, 🐲레이드로 정수를 모으세요.', 'bad');
+  if (!confirm('🌈 초월 ★' + me.ascendNext.to + '\n\n무기가 +0 으로 돌아가고 재료를 소모합니다.\n골드·아이템·칭호는 그대로예요.\n\n⚠️ 초월하면 🛡️파괴방지권이 영구히 통하지 않습니다.\n\n진행할까요?')) return;
+  const r = await api('ascend', 'POST');
+  if (!r.ok) return toast(r.error, 'bad');
+  applyMe(r.me); render();
+  lastWeaponKey = '';   // 등급·속성이 통째로 바뀌므로 무기 아트를 강제로 다시 그린다
+  setWeaponArt(me);
+  toast(r.msg, 'ok'); weaponResult('success'); vibe([20, 50, 30, 50, 60]); sfx('guaranteed'); sfx('pang');
+  if (['rank', 'log'].includes(currentTab)) loadTab();
+}
+
+/* ---------- 인벤토리 ----------
+ * 슬롯 1칸 = 아이템 99개(같은 종류는 99개마다 한 칸씩 더 먹는다). 꽉 차면 드랍이 버려진다.
+ * 칸수는 서버(me.inv.slots)가 계산해서 내려준다 — 클라는 하드코딩하지 않는다. */
+let invSel = null;
+function openInv() { el('invModal').hidden = false; renderInv(); }
+function closeInv() { el('invModal').hidden = true; invSel = null; }
+function renderInv() {
+  if (!me) return;
+  const inv = me.inv;
+  el('invGold').textContent = me.gold.toLocaleString();
+  el('invSlotInfo').textContent = inv.used + '/' + inv.slots + '칸' + (inv.full ? ' · 꽉 참!' : '');
+  el('invSlotInfo').className = 'inv-slotinfo' + (inv.full ? ' full' : '');
+  const cells = inv.cells.map(c =>
+    `<button class="inv-cell ${invSel === c.id ? 'sel' : ''}" data-item="${c.id}">
+       <span class="ic-emoji">${c.emoji}</span><span class="ic-count">${c.count}</span></button>`);
+  for (let i = inv.cells.length; i < inv.slots; i++) cells.push('<span class="inv-cell empty"></span>');
+  el('invGrid').innerHTML = cells.join('');
+  const sel = inv.items.find(i => i.id === invSel);
+  el('invDetail').innerHTML = sel
+    ? `<div class="ivd-name">${sel.emoji} ${esc(sel.name)} <b>×${sel.count}</b>
+         ${sel.count > inv.stackMax ? `<small>(${Math.ceil(sel.count / inv.stackMax)}칸)</small>` : ''}</div>
+       <div class="ivd-desc">${esc(sel.desc)}</div>
+       ${sel.kind === 'use' ? `<button class="btn primary sm" id="invUseBtn">사용하기</button>`
+         : `<p class="hint" style="margin:6px 0 0">${sel.kind === 'mat' ? '초월 승급 재료예요.' : '조건이 되면 자동으로 쓰여요.'}</p>`}`
+    : '<p class="hint" style="margin:0">아이템을 눌러 자세히 보기 · 한 칸에 ' + inv.stackMax + '개까지 쌓여요</p>';
+  // 칸은 상점 1회 패키지 + 배틀패스 프리미엄 보상으로만 열린다(골드 반복 확장 없음)
+  const hint = el('invSlotHint');
+  hint.innerHTML = inv.atMaxSlots ? '가방이 최대 ' + inv.max + '칸까지 열렸어요.'
+    : [!inv.packBought ? '🛒 상점 <b>가방 확장 패키지</b> +' + inv.packSlots + '칸 (' + inv.packPrice.toLocaleString() + 'G · 1회)' : null,
+       '🎟️ 배틀패스 프리미엄 <b>Lv.' + inv.bpLevel + '</b> 보상 +' + inv.bpSlots + '칸'].filter(Boolean).join('<br>');
+  el('invGrid').querySelectorAll('[data-item]').forEach(b => {
+    b.onclick = () => { invSel = invSel === b.dataset.item ? null : b.dataset.item; renderInv(); };
+  });
+  const ub = el('invUseBtn');
+  if (ub) ub.onclick = () => act(() => doUseItem(sel.id), ub);
+}
+async function doUseItem(itemId) {
+  if (itemId === 'classtkt' && !confirm('🔄 직업 변경권을 사용할까요?\n직업을 다시 선택합니다 (레벨·골드 유지).')) return;
+  const r = await api('use-item', 'POST', { item: itemId });
+  if (!r.ok) return toast(r.error, 'bad');
+  applyMe(r.me);
+  if (r.needReselect) { closeInv(); render(); return showClassSelect(); }
+  render(); renderInv();
+  toast(r.msg, 'ok');
+}
+
 
 /* ---------- 토스트 ---------- */
 let toastTimer = null;
@@ -542,6 +628,7 @@ function killMonster() {
   applyMe(r.me); huntSession += r.gold; huntKills++; render();  // 서버 반영분을 이제 화면에 리빌
   let msg = '💰 +' + r.gold.toLocaleString() + 'G' + (r.crit ? ' 💥치명타!' : '');
   if (r.drop) msg += r.drop.type === 'potion' ? '  ' + r.drop.text : '  🎁' + r.drop.text;
+  if (r.mat) msg += '  ' + r.mat.text;
   spawnHuntReward(msg, r.crit);
   updateHuntHud();
   setTimeout(() => { if (huntOpen) spawnHuntMonster(); }, HUNT_SPAWN_DELAY);
@@ -665,6 +752,7 @@ async function breakRock() {
     renderMinePanel({ text: r.msg, kind: r.jackpot ? 'ok' : r.gem ? 'info' : r.tired ? 'tired' : '' });
     if (r.leveledTo) toast('🎉 채굴 레벨 ' + r.leveledTo + ' 달성! 채굴 수익 증가', 'ok');
     else if (r.gem && r.gem.type === 'protect') toast(r.gem.text, 'info');
+    else if (r.gem && r.gem.type === 'full') toast(r.gem.text, 'bad');
   }, 240);
 }
 // 보상 텍스트·파편은 body 에 fixed 로 띄운다(패널이 곧 리렌더돼도 애니메이션 유지)
@@ -697,14 +785,12 @@ async function doAttend() {
   applyMe(r.me); render(); toast('📅 ' + r.msg, 'ok');
 }
 async function doBuy(item) {
-  if (item === 'classchange' && !confirm('직업 변경권 30,000G — 직업을 다시 선택합니다(레벨·골드 유지). 구매할까요?')) return;
   const r = await api('shop-buy', 'POST', { item });
   if (!r.ok) return toast(r.error, 'bad');
-  applyMe(r.me);
-  if (item === 'classchange' && r.needReselect) { showClassSelect(); return; }
-  render();
-  if (item === 'dye') toast('🎨 ' + r.dye.name + ' [' + r.dye.rarity + '] 뽑기 완료!', r.dye.rarity === '기본' ? 'ok' : 'info');
-  else toast(r.msg || '구매 완료', 'ok');
+  applyMe(r.me); render();
+  // 염색약·직업변경권은 구매 즉시 발동하지 않는다 — 가방에서 '사용하기'
+  const useHint = (item === 'dye' || item === 'classchange') ? ' 🎒가방에서 사용하세요.' : '';
+  toast((r.msg || '구매 완료') + useHint, 'ok');
   if (currentTab === 'shop') loadTab();
 }
 async function doFight(target) {
@@ -718,7 +804,7 @@ async function doFight(target) {
 }
 
 /* ---------- 파티 / 레이드 (폴링 기반 실시간 관전) ---------- */
-let raidTimer = null, curRaid = null, cacheParties = [], cachePlayers = [], BOSS_CACHE = [];
+let raidTimer = null, curRaid = null, cacheParties = [], cachePlayers = [], BOSS_CACHE = [], BOSS_HPSCALE = 0.7;
 let lastFetch = 0, dismissedRaidTs = null, lastPartyHtml = '';
 
 async function doPartyCreate() { const r = await api('party-create', 'POST'); if (!r.ok) return toast(r.error, 'bad'); applyMe(r.me); await refreshRaidData(); paintRaid(); }
@@ -803,7 +889,7 @@ function updateBattleUI() {
       res.dataset.done = '1';
       const parts2 = raid.participants.slice().sort((a, b) => b.contrib - a.contrib);
       res.innerHTML = `<div class="raid-result ${raid.win ? 'win' : 'lose'}"><b>${raid.win ? '🏆 레이드 성공!' : '☠️ 레이드 실패...'}</b>` +
-        (raid.win && raid.rewards && raid.rewards.length ? '<br>' + raid.rewards.map(rw => esc(rw.nick) + ' 💰+' + rw.gold.toLocaleString() + (rw.drop ? ' ' + rw.drop : '')).join('<br>') : '') +
+        (raid.win && raid.rewards && raid.rewards.length ? '<br>' + raid.rewards.map(rw => esc(rw.nick) + ' 💰+' + rw.gold.toLocaleString() + (rw.drop ? ' ' + rw.drop : '') + (rw.essence ? ' 🌟+' + rw.essence : rw.invFull ? ' 🎒꽉참' : '')).join('<br>') : '') +
         `<div class="raid-mvp">기여: ${parts2.map(p => esc(p.nick) + ' ' + p.contrib.toLocaleString()).join(' · ')}</div>` +
         `</div><button class="btn ghost sm" id="closeRaidBtn" style="margin-top:8px">닫기</button>`;
       sfx(raid.win ? 'jackpot' : 'destroy'); vibe(raid.win ? [15, 40, 25] : [40, 60, 40]);
@@ -869,7 +955,7 @@ function spawnRaidSpark() {
 async function refreshRaidData() {
   lastFetch = Date.now();
   try {
-    if (!BOSS_CACHE.length) { const br = await api('bosses'); BOSS_CACHE = br.bosses || []; }
+    if (!BOSS_CACHE.length) { const br = await api('bosses'); BOSS_CACHE = br.bosses || []; BOSS_HPSCALE = br.partyHpScale || 0.7; }
     const [meR, raidR, partiesR, playersR] = await Promise.all([api('me'), api('party-raid'), api('parties'), api('players')]);
     if (meR.ok && applyMe(meR.me)) { render(); seedInvites(); } // ts 가드 + 초대 seen 처리
     curRaid = raidR.raid; cacheParties = partiesR.list || []; cachePlayers = playersR.list || [];
@@ -925,12 +1011,19 @@ function paintParty(panel) {
       const invitable = cachePlayers.filter(n => n !== me.nick && !(pt && pt.members.some(m => m.nick === n)));
       html += `<div style="margin:6px 0"><b>동료 초대</b></div>` +
         (invitable.length ? invitable.map(n => `<div class="party-member"><b>${esc(n)}</b><button class="btn sm primary" data-invite="${esc(n)}" style="margin-left:auto">초대</button></div>`).join('') : emptyMsg('초대할 유저가 없어요'));
-      html += `<div style="margin:12px 0 6px"><b>보스 선택</b> <small>(남은 레이드 ${me.raidsLeft}/${me.dailyRaids})</small></div>`;
-      html += BOSS_CACHE.map((b, i) =>
-        `<div class="raid-boss"><span class="bemoji">${b.emoji}</span>
-          <div class="binfo"><div class="bname">${esc(b.name)} <small>${['입문', '보통', '어려움', '지옥'][i] || ''}</small></div>
-            <div class="bstat">HP ${b.hp.toLocaleString()} · 공격 ${b.atk} · 보상 💰${b.reward.toLocaleString()}</div></div>
-          <button class="btn sm primary" data-raid="${b.id}">도전</button></div>`).join('');
+      const n = pt ? pt.count : 1;
+      html += `<div style="margin:12px 0 6px"><b>보스 선택</b> <small>(남은 레이드 ${me.raidsLeft}/${me.dailyRaids} · 성공해야 차감)</small></div>`;
+      html += `<p class="hint" style="margin:0 0 8px">실패하면 보상은 없지만 <b>횟수도 깎이지 않아요</b>. 보스 체력·화력은 <b>참여 인원(${n}명)</b>에 맞춰 올라갑니다.</p>`;
+      html += BOSS_CACHE.map(b => {
+        // 입장 조건은 파티 전원이 만족해야 하지만, 목록에서는 내 기준으로 잠금을 보여준다
+        const why = me.level < b.reqLevel ? '무기 +' + b.reqLevel + ' 필요'
+          : me.ascend < b.reqAscend ? '초월 ★' + b.reqAscend + ' 필요' : null;
+        const sc = 1 + (n - 1) * BOSS_HPSCALE;   // 서버 raidScale 과 같은 식(표시용)
+        return `<div class="raid-boss ${why ? 'locked' : ''}"><span class="bemoji">${b.emoji}</span>
+          <div class="binfo"><div class="bname">${esc(b.name)} <small class="btier t-${esc(b.tier)}">${esc(b.tier)}</small>${why ? ` <span class="block">🔒 ${why}</span>` : ''}</div>
+            <div class="bstat">HP ${Math.round(b.hp * sc).toLocaleString()} · 보상 💰${Math.round(b.reward * sc).toLocaleString()} · 🌟${b.essence}</div></div>
+          <button class="btn sm primary" data-raid="${b.id}" ${why ? 'disabled' : ''}>도전</button></div>`;
+      }).join('');
     } else html += `<p class="hint">파티장이 레이드를 시작할 수 있어요. 시작하면 여기서 다같이 보스를 연타해요!</p>`;
   } else {
     html += `<p class="hint" style="margin:0 0 8px">🎯 <b>혼자서도 도전 가능!</b> 파티를 만들면 바로 보스를 고를 수 있어요. 동료를 초대하면 함께(탱커·힐러 조합) 더 강한 보스도 노려봐요.</p>`;
@@ -971,12 +1064,22 @@ async function loadTab() {
         <span class="val gold">${p.gold.toLocaleString()}G</span></div>`).join('') : emptyMsg('아직 참가자가 없어요');
   } else if (currentTab === 'shop') {
     const { items } = await api('shop'); if (stale()) return;
-    panel.innerHTML = `<p class="hint" style="margin:0 0 10px">보유 💰${me.gold.toLocaleString()}G${me.enhanceBoost > 0 ? ' · 🍀 강화부스트 ' + me.enhanceBoost + '회' : ''}</p>` +
-      items.map(it =>
-        `<div class="raid-boss"><span class="bemoji">${it.emoji}</span>
-          <div class="binfo"><div class="bname">${esc(it.name)} <small>${it.price.toLocaleString()}G</small></div>
-            <div class="bstat">${esc(it.desc)}</div></div>
-          <button class="btn sm primary" data-buy="${it.id}" ${me.gold < it.price ? 'disabled' : ''}>구매</button></div>`).join('');
+    panel.innerHTML = `<p class="hint" style="margin:0 0 10px">보유 💰${me.gold.toLocaleString()}G · 🎒 ${me.inv.used}/${me.inv.slots}칸</p>` +
+      items.map(it => {
+        // 방지권은 하루 구매 상한이 있고, 초월 ★1+ 는 아예 살 수 없다
+        const capped = it.id === 'protect';
+        const once = !!it.once;
+        const onceDone = once && (me.inv.packBought || me.inv.atMaxSlots);
+        const soldOut = (capped && (!me.protectWorks || me.protectBuyLeft <= 0)) || onceDone;
+        const note = once ? ` <span class="shop-lim${onceDone ? ' off' : ''}">${onceDone ? '구매 완료' : '계정당 1회'}</span>`
+          : !capped ? ''
+          : !me.protectWorks ? ' <span class="shop-lim off">초월 이후 사용 불가</span>'
+          : ` <span class="shop-lim${me.protectBuyLeft <= 0 ? ' off' : ''}">오늘 ${me.protectBuyLeft}/${me.protectDailyBuy}개</span>`;
+        return `<div class="raid-boss"><span class="bemoji">${it.emoji}</span>
+          <div class="binfo"><div class="bname">${esc(it.name)} <small>${it.price.toLocaleString()}G</small>${note}</div>
+            <div class="bstat">${esc(it.desc)}${capped ? ' · 더 필요하면 🗡️사냥에서 얻으세요' : ''}</div></div>
+          <button class="btn sm primary" data-buy="${it.id}" ${me.gold < it.price || soldOut ? 'disabled' : ''}>구매</button></div>`;
+      }).join('');
   } else if (currentTab === 'hogu') {
     const { list } = await api('hogu'); if (stale()) return;
     panel.innerHTML = list.length ? list.map((p, i) =>
@@ -1029,6 +1132,7 @@ async function openProfile(nick) {
      <div class="pf-line"><span>무기</span><b>${esc(p.weapon)}</b></div>
      <div class="pf-line"><span>속성</span><b>${p.elementEmoji || ''} ${esc(p.elementName || '-')}</b></div>
      <div class="pf-line"><span>골드</span><b>${p.gold.toLocaleString()}G</b></div>
+     <div class="pf-line"><span>초월</span><b>${p.ascend > 0 ? '★' + p.ascend : '-'}</b></div>
      <div class="pf-line"><span>방지권</span><b>${p.protects}개</b></div>
      <div class="pf-line"><span>전적</span><b>${p.wins}승 ${p.losses}패${p.winRate != null ? ' (' + p.winRate + '%)' : ''}</b></div>
      <div class="pf-line"><span>최고기록</span><b>+${p.best}</b></div>
@@ -1433,6 +1537,9 @@ async function buyPassPremium() {
   if (!r.ok) { toast(r.error, 'bad'); return; }   // 현재는 '준비중' 안내
   applyMe(r.me); await renderPass();
 }
+el('ascendBtn').onclick = () => act(doAscend, el('ascendBtn'));
+el('invBtn').onclick = () => { ensureAudio(); openInv(); };
+el('invClose').onclick = closeInv;
 el('missionBtn').onclick = () => { ensureAudio(); openMissions(); };
 el('missionClose').onclick = closeMissions;
 el('passBtn').onclick = () => { ensureAudio(); openPass(); };

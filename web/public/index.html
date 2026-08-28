@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>⚔️ 강화 RPG</title>
-<link rel="stylesheet" href="/style.css?v=34">
+<link rel="stylesheet" href="/style.css?v=41">
 </head>
 <body>
 
@@ -41,7 +41,6 @@
     <span class="me-nick" id="hNick">-</span>
     <span class="chips">
       <span class="chip gold">💰 <b id="hGold">0</b></span>
-      <span class="chip">🛡️ <b id="hProtect">0</b></span>
     </span>
     <div class="menu-wrap">
       <button id="menuBtn" class="btn ghost sm" aria-label="메뉴">☰<span id="menuDot" class="dot" hidden></span></button>
@@ -73,6 +72,10 @@
           <div class="pity-track"><div id="pityBar" class="pity-fill"></div></div>
         </div>
         <button id="enhanceBtn" class="btn primary big enhance">⚒️ 강화</button>
+        <div id="ascendWrap" class="ascend-wrap" hidden>
+          <div id="ascendMats" class="ascend-mats"></div>
+          <button id="ascendBtn" class="btn big ascend">🌈 초월</button>
+        </div>
       </section>
 
       <section class="actions">
@@ -81,11 +84,13 @@
       </section>
       <section class="actions">
         <button id="attendBtn" class="btn action">📅 출석</button>
+        <button id="invBtn" class="btn action">🎒 가방 <small id="invCount"></small></button>
         <button id="missionBtn" class="btn action">🎯 미션<span id="missionDot" class="dot" hidden></span></button>
         <button id="passBtn" class="btn action">🎟️ 패스</button>
       </section>
 
       <section class="card stats">
+        <div><span>초월</span><b id="sAscend">-</b></div>
         <div><span>최고기록</span><b id="sBest">+0</b></div>
         <div><span>파괴</span><b id="sBreaks">0</b></div>
         <div><span>전적</span><b id="sRecord">0승 0패</b></div>
@@ -162,6 +167,18 @@
 </div>
 
 <!-- 미션 (일일/주간) -->
+<div id="invModal" class="modal" hidden>
+  <div class="card modal-card inv-card">
+    <button id="invClose" class="btn ghost sm close">✕</button>
+    <h3>🎒 가방 <small id="invSlotInfo" class="inv-slotinfo"></small></h3>
+    <div class="inv-gold">💰 <b id="invGold">0</b>G <small>골드는 칸을 차지하지 않아요</small></div>
+    <div id="invGrid" class="inv-grid"></div>
+    <div id="invDetail" class="inv-detail"></div>
+    <div id="invSlotHint" class="inv-slothint"></div>
+  </div>
+</div>
+
+<!-- 미션 -->
 <div id="missionModal" class="modal" hidden>
   <div class="card modal-card mission-card">
     <button id="missionClose" class="btn ghost sm close">✕</button>
@@ -212,6 +229,6 @@
 
 <!-- Supabase Realtime (선택) — 로드 실패해도 게임은 폴링으로 동작 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/app.js?v=34"></script>
+<script src="/app.js?v=41"></script>
 </body>
 </html>
