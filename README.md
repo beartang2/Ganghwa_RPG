@@ -42,11 +42,29 @@ npm start        # 또는 npm run dev (nodemon)
 
 ```
 web/                 웹 게임 (프론트 public/ + 서버 server.js + 로직 game.js)
+  public/fx.js       시각 효과 — React Bits 컴포넌트 바닐라 JS 이식 (MIT + Commons Clause, 파일 머리말 참고)
   api/               Vercel 서버리스 어댑터 (game.js 재사용)
   db/                로컬 어댑터 테스트 (pglite)
 supabase/            Supabase 마이그레이션 (GitHub 연동 자동 적용)
 legacy/              초기 카카오톡 봇 (보관용)
 ```
+
+## 🎨 화면 / 이펙트
+
+대장간 테마(그을음·무쇠·놋쇠·쇳물). 빌드 없는 바닐라 JS 를 유지하려고 [React Bits](https://reactbits.dev) 컴포넌트를
+`web/public/fx.js` 로 이식했다 — 원본 알고리즘·셰이더는 그대로, React 훅만 일반 객체로 바꿨다.
+
+| 원본 (React Bits) | 쓰는 곳 |
+|------|------|
+| Particles | 화면 아래에서 떠오르는 화로 불씨 (`#embers`) |
+| ClickSpark | 강화·사냥·채굴·레이드 탭 불꽃, 강화 결과 버스트 |
+| StarBorder | 강화 버튼 테두리 빛 |
+| ElectricBorder | 장인의 기운 100%(다음 강화 확정)일 때 화로 패널 |
+| GradientText | 전설·초월 무기 이름 |
+| ShinyText | 로그인 타이틀 |
+| Counter | 상단 골드 숫자 |
+
+`fx.js` 로드 실패나 WebGL2 미지원이면 해당 효과만 빠지고 게임은 그대로 동작한다. `prefers-reduced-motion` 을 존중한다.
 
 ## 🔧 밸런스 튜닝
 
