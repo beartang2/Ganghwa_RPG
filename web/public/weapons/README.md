@@ -17,7 +17,7 @@
 
 → **간단히 하려면 2번(45장)만** 만들면 되고, 직업별로 다르게 하려면 1번(180장)까지.
 
-- **class**: `warrior`(검) · `archer`(활) · `tanker`(대검) · `healer`(지팡이)
+- **class**: `warrior`(검) · `archer`(활) · `tanker`(방패) · `healer`(지팡이)
 - **element**: `fire` 불 · `water` 물 · `earth` 대지 · `wind` 바람 · `thunder` 번개 · `ice` 얼음 · `light` 빛 · `dark` 어둠 · `poison` 독
 - **grade**: `common` 일반 · `rare` 희귀 · `epic` 에픽 · `legend` 전설 · `transcend` 초월
 
