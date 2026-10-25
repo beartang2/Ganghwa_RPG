@@ -40,6 +40,8 @@ small{opacity:.75;font-weight:600}
   background:#0f131c;color:var(--text);font-size:16px;text-align:center}
 .login-card .btn{margin-top:10px}
 .hint{color:var(--muted);font-size:12px;margin-top:14px;line-height:1.5}
+.move-notice{margin:-.4em 0 1em;padding:9px 12px;border-radius:10px;font-size:13px;line-height:1.5;
+  word-break:keep-all;color:var(--text);background:rgba(108,140,255,.12);border:1px solid rgba(108,140,255,.35)}
 .err{color:var(--danger);font-size:13px;min-height:18px;margin:8px 0 0}
 
 /* 로딩 스피너 (로그인 버튼 등) */

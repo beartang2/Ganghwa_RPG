@@ -4,7 +4,29 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>⚔️ 강화 RPG</title>
-<link rel="stylesheet" href="/style.css?v=34">
+<meta name="description" content="무기를 강화하고, 깨지면 처음부터 다시. 친구들과 함께하는 확률 강화 RPG 웹게임 — 사냥·채굴·싸움·파티 레이드까지.">
+<link rel="canonical" href="https://ganghwa.beartanh.dev/">
+<meta name="theme-color" content="#0e1016">
+
+<!-- 링크 공유 미리보기 (카카오톡·디스코드·슬랙 등). og:image 는 절대 URL 이어야 스크래퍼가 읽는다 -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="강화 RPG">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:url" content="https://ganghwa.beartanh.dev/">
+<meta property="og:title" content="⚔️ 강화 RPG">
+<meta property="og:description" content="무기를 강화하고, 깨지면 처음부터 다시. 친구들과 함께하는 확률 강화 RPG 웹게임">
+<meta property="og:image" content="https://ganghwa.beartanh.dev/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="강화 RPG — 희귀 +16부터 초월 +70까지 강화되는 검">
+<meta name="twitter:card" content="summary_large_image">
+
+<!-- 아이콘 -->
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+
+<link rel="stylesheet" href="/style.css?v=35">
 </head>
 <body>
 
@@ -13,6 +35,9 @@
   <div class="card login-card">
     <h1>⚔️ 강화 RPG</h1>
     <p class="sub">닉네임과 PIN으로 시작하세요</p>
+    <!-- 도메인 이사 안내(2026-10). localStorage 는 도메인별이라 새 주소에선 한 번 다시 로그인해야 한다.
+         이사가 충분히 지나면 이 줄은 지워도 된다. -->
+    <p class="move-notice">🌐 새 주소로 이사했어요! 기존 <b>닉네임 + PIN</b> 그대로 로그인하면 캐릭터가 이어져요.</p>
     <input id="nick" placeholder="닉네임 (1~12자)" maxlength="12" autocomplete="off">
     <input id="pin" type="password" placeholder="PIN 숫자 8자리" maxlength="8" inputmode="numeric" autocomplete="off">
     <button id="loginBtn" class="btn primary big">게스트로 시작</button>
@@ -212,6 +237,6 @@
 
 <!-- Supabase Realtime (선택) — 로드 실패해도 게임은 폴링으로 동작 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/app.js?v=34"></script>
+<script src="/app.js?v=35"></script>
 </body>
 </html>
