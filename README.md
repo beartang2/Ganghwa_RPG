@@ -43,6 +43,7 @@ npm start        # 또는 npm run dev (nodemon)
 ```
 web/                 웹 게임 (프론트 public/ + 서버 server.js + 로직 game.js)
   public/fx.js       시각 효과 — React Bits 컴포넌트 바닐라 JS 이식 (MIT + Commons Clause, 파일 머리말 참고)
+  public/weapon-art.js  무기 그림 생성기 — 직업 4 × 속성 9 × 등급 5 = 180종 SVG (이미지 파일 불필요)
   api/               Vercel 서버리스 어댑터 (game.js 재사용)
   db/                로컬 어댑터 테스트 (pglite)
 supabase/            Supabase 마이그레이션 (GitHub 연동 자동 적용)
@@ -65,6 +66,19 @@ legacy/              초기 카카오톡 봇 (보관용)
 | Counter | 상단 골드 숫자 |
 
 `fx.js` 로드 실패나 WebGL2 미지원이면 해당 효과만 빠지고 게임은 그대로 동작한다. `prefers-reduced-motion` 을 존중한다.
+
+### 무기 그림 (`web/public/weapon-art.js`)
+
+180장을 그리는 대신 부품을 겹쳐 그린다 — **형태는 직업**(검·활·방패·지팡이), **금속은 등급**
+(무쇠 → 푸른 강철 → 흑강+자수정 → 황금 → 결정), **빛깔·문양은 속성**(날 안쪽 처리 + 둘레의 불꽃·고드름·번개 등).
+등급이 오를수록 가드가 날개·후광으로 커지고, 전설부터는 문양이 움직인다.
+
+```js
+WeaponArt.svg({ cls: 'warrior', element: 'fire', grade: 'legend' })  // → '<svg …>'
+```
+
+직접 그린 PNG 를 쓰고 싶으면 `app.js` 의 `USE_WEAPON_PNG = true` (규칙은 [`web/public/weapons/README.md`](web/public/weapons/README.md)).
+일부만 있으면 화풍이 섞이니, 한 직업 분량을 다 채웠을 때 켜는 걸 권장.
 
 ## 🔧 밸런스 튜닝
 

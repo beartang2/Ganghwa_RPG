@@ -12,6 +12,7 @@ const PATCH = {
   notes: [
     '🔥 <b>대장간 테마로 새 단장</b> — 화로 불씨, 망치질 불꽃, 등급별로 달아오르는 화로',
     '⚡ 장인의 기운이 <b>100%</b>면 화로에 전류가 흘러요 — 다음 강화는 확정 성공!',
+    '⚔️ <b>무기 그림 전면 교체</b> — 직업·속성·등급마다 다른 180가지 무기. 전설부터는 무기가 살아 움직여요',
     '🌐 <b>새 주소로 이사</b>했어요 — <b>ganghwa.beartanh.dev</b> 를 즐겨찾기 해 주세요',
     '💬 카톡으로 링크를 보내면 <b>미리보기 카드</b>가 떠요 — 친구 초대가 쉬워졌어요',
     '📱 홈 화면에 추가하면 <b>앱 아이콘</b>으로 바로 실행',
@@ -287,21 +288,29 @@ async function showClassSelect() {
   });
 }
 
-/* ---------- 무기 이미지 로더 (있으면 이미지, 없으면 SVG 폴백) ----------
- * 우선순위: /weapons/{class}_{element}_{grade}.png → {element}_{grade}.png → SVG */
+/* ---------- 무기 그림 ----------
+ * 기본: weapon-art.js 생성기(직업 × 속성 × 등급 180종, 이미지 파일 불필요) — 모든 유저가 같은 화풍.
+ * USE_WEAPON_PNG = true 로 켜면 예전처럼 /weapons/{class}_{element}_{grade}.png → {element}_{grade}.png 를
+ * 먼저 찾는다(일부만 있으면 화풍이 섞이니, 한 직업의 45장을 다 채웠을 때 켜는 걸 권장). */
+const USE_WEAPON_PNG = false;
+function weaponArtHTML(m) {
+  if (window.WeaponArt) return window.WeaponArt.svg({ cls: m.class, element: m.element, grade: m.grade && m.grade.key, label: m.weapon });
+  return weaponSVG(m.class, m.level, m.grade.color);
+}
 let lastWeaponKey = '';
 function setWeaponArt(m) {
   const key = m.class + '|' + m.element + '|' + m.grade.key;
-  if (key === lastWeaponKey) return; // 같은 조합이면 재요청 안 함(404 반복 방지)
+  if (key === lastWeaponKey) return; // 같은 조합이면 다시 그리지 않음(애니메이션 끊김·404 반복 방지)
   lastWeaponKey = key;
   const art = el('weaponArt');
+  if (!USE_WEAPON_PNG) { art.innerHTML = weaponArtHTML(m); return; }
   const candidates = [
     '/weapons/' + m.class + '_' + m.element + '_' + m.grade.key + '.png',
     '/weapons/' + m.element + '_' + m.grade.key + '.png',
   ];
   let i = 0;
   const tryNext = () => {
-    if (i >= candidates.length) { art.innerHTML = weaponSVG(m.class, m.level, m.grade.color); return; }
+    if (i >= candidates.length) { art.innerHTML = weaponArtHTML(m); return; }
     const url = candidates[i++];
     const img = new Image();
     img.onload = () => { img.className = 'weapon-img'; img.style.filter = 'drop-shadow(0 0 10px ' + m.grade.color + ')'; art.innerHTML = ''; art.appendChild(img); };
@@ -1109,6 +1118,7 @@ async function openProfile(nick) {
   const eq = p.equippedTitle;
   el('modalBody').innerHTML =
     `<h3>${p.classEmoji || '📇'} ${nickSpan(p.nick, p.nickColor)}${titleTag(eq)} <small style="color:var(--muted)">${esc(p.className || '')}</small></h3>
+     ${p.class && p.grade ? `<div class="pf-weapon">${weaponArtHTML(p)}</div>` : ''}
      ${titlesSection(p, isMe, eq)}
      <div class="pf-line"><span>무기</span><b>${esc(p.weapon)}</b></div>
      <div class="pf-line"><span>속성</span><b>${p.elementEmoji || ''} ${esc(p.elementName || '-')}</b></div>
