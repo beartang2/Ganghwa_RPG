@@ -26,14 +26,21 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
 
-<link rel="stylesheet" href="/style.css?v=35">
+<!-- 표제용 서체: Hahmlet(한글 세리프, OFL) — 무기 이름·강화 버튼·타이틀에만 쓴다 -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@600;800;900&display=swap">
+<link rel="stylesheet" href="/style.css?v=38">
 </head>
 <body>
+<!-- 화로 불씨 배경 (fx.js / React Bits Particles 이식) -->
+<div id="embers" aria-hidden="true"></div>
 
 <!-- 로그인 -->
 <div id="login" class="screen">
   <div class="card login-card">
-    <h1>⚔️ 강화 RPG</h1>
+    <img class="login-emblem" src="/icon-512.png" alt="" width="76" height="76">
+    <h1><span id="loginTitle">강화 RPG</span></h1>
     <p class="sub">닉네임과 PIN으로 시작하세요</p>
     <!-- 도메인 이사 안내(2026-10). localStorage 는 도메인별이라 새 주소에선 한 번 다시 로그인해야 한다.
          이사가 충분히 지나면 이 줄은 지워도 된다. -->
@@ -54,7 +61,7 @@
 <!-- 직업 선택 -->
 <div id="classSelect" class="screen" hidden>
   <div class="card">
-    <h2 style="text-align:center;margin:.2em 0 .1em">직업 선택</h2>
+    <h2 class="class-select-title">직업 선택</h2>
     <p class="sub" style="text-align:center;color:var(--muted);margin:.2em 0 1em">역할에 따라 시작 무기와 레이드 능력이 달라져요 (변경 불가)</p>
     <div id="classGrid" class="class-grid"></div>
   </div>
@@ -83,7 +90,7 @@
   <main class="wrap">
     <div class="col-left">
       <section class="card weapon-panel">
-        <div id="weaponArt" class="weapon-art"></div>
+        <div class="hearth"><div id="weaponArt" class="weapon-art"></div></div>
         <div class="weapon-info">
           <div id="weaponName" class="weapon-name">+0 ⚪ 일반</div>
           <div id="weaponElem" class="weapon-elem"></div>
@@ -97,7 +104,7 @@
           <div class="pity-label">🔨 장인의 기운 <span id="pityPct">0%</span></div>
           <div class="pity-track"><div id="pityBar" class="pity-fill"></div></div>
         </div>
-        <button id="enhanceBtn" class="btn primary big enhance">⚒️ 강화</button>
+        <button id="enhanceBtn" class="btn primary big enhance"><span id="enhLabel" class="enh-label">⚒️ 강화</span><span id="enhCost" class="enh-cost"></span></button>
       </section>
 
       <section class="actions">
@@ -237,6 +244,8 @@
 
 <!-- Supabase Realtime (선택) — 로드 실패해도 게임은 폴링으로 동작 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/app.js?v=35"></script>
+<script src="/fx.js?v=38"></script>
+<script src="/weapon-art.js?v=38"></script>
+<script src="/app.js?v=38"></script>
 </body>
 </html>

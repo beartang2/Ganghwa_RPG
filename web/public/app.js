@@ -7,9 +7,12 @@ let currentTab = 'rank';
 /* 업데이트 패치노트 — 업데이트할 때마다 version 을 올리고 notes 를 갱신하면
    유저에게 '버전당 1회' 안내창이 뜬다. (닫기 버튼은 아래 PATCH_DELAY 초 후 활성화) */
 const PATCH = {
-  version: '4',
+  version: '5',
   title: '🎉 업데이트 안내',
   notes: [
+    '🔥 <b>대장간 테마로 새 단장</b> — 화로 불씨, 망치질 불꽃, 등급별로 달아오르는 화로',
+    '⚡ 장인의 기운이 <b>100%</b>면 화로에 전류가 흘러요 — 다음 강화는 확정 성공!',
+    '⚔️ <b>무기 그림 전면 교체</b> — 직업·속성·등급마다 다른 180가지 무기. 속성은 무기 표면의 재질(용암 균열·서리·성운…)로 드러나고, 전설부터는 무기가 살아 움직여요',
     '🌐 <b>새 주소로 이사</b>했어요 — <b>ganghwa.beartanh.dev</b> 를 즐겨찾기 해 주세요',
     '💬 카톡으로 링크를 보내면 <b>미리보기 카드</b>가 떠요 — 친구 초대가 쉬워졌어요',
     '📱 홈 화면에 추가하면 <b>앱 아이콘</b>으로 바로 실행',
@@ -20,6 +23,55 @@ const PATCH_DELAY = 3;   // 닫기 버튼 활성화까지 대기(초) — 실수
 let patchTimer = null;
 
 const el = id => document.getElementById(id);
+
+/* ---------- 시각 효과 (fx.js — React Bits 컴포넌트 이식) ----------
+ * fx.js 가 없거나(로드 실패) WebGL2 를 못 쓰는 기기면 해당 효과만 빠지고 게임은 그대로 동작한다. */
+const FX = (() => {
+  const F = window.Fx;
+  if (!F) return null;
+  const fx = {};
+  const tryFx = (name, make) => { try { fx[name] = make(); } catch (e) { console.warn('[fx]', name, e); } };
+  const small = window.matchMedia && window.matchMedia('(max-width: 600px)').matches;
+  // 화로 불씨: 아래에서 위로 떠오르고, 화면을 누르면 충격파로 흩어진다
+  tryFx('embers', () => F.embers(el('embers'), {
+    particleCount: small ? 120 : 220, particleSpread: 10, speed: 0.08,
+    particleColors: ['#ff7a1a', '#ff9a3c', '#ffd27a', '#ff5a1a'],
+    particleBaseSize: 120, sizeRandomness: 1.3, glow: 1, twinkle: 0.65,
+    drift: 'up', driftSpeed: 0.55, disableRotation: true,
+    hoverEffect: 'repel', hoverRadius: 110, particleHoverFactor: 0.8, opacity: 0.85,
+  }));
+  // 망치질 불꽃: 위로 튀었다가 중력으로 떨어지는 줄불꽃
+  tryFx('sparks', () => F.clickSpark({
+    sparkColor: ['#ffd27a', '#ff9a3c', '#fff4d6'], sparkSize: 9, sparkRadius: 34, sparkCount: 9,
+    sparkWidth: 2, duration: 460, shape: 'streak', randomness: 0.6, gravity: 0.55, glow: 0.8,
+  })
+    .bind('#enhanceBtn', { sparkCount: 12, sparkRadius: 52, spread: 200 })
+    .bind('#huntMon', { sparkColor: ['#fff4d6', '#ff9a3c', '#ef4f45'], sparkCount: 7, sparkRadius: 30, duration: 360 }, { immediate: true })
+    .bind('.rock', { sparkColor: ['#ffd27a', '#c9b8a6', '#ffffff'], sparkCount: 8, sparkRadius: 30, gravity: 1.1, duration: 420 }, { immediate: true })
+    .bind('.raid-mon', { sparkColor: ['#fff4d6', '#ff9a3c', '#ffd27a'], sparkCount: 7, sparkRadius: 32, duration: 360 }, { immediate: true })
+    .bind('.btn.action', { sparkCount: 6, sparkRadius: 22, shape: 'line', gravity: 0, duration: 360, glow: 0.4 }));
+  // 강화 버튼: 달군 쇠판 테두리를 도는 빛
+  tryFx('star', () => F.starBorder(el('enhanceBtn'), {
+    color: '#fff1c1', trailColor: '#ff9a3c', duration: 3.2, thickness: 1.5, radius: 14,
+    trailLength: 0.35, glow: 0.9, sparkle: true, borderColor: 'rgba(255,214,150,.35)',
+  }));
+  // 장인의 기운 100%(다음 강화 확정) 일 때만 화로 테두리에 전류가 흐른다
+  tryFx('electric', () => F.electricBorder(document.querySelector('.weapon-panel'), {
+    color: '#ffd27a', glowColor: '#ff8a2a', borderRadius: 18, thickness: 1.6, strands: 3,
+    chaos: 0.55, spread: 0.5, glow: 0.8, intensity: 0.9, arcs: 1.2, active: false,
+    pixelBudget: small ? 6e5 : 3e6,   // 휴대폰은 셰이더 픽셀 수를 줄여 발열·배터리 부담을 낮춘다
+  }));
+  // 전설·초월 무기 이름은 등급색 그라디언트가 흐른다(그 아래 등급은 평범한 글자)
+  tryFx('grade', () => F.gradientText(el('weaponName'), { enabled: false, animationSpeed: 6, scale: 2.5 }));
+  tryFx('title', () => F.shinyText(el('loginTitle'), { color: '#e8b264', shineColor: '#fff6df', speed: 2.4, delay: 2.6, angle: 115, shineWidth: 34 }));
+  tryFx('gold', () => F.counter(el('hGold'), { locale: 'ko-KR', duration: 0.6, bounce: 0.18, stagger: 0.035, fade: 0.25 }));
+  return fx;
+})();
+const GRADE_FLOW = {
+  legend: ['#fff1c1', '#ffb347', '#f7971e', '#ffd27a'],
+  transcend: ['#ffd27a', '#ff5d6c', '#c471ed', '#7df9ff'],
+};
+let lastEnhDisabled = null;
 
 /* ---------- API ---------- */
 async function api(pathName, method = 'GET', body) {
@@ -236,21 +288,29 @@ async function showClassSelect() {
   });
 }
 
-/* ---------- 무기 이미지 로더 (있으면 이미지, 없으면 SVG 폴백) ----------
- * 우선순위: /weapons/{class}_{element}_{grade}.png → {element}_{grade}.png → SVG */
+/* ---------- 무기 그림 ----------
+ * 기본: weapon-art.js 생성기(직업 × 속성 × 등급 180종, 이미지 파일 불필요) — 모든 유저가 같은 화풍.
+ * USE_WEAPON_PNG = true 로 켜면 예전처럼 /weapons/{class}_{element}_{grade}.png → {element}_{grade}.png 를
+ * 먼저 찾는다(일부만 있으면 화풍이 섞이니, 한 직업의 45장을 다 채웠을 때 켜는 걸 권장). */
+const USE_WEAPON_PNG = false;
+function weaponArtHTML(m) {
+  if (window.WeaponArt) return window.WeaponArt.svg({ cls: m.class, element: m.element, grade: m.grade && m.grade.key, label: m.weapon });
+  return weaponSVG(m.class, m.level, m.grade.color);
+}
 let lastWeaponKey = '';
 function setWeaponArt(m) {
   const key = m.class + '|' + m.element + '|' + m.grade.key;
-  if (key === lastWeaponKey) return; // 같은 조합이면 재요청 안 함(404 반복 방지)
+  if (key === lastWeaponKey) return; // 같은 조합이면 다시 그리지 않음(애니메이션 끊김·404 반복 방지)
   lastWeaponKey = key;
   const art = el('weaponArt');
+  if (!USE_WEAPON_PNG) { art.innerHTML = weaponArtHTML(m); return; }
   const candidates = [
     '/weapons/' + m.class + '_' + m.element + '_' + m.grade.key + '.png',
     '/weapons/' + m.element + '_' + m.grade.key + '.png',
   ];
   let i = 0;
   const tryNext = () => {
-    if (i >= candidates.length) { art.innerHTML = weaponSVG(m.class, m.level, m.grade.color); return; }
+    if (i >= candidates.length) { art.innerHTML = weaponArtHTML(m); return; }
     const url = candidates[i++];
     const img = new Image();
     img.onload = () => { img.className = 'weapon-img'; img.style.filter = 'drop-shadow(0 0 10px ' + m.grade.color + ')'; art.innerHTML = ''; art.appendChild(img); };
@@ -274,23 +334,44 @@ function fmtPct(p) {
 function render() {
   if (!me) return;
   el('hNick').innerHTML = (me.classEmoji || '') + ' ' + nickSpan(me.nick, me.nickColor) + titleTag(me.equippedTitle) + ' <span class="edit-hint">✏️</span>';
-  el('hGold').textContent = me.gold.toLocaleString();
+  if (FX && FX.gold) FX.gold.set(me.gold); else el('hGold').textContent = me.gold.toLocaleString();
   el('hProtect').textContent = me.protects;
   updateMissionBadge();
   updateNoticeBadge();
 
   setWeaponArt(me);
-  el('weaponName').textContent = me.weapon;
+  // 등급 이모지는 따로 감싼다 — 이름에 그라디언트(background-clip:text)를 입히면 컬러 이모지가 색을 잃기 때문
+  const wEmoji = me.grade && me.grade.emoji;
+  el('weaponName').innerHTML = wEmoji && me.weapon.includes(wEmoji)
+    ? me.weapon.split(wEmoji).map(esc).join('<span class="wn-emoji">' + wEmoji + '</span>')
+    : esc(me.weapon);
+  const panel = document.querySelector('.weapon-panel');
+  panel.style.setProperty('--heat', me.grade.color);
+  if (FX && FX.grade) {
+    const flow = GRADE_FLOW[me.grade.key];
+    FX.grade.enable(!!flow, flow ? { colors: flow } : null);
+  }
   el('weaponElem').textContent = (me.elementEmoji || '') + ' ' + (me.elementName || '') + '속성';
   el('weaponElem').style.color = me.elementColor || 'var(--muted)';
   el('oddsS').textContent = fmtPct(me.odds.success);
   el('oddsD').textContent = fmtPct(me.odds.destroy);
   const pity = Math.round((me.pity || 0) * 100);
-  el('pityPct').textContent = pity + '%';
+  const guaranteed = pity >= 100;
+  el('pityPct').textContent = guaranteed ? '100% · 다음 강화 확정' : pity + '%';
+  panel.classList.toggle('guaranteed', guaranteed);
+  if (FX && FX.electric) FX.electric.setActive(guaranteed);
   el('pityBar').style.width = pity + '%';
   el('nextCost').textContent = me.nextCost == null ? '🌈 만렙 달성!' : '다음 강화 비용 ' + me.nextCost.toLocaleString() + 'G';
-  el('enhanceBtn').textContent = '⚒️ 강화' + (me.enhanceBoost > 0 ? ' 🍀' + me.enhanceBoost : '');
-  el('enhanceBtn').disabled = me.nextCost == null || me.gold < me.nextCost;
+  el('enhLabel').textContent = '⚒️ 강화' + (me.enhanceBoost > 0 ? ' 🍀' + me.enhanceBoost : '');
+  el('enhCost').textContent = me.nextCost == null ? '만렙' : me.nextCost.toLocaleString() + 'G';
+  const enhDisabled = me.nextCost == null || me.gold < me.nextCost;
+  el('enhanceBtn').disabled = enhDisabled;
+  el('enhanceBtn').title = enhDisabled && me.nextCost != null ? '골드가 ' + (me.nextCost - me.gold).toLocaleString() + 'G 부족해요' : '';
+  if (FX && FX.star && enhDisabled !== lastEnhDisabled) {   // 못 누를 땐 빛을 식힌다
+    FX.star.set(enhDisabled ? { color: '#6b5d50', trailColor: '#4a3c30', sparkle: false, glow: 0.2 }
+      : { color: '#fff1c1', trailColor: '#ff9a3c', sparkle: true, glow: 0.9 });
+  }
+  lastEnhDisabled = enhDisabled;
 
   el('huntLeft').textContent = me.huntsLeft > 0 ? '(' + me.huntsLeft + '/' + me.dailyHunts + ')' : '♾️';
   el('huntBtn').disabled = false;   // 무한 사냥: 항상 가능(소진 후엔 보상 축소)
@@ -418,10 +499,24 @@ function weaponResult(kind) {   // 'success' | 'protect' | 'fail' | 'destroy'
   const good = kind === 'success' || kind === 'protect';
   art.classList.add(good ? 'pop' : 'crack');
   panel.classList.add(good ? 'ok' : 'bad');
+  if (FX && FX.sparks) return forgeBurst(kind);
   if (kind === 'success') spawnEnhParticles(['✨', '💫', '⭐', '🌟'], 9);
   else if (kind === 'protect') spawnEnhParticles(['🛡️', '✨'], 6);
   else if (kind === 'destroy') spawnEnhParticles(['💥', '🔥', '💢'], 9);
   else spawnEnhParticles(['💢', '💨'], 4);
+}
+// 결과별 불꽃: 성공=금빛 별 + 고리 · 방지=담금질 물빛 · 파괴=쇳물이 사방으로 · 실패=식은 쇳가루
+const FORGE_BURSTS = {
+  success: { sparkColor: ['#fff6df', '#ffd27a', '#ff9a3c'], sparkCount: 18, sparkRadius: 96, sparkSize: 12, shape: 'star', ring: true, gravity: 0.25, duration: 720, glow: 1 },
+  protect: { sparkColor: ['#e6f3fb', '#7fb4d6', '#ffffff'], sparkCount: 14, sparkRadius: 70, sparkWidth: 2.5, shape: 'dot', ring: true, gravity: 0.2, duration: 600, glow: 0.8 },
+  destroy: { sparkColor: ['#ef4f45', '#ff7a1a', '#ffd27a'], sparkCount: 24, sparkRadius: 118, sparkSize: 14, shape: 'streak', gravity: 1.3, duration: 820, glow: 1 },
+  fail: { sparkColor: ['#8a7a6b', '#c9b8a6'], sparkCount: 7, sparkRadius: 36, shape: 'line', gravity: 0.9, duration: 380, glow: 0 },
+};
+function forgeBurst(kind) {
+  const rc = el('weaponArt').getBoundingClientRect();
+  const cx = rc.left + rc.width / 2, cy = rc.top + rc.height / 2;
+  FX.sparks.burst(cx, cy, FORGE_BURSTS[kind] || FORGE_BURSTS.fail);
+  if ((kind === 'success' || kind === 'destroy') && FX.embers) FX.embers.burst(cx, cy);
 }
 function spawnEnhParticles(emojis, count) {
   const art = el('weaponArt'); if (!art) return;
@@ -1023,6 +1118,7 @@ async function openProfile(nick) {
   const eq = p.equippedTitle;
   el('modalBody').innerHTML =
     `<h3>${p.classEmoji || '📇'} ${nickSpan(p.nick, p.nickColor)}${titleTag(eq)} <small style="color:var(--muted)">${esc(p.className || '')}</small></h3>
+     ${p.class && p.grade ? `<div class="pf-weapon">${weaponArtHTML(p)}</div>` : ''}
      ${titlesSection(p, isMe, eq)}
      <div class="pf-line"><span>무기</span><b>${esc(p.weapon)}</b></div>
      <div class="pf-line"><span>속성</span><b>${p.elementEmoji || ''} ${esc(p.elementName || '-')}</b></div>
