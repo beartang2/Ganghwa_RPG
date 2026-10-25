@@ -73,6 +73,26 @@ const GRADE_FLOW = {
 };
 let lastEnhDisabled = null;
 
+/* 상단바 골드 — 1억 이상은 '9876.5억'처럼 줄여 보여준다(좁은 휴대폰에서 상단바가 화면 밖으로 밀리지 않게).
+ * 정확한 값은 칩에 마우스를 올리면(title) 보이고, 상점·프로필·부자 랭킹에는 그대로 나온다.
+ * 숫자 굴러가는 Counter 는 포맷이 생성 시점에 고정이라, 1억을 넘나들 때만 새 포맷으로 다시 만든다. */
+const GOLD_COMPACT_AT = 1e8;
+const GOLD_COMPACT_FMT = { notation: 'compact', maximumFractionDigits: 1 };
+let goldCompact = false;
+function setTopGold(g) {
+  const compact = g >= GOLD_COMPACT_AT;
+  if (compact !== goldCompact && FX && FX.gold && window.Fx) {
+    try {
+      FX.gold.destroy();
+      FX.gold = window.Fx.counter(el('hGold'), { locale: 'ko-KR', duration: 0.6, bounce: 0.18, stagger: 0.035, fade: 0.25, format: compact ? GOLD_COMPACT_FMT : {} });
+    } catch (e) { FX.gold = null; }
+  }
+  goldCompact = compact;
+  el('hGold').parentElement.title = g.toLocaleString() + 'G';
+  if (FX && FX.gold) FX.gold.set(g);
+  else el('hGold').textContent = compact ? new Intl.NumberFormat('ko-KR', GOLD_COMPACT_FMT).format(g) : g.toLocaleString();
+}
+
 /* ---------- API ---------- */
 async function api(pathName, method = 'GET', body) {
   const opt = { method, headers: {} };
@@ -333,8 +353,8 @@ function fmtPct(p) {
 /* ---------- 렌더 ---------- */
 function render() {
   if (!me) return;
-  el('hNick').innerHTML = (me.classEmoji || '') + ' ' + nickSpan(me.nick, me.nickColor) + titleTag(me.equippedTitle) + ' <span class="edit-hint">✏️</span>';
-  if (FX && FX.gold) FX.gold.set(me.gold); else el('hGold').textContent = me.gold.toLocaleString();
+  el('hNick').innerHTML = '<span class="me-cls">' + (me.classEmoji || '') + ' </span>' + nickSpan(me.nick, me.nickColor) + titleTag(me.equippedTitle) + ' <span class="edit-hint">✏️</span>';
+  setTopGold(me.gold);
   el('hProtect').textContent = me.protects;
   updateMissionBadge();
   updateNoticeBadge();
@@ -1001,7 +1021,7 @@ function paintParty(panel) {
   let html = '';
   if (me.invites && me.invites.length) {
     html += `<div style="margin-bottom:6px"><b>📨 받은 파티 초대</b></div>` +
-      me.invites.map(iv => `<div class="party-member"><b>${esc(iv.leaderNick)}</b> 파티 <small>${iv.count}/${iv.max}</small>
+      me.invites.map(iv => `<div class="party-member"><b class="pm-nick">${esc(iv.leaderNick)}</b> <small>파티 ${iv.count}/${iv.max}</small>
         <span style="margin-left:auto;display:flex;gap:6px"><button class="btn sm primary" data-accept="${iv.partyId}">수락</button>
         <button class="btn sm ghost" data-reject="${iv.partyId}">거절</button></span></div>`).join('') + `<div style="height:12px"></div>`;
   }
@@ -1010,14 +1030,14 @@ function paintParty(panel) {
     const amLeader = pt && pt.leaderNick === me.nick;
     html += `<div style="margin-bottom:8px"><b>내 파티</b> <small>(${pt ? pt.count : 1}/${pt ? pt.max : 5}명)</small></div>`;
     if (pt) html += pt.members.map(m =>
-      `<div class="party-member">${m.classEmoji} <b>${esc(m.nick)}</b> <small>+${m.level}</small>
+      `<div class="party-member">${m.classEmoji} <b class="pm-nick">${esc(m.nick)}</b> <small>+${m.level}</small>
         ${m.isLeader ? '<span class="leader">👑파티장</span>' : ''}
         <span style="margin-left:auto" class="w">레이드 ${m.raidsLeft}회</span></div>`).join('');
     html += `<button class="btn ghost sm" id="leavePartyBtn" style="margin:10px 0">파티 나가기</button>`;
     if (amLeader) {
       const invitable = cachePlayers.filter(n => n !== me.nick && !(pt && pt.members.some(m => m.nick === n)));
       html += `<div style="margin:6px 0"><b>동료 초대</b></div>` +
-        (invitable.length ? invitable.map(n => `<div class="party-member"><b>${esc(n)}</b><button class="btn sm primary" data-invite="${esc(n)}" style="margin-left:auto">초대</button></div>`).join('') : emptyMsg('초대할 유저가 없어요'));
+        (invitable.length ? invitable.map(n => `<div class="party-member"><b class="pm-nick">${esc(n)}</b><button class="btn sm primary" data-invite="${esc(n)}" style="margin-left:auto">초대</button></div>`).join('') : emptyMsg('초대할 유저가 없어요'));
       html += `<div style="margin:12px 0 6px"><b>보스 선택</b> <small>(남은 레이드 ${me.raidsLeft}/${me.dailyRaids})</small></div>`;
       html += BOSS_CACHE.map((b, i) =>
         `<div class="raid-boss"><span class="bemoji">${b.emoji}</span>
@@ -1030,7 +1050,7 @@ function paintParty(panel) {
     html += `<button class="btn primary sm" id="createPartyBtn" style="margin-bottom:10px">➕ 파티 만들기 (혼자도 OK)</button>`;
     html += `<div style="margin:6px 0"><b>파티 목록</b></div>`;
     html += cacheParties.length ? cacheParties.map(pt =>
-      `<div class="party-member">👑 <b>${esc(pt.leaderNick)}</b> <small>${pt.count}/${pt.max}명</small>
+      `<div class="party-member">👑 <b class="pm-nick">${esc(pt.leaderNick)}</b> <small>${pt.count}/${pt.max}명</small>
         <button class="btn sm primary" data-join="${pt.id}" style="margin-left:auto" ${pt.count >= pt.max ? 'disabled' : ''}>참가</button></div>`).join('')
       : emptyMsg('열린 파티가 없어요. 직접 만들어보세요!');
   }
@@ -1054,13 +1074,13 @@ async function loadTab() {
     const { list } = await api('rank'); if (stale()) return;
     panel.innerHTML = list.length ? list.map((p, i) =>
       `<div class="row"><span class="rk">${medal(i)}</span>
-        <span class="nm" data-nick="${esc(p.nick)}">${p.classEmoji || ''} ${nickSpan(p.nick, p.nickColor)}${titleTag(p.title)}</span>
-        <span class="val">${esc(p.weapon)} · ${p.wins}승${p.losses}패</span></div>`).join('') : emptyMsg('아직 참가자가 없어요');
+        <div class="nm" data-nick="${esc(p.nick)}">${nmLine(p.nick, p.nickColor, p.title, p.classEmoji)}
+          <div class="nm-sub">${esc(p.weapon)} · ${p.wins}승 ${p.losses}패</div></div></div>`).join('') : emptyMsg('아직 참가자가 없어요');
   } else if (currentTab === 'goldrank') {
     const { list } = await api('goldrank'); if (stale()) return;
     panel.innerHTML = list.length ? list.map((p, i) =>
       `<div class="row"><span class="rk">${medal(i)}</span>
-        <span class="nm" data-nick="${esc(p.nick)}">${nickSpan(p.nick, p.nickColor)}${titleTag(p.title)}</span>
+        <div class="nm" data-nick="${esc(p.nick)}">${nmLine(p.nick, p.nickColor, p.title)}</div>
         <span class="val gold">${p.gold.toLocaleString()}G</span></div>`).join('') : emptyMsg('아직 참가자가 없어요');
   } else if (currentTab === 'shop') {
     const { items } = await api('shop'); if (stale()) return;
@@ -1074,7 +1094,7 @@ async function loadTab() {
     const { list } = await api('hogu'); if (stale()) return;
     panel.innerHTML = list.length ? list.map((p, i) =>
       `<div class="row"><span class="rk">${i < 3 ? ['👑', '🥈', '🥉'][i] : (i + 1)}</span>
-        <span class="nm" data-nick="${esc(p.nick)}">${esc(p.nick)}</span>
+        <div class="nm" data-nick="${esc(p.nick)}">${nmLine(p.nick)}</div>
         <span class="val">${p.c}번 파괴 🤡</span></div>`).join('') : emptyMsg('😌 오늘은 아직 아무도 안 깨졌어요');
   } else if (currentTab === 'log') {
     const { list } = await api('log'); if (stale()) return;
@@ -1084,7 +1104,7 @@ async function loadTab() {
     const others = list.filter(n => n !== me.nick);
     panel.innerHTML = `<p class="hint" style="margin:0 0 8px">이기면 상대 골드 20% 획득. (남은 싸움 ${me.fightsLeft}/${me.dailyFights})</p>` +
       (others.length ? others.map(n =>
-        `<div class="fightrow"><span class="nm" data-nick="${esc(n)}">${esc(n)}</span>
+        `<div class="fightrow"><div class="nm" data-nick="${esc(n)}">${nmLine(n)}</div>
           <button class="btn sm primary" data-fight="${esc(n)}" ${me.fightsLeft <= 0 ? 'disabled' : ''}>싸움</button></div>`).join('') : emptyMsg('상대가 없어요'));
   }
   // 렌더 완료분을 캐시 — 다음에 그 탭 누르면 즉시 표시(뒤에서 갱신)
@@ -1104,6 +1124,10 @@ function nickSpan(nick, nc) {
   if (nc.kind === 'rainbow') return '<span class="nick-rainbow">' + e + '</span>';
   return e;
 }
+// 목록용 닉네임 줄: 닉네임이 길면 말줄임(…), 칭호는 자리가 모자라면 아랫줄로 내려간다
+function nmLine(nick, nc, title, emoji) {
+  return `<div class="nm-line"><span class="nm-nick">${emoji ? emoji + ' ' : ''}${nickSpan(nick, nc)}</span>${titleTag(title)}</div>`;
+}
 // 장착 칭호 태그 (닉네임 옆 작게). t = {title,color} 또는 null
 function titleTag(t) {
   return t ? ` <span class="title-tag" style="color:${t.color}">「${esc(t.title)}」</span>` : '';
@@ -1117,7 +1141,8 @@ async function openProfile(nick) {
   const isMe = me && p.nick === me.nick;
   const eq = p.equippedTitle;
   el('modalBody').innerHTML =
-    `<h3>${p.classEmoji || '📇'} ${nickSpan(p.nick, p.nickColor)}${titleTag(eq)} <small style="color:var(--muted)">${esc(p.className || '')}</small></h3>
+    `<h3 class="pf-name">${p.classEmoji || '📇'} ${nickSpan(p.nick, p.nickColor)}</h3>
+     <div class="pf-sub">${titleTag(eq)}<small>${esc(p.className || '')}</small></div>
      ${p.class && p.grade ? `<div class="pf-weapon">${weaponArtHTML(p)}</div>` : ''}
      ${titlesSection(p, isMe, eq)}
      <div class="pf-line"><span>무기</span><b>${esc(p.weapon)}</b></div>
@@ -1129,7 +1154,7 @@ async function openProfile(nick) {
      <div class="pf-line"><span>파괴</span><b>${p.breaks}회</b></div>
      <div class="pf-line"><span>강화순위</span><b>${p.rank.rank ? p.rank.rank + '/' + p.rank.total + '위' : '-'}</b></div>` +
     (isMe ? `<div style="margin-top:12px;display:flex;gap:6px">
-       <input id="renameInput" maxlength="12" value="${esc(p.nick)}" style="flex:1;padding:9px;border-radius:10px;border:1px solid var(--line);background:#0f131c;color:var(--text)">
+       <input id="renameInput" maxlength="12" value="${esc(p.nick)}" style="flex:1;min-width:0;padding:9px;border-radius:10px;border:1px solid var(--line);background:#0f131c;color:var(--text)">
        <button id="renameBtn" class="btn primary sm">닉변경</button></div>` : '');
   el('modal').hidden = false;
   if (isMe) {

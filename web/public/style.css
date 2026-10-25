@@ -18,7 +18,10 @@
 [hidden]{display:none!important}
 html,body{margin:0;padding:0}
 /* 오버스크롤(위/아래 바운스) 시 배경 밖으로 밝은색이 비치지 않도록 html 도 어둡게 */
-html{background:var(--bg)}
+html{background:var(--bg);
+  /* 효과 캔버스(전류·별빛 테두리)는 패널 밖으로 번지게 그린다. 화면 가장자리에서 그 번짐이
+     페이지 폭을 늘려 가로 스크롤이 생기지 않도록 화면(뷰포트) 밖은 잘라낸다 */
+  overflow-x:hidden}
 body{
   /* 화면 아래쪽에 화로가 있는 것처럼 열기가 올라온다 */
   background:
@@ -27,10 +30,15 @@ body{
     var(--bg);
   color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
   min-height:100vh; -webkit-font-smoothing:antialiased;
+  /* 한글은 어절(띄어쓰기) 단위로 줄바꿈 — '누|적', '계|정'처럼 단어 한가운데서 끊기지 않게.
+     띄어쓰기 없는 아주 긴 문자열(영문 닉네임 등)만 넘칠 때 어쩔 수 없이 끊는다 */
+  word-break:keep-all; overflow-wrap:break-word;
   touch-action:manipulation;   /* 더블탭 확대 차단(일반 탭·클릭은 정상, 핀치는 JS로 별도 차단) */
 }
 :focus-visible{outline:2px solid var(--primary);outline-offset:2px}
 .screen{position:relative;z-index:1;max-width:520px;margin:0 auto;padding:16px}
+/* 휴대폰: 화면 가장자리 바로 옆 패널의 번짐 효과를 화면 폭에서 잘라낸다(html 의 overflow-x 를 무시하는 브라우저 대비) */
+@media (max-width:640px){ .screen{overflow-x:hidden;overflow-x:clip} }
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;
   box-shadow:inset 0 1px 0 rgba(255,240,220,.04),0 10px 30px rgba(0,0,0,.4)}
 b{font-weight:700}
@@ -122,13 +130,23 @@ body.loading-on #globalLoading{opacity:1}
 
 /* ---------- 상단바 ---------- */
 .topbar{display:flex;align-items:center;gap:8px;max-width:520px;margin:0 auto 12px;padding:4px}
-.me-nick{font-weight:800;font-size:16px;cursor:pointer;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.me-nick{flex:1 1 auto;font-weight:800;font-size:16px;cursor:pointer;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .me-nick:hover{text-decoration:underline}
 .me-nick .edit-hint{font-size:12px;opacity:.55;text-decoration:none;display:inline-block}
 .chips{margin-left:auto;display:flex;gap:6px;flex-shrink:0}
 .chip{display:inline-flex;align-items:center;gap:5px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:6px 11px;font-size:14px}
 .chip.gold{border-color:rgba(212,162,76,.45)}
 .chip.gold b{color:var(--gold);font-variant-numeric:tabular-nums}
+/* 좁은 휴대폰: 상단바는 닉네임·골드·방지권·메뉴만 — 칭호와 ✏️ 는 프로필에서 */
+@media (max-width:420px){
+  .topbar{gap:6px}
+  .me-nick{font-size:15px}
+  .me-nick .title-tag,.me-nick .edit-hint{display:none}
+  .chips{gap:4px}
+  .chip{gap:4px;padding:5px 9px;font-size:13px}
+  #menuBtn{padding:6px 9px}
+}
+@media (max-width:360px){ .me-cls{display:none} }   /* 아주 좁으면 직업 이모지보다 닉네임 글자를 한 자라도 더 */
 /* 상단바 메뉴(☰ 드롭다운) */
 .menu-wrap{position:relative}
 #menuBtn{font-size:17px;line-height:1;padding:6px 11px}
@@ -272,6 +290,8 @@ body.loading-on #globalLoading{opacity:1}
 .party-member{display:flex;align-items:center;gap:8px;padding:7px 4px;border-bottom:1px solid var(--line);font-size:14px}
 .party-member:last-child{border-bottom:0}
 .party-member .leader{color:var(--gold);font-size:11px}
+.party-member .pm-nick{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.party-member>small,.party-member>span,.party-member>button{flex-shrink:0;white-space:nowrap}
 .raid-result{border-radius:12px;padding:12px;margin-bottom:10px;border:1px solid var(--line)}
 .raid-result.win{background:rgba(95,211,154,.11);border-color:var(--success)}
 .raid-result.lose{background:rgba(239,79,69,.11);border-color:var(--danger)}
@@ -305,11 +325,11 @@ body.loading-on #globalLoading{opacity:1}
 @keyframes raidSpark{0%{opacity:0;transform:translate(-50%,-40%) scale(.6) rotate(-20deg)}30%{opacity:1;transform:translate(-50%,-60%) scale(1.1)}100%{opacity:0;transform:translate(-50%,-90%) scale(1) rotate(20deg)}}
 
 /* ---------- 스탯: 무쇠판 대신 이음매로 나뉜 한 줄 ---------- */
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:0;text-align:center;padding:12px 6px;background:rgba(34,27,22,.7)}
+.stats{display:grid;grid-template-columns:.9fr 1fr 1.45fr 1fr;gap:0;text-align:center;padding:12px 6px;background:rgba(34,27,22,.7)}
 .stats>div{display:flex;flex-direction:column;gap:4px;padding:0 4px}
 .stats>div+div{border-left:1px solid var(--line)}
 .stats span{color:var(--muted);font-size:11px}
-.stats b{font-family:var(--display);font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
+.stats b{font-family:var(--display);font-size:clamp(13px,4vw,16px);font-weight:800;font-variant-numeric:tabular-nums}
 
 /* ---------- 탭: 놋쇠 밑줄 ---------- */
 .tabs{display:flex;gap:2px;overflow-x:auto;padding-bottom:0;border-bottom:1px solid var(--line);scrollbar-width:none}
@@ -319,15 +339,27 @@ body.loading-on #globalLoading{opacity:1}
   box-shadow:inset 0 -2px 0 transparent;transition:color .12s,box-shadow .12s}
 .tab:hover{color:var(--text)}
 .tab.active{color:var(--text);box-shadow:inset 0 -2px 0 var(--primary);background:linear-gradient(180deg,transparent,rgba(212,162,76,.07))}
+.tab .ti{margin-right:5px}
+/* 휴대폰: 7개 탭이 옆으로 숨지 않게 한 줄에 모두 — 아이콘 위, 이름 아래 */
+@media (max-width:560px){
+  .tabs{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:0;overflow:visible}
+  .tab{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;padding:7px 0 7px;font-size:11.5px;letter-spacing:-.02em;border-radius:8px 8px 0 0}
+  .tab .ti{margin:0;font-size:17px;line-height:1.1}
+}
 .panel{min-height:120px}
 
 /* ---------- 리스트 ---------- */
 .row{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line)}
 .row:last-child{border-bottom:0}
 .row .rk{width:26px;text-align:center;font-family:var(--display);font-weight:800;color:var(--muted)}
-.row .nm{font-weight:700;flex:1;cursor:pointer;min-width:0}
-.row .nm:hover{text-decoration:underline}
-.row .val{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.row .nm,.fightrow .nm{font-weight:700;flex:1;cursor:pointer;min-width:0}
+.row .nm:hover .nm-nick,.fightrow .nm:hover .nm-nick{text-decoration:underline}
+.row .val{flex-shrink:0;white-space:nowrap;color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+/* 닉네임 줄: 닉네임은 길면 말줄임, 칭호는 자리가 모자라면 아랫줄로 */
+.nm-line{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:2px;row-gap:1px;min-width:0}
+.nm-nick{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nm-line .title-tag{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.nm-sub{margin-top:2px;color:var(--muted);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
 .row .val.gold{color:var(--gold)}
 .empty{color:var(--muted);text-align:center;padding:24px 0}
 .logline{padding:8px 4px;border-bottom:1px solid var(--line);font-size:13px;color:#d9cfc2}
@@ -336,7 +368,7 @@ body.loading-on #globalLoading{opacity:1}
 /* 싸움 목록 */
 .fightrow{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line)}
 .fightrow:last-child{border-bottom:0}
-.fightrow .nm{flex:1;font-weight:700}
+.fightrow .btn{flex-shrink:0}
 .fightrow .w{color:var(--muted);font-size:12px}
 
 /* ---------- 토스트 — 화면 하단 고정 오버레이(레이아웃을 밀지 않음) ---------- */
@@ -459,11 +491,16 @@ body.loading-on #globalLoading{opacity:1}
 .hunt-reward.crit{color:var(--molten-hi);text-shadow:0 0 12px #ffb300,0 2px 8px #000}
 
 /* ---------- 모달 ---------- */
-.modal{position:fixed;inset:0;background:rgba(10,7,5,.68);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50;
+.modal{position:fixed;inset:0;background:rgba(10,7,5,.68);display:flex;align-items:flex-start;justify-content:center;padding:20px;z-index:50;
+  overflow-y:auto;overscroll-behavior:contain;
   backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
-.modal-card{position:relative;max-width:360px;width:100%;border-color:var(--line2);
+.modal-card{position:relative;max-width:360px;width:100%;margin:auto 0;border-color:var(--line2);   /* margin:auto → 짧으면 가운데, 길면 위부터 */
   box-shadow:inset 0 2px 0 rgba(212,162,76,.35),0 20px 50px rgba(0,0,0,.6)}
 .modal .close{position:absolute;top:10px;right:10px}
+/* 오른쪽 위 ✕ 와 제목·수치가 겹치지 않게 자리를 비운다 */
+#modalBody h3,.mine-top{padding-right:36px}
+@media (max-width:360px){ .modal{padding:14px 12px} }
+.mission-card h3,.auth-card h3,.pass-head,.hunt-top{padding-left:36px;padding-right:36px}
 .modal h3{margin:.1em 0 .6em;font-family:var(--display);font-weight:900;font-size:20px}
 /* 칭호 */
 .titles-row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 12px}
@@ -484,12 +521,17 @@ body.loading-on #globalLoading{opacity:1}
 /* 닉네임 옆 장착 칭호 태그 */
 .title-tag{font-size:.78em;font-weight:800;text-shadow:0 0 6px currentColor;white-space:nowrap}
 
+/* 프로필 머리: 닉네임 한 줄(긴 닉네임은 글자를 줄여 한 줄에), 칭호·직업은 아랫줄 */
+#modalBody h3.pf-name{margin-bottom:.2em;font-size:clamp(17px,5.2vw,20px)}
+.pf-sub{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;margin:0 0 10px;font-size:16px}
+.pf-sub small{color:var(--muted)}
 .pf-line{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
 .pf-line:last-child{border-bottom:0}
 .pf-line span{color:var(--muted)}
 
 /* ---------- 이메일 계정 (로그인 화면 + Auth 모달) ---------- */
 .email-login{margin-top:14px}
+.email-login .btn{font-size:clamp(14px,4.4vw,17px)}
 .or-divider{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;margin:6px 0 10px}
 .or-divider::before,.or-divider::after{content:"";flex:1;height:1px;background:var(--line)}
 .auth-card{max-width:380px}
