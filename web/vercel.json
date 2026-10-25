@@ -5,6 +5,8 @@
     { "source": "/", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
     { "source": "/index.html", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
     { "source": "/app.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
+    { "source": "/fx.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
+    { "source": "/weapon-art.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
     { "source": "/style.css", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
   ]
 }

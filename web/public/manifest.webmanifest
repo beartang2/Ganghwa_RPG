@@ -1,0 +1,15 @@
+{
+  "name": "강화 RPG",
+  "short_name": "강화 RPG",
+  "description": "무기를 강화하고, 깨지면 처음부터 다시. 친구들과 함께하는 확률 강화 RPG 웹게임",
+  "lang": "ko",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0e1016",
+  "theme_color": "#0e1016",
+  "icons": [
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

@@ -33,6 +33,7 @@ const MIME = {
   '.js': 'application/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.png': 'image/png',
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
 function serveStatic(res, urlPath) {
   let rel = urlPath === '/' ? '/index.html' : urlPath;

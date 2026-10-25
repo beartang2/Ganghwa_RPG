@@ -4,15 +4,47 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>⚔️ 강화 RPG</title>
-<link rel="stylesheet" href="/style.css?v=34">
+<meta name="description" content="무기를 강화하고, 깨지면 처음부터 다시. 친구들과 함께하는 확률 강화 RPG 웹게임 — 사냥·채굴·싸움·파티 레이드까지.">
+<link rel="canonical" href="https://ganghwa.beartanh.dev/">
+<meta name="theme-color" content="#0e1016">
+
+<!-- 링크 공유 미리보기 (카카오톡·디스코드·슬랙 등). og:image 는 절대 URL 이어야 스크래퍼가 읽는다 -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="강화 RPG">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:url" content="https://ganghwa.beartanh.dev/">
+<meta property="og:title" content="⚔️ 강화 RPG">
+<meta property="og:description" content="무기를 강화하고, 깨지면 처음부터 다시. 친구들과 함께하는 확률 강화 RPG 웹게임">
+<meta property="og:image" content="https://ganghwa.beartanh.dev/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="강화 RPG — 희귀 +16부터 초월 +70까지 강화되는 검">
+<meta name="twitter:card" content="summary_large_image">
+
+<!-- 아이콘 -->
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+
+<!-- 표제용 서체: Hahmlet(한글 세리프, OFL) — 무기 이름·강화 버튼·타이틀에만 쓴다 -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@600;800;900&display=swap">
+<link rel="stylesheet" href="/style.css?v=38">
 </head>
 <body>
+<!-- 화로 불씨 배경 (fx.js / React Bits Particles 이식) -->
+<div id="embers" aria-hidden="true"></div>
 
 <!-- 로그인 -->
 <div id="login" class="screen">
   <div class="card login-card">
-    <h1>⚔️ 강화 RPG</h1>
+    <img class="login-emblem" src="/icon-512.png" alt="" width="76" height="76">
+    <h1><span id="loginTitle">강화 RPG</span></h1>
     <p class="sub">닉네임과 PIN으로 시작하세요</p>
+    <!-- 도메인 이사 안내(2026-10). localStorage 는 도메인별이라 새 주소에선 한 번 다시 로그인해야 한다.
+         이사가 충분히 지나면 이 줄은 지워도 된다. -->
+    <p class="move-notice">🌐 새 주소로 이사했어요! 기존 <b>닉네임 + PIN</b> 그대로 로그인하면 캐릭터가 이어져요.</p>
     <input id="nick" placeholder="닉네임 (1~12자)" maxlength="12" autocomplete="off">
     <input id="pin" type="password" placeholder="PIN 숫자 8자리" maxlength="8" inputmode="numeric" autocomplete="off">
     <button id="loginBtn" class="btn primary big">게스트로 시작</button>
@@ -29,7 +61,7 @@
 <!-- 직업 선택 -->
 <div id="classSelect" class="screen" hidden>
   <div class="card">
-    <h2 style="text-align:center;margin:.2em 0 .1em">직업 선택</h2>
+    <h2 class="class-select-title">직업 선택</h2>
     <p class="sub" style="text-align:center;color:var(--muted);margin:.2em 0 1em">역할에 따라 시작 무기와 레이드 능력이 달라져요 (변경 불가)</p>
     <div id="classGrid" class="class-grid"></div>
   </div>
@@ -58,7 +90,7 @@
   <main class="wrap">
     <div class="col-left">
       <section class="card weapon-panel">
-        <div id="weaponArt" class="weapon-art"></div>
+        <div class="hearth"><div id="weaponArt" class="weapon-art"></div></div>
         <div class="weapon-info">
           <div id="weaponName" class="weapon-name">+0 ⚪ 일반</div>
           <div id="weaponElem" class="weapon-elem"></div>
@@ -72,7 +104,7 @@
           <div class="pity-label">🔨 장인의 기운 <span id="pityPct">0%</span></div>
           <div class="pity-track"><div id="pityBar" class="pity-fill"></div></div>
         </div>
-        <button id="enhanceBtn" class="btn primary big enhance">⚒️ 강화</button>
+        <button id="enhanceBtn" class="btn primary big enhance"><span id="enhLabel" class="enh-label">⚒️ 강화</span><span id="enhCost" class="enh-cost"></span></button>
       </section>
 
       <section class="actions">
@@ -212,6 +244,8 @@
 
 <!-- Supabase Realtime (선택) — 로드 실패해도 게임은 폴링으로 동작 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/app.js?v=34"></script>
+<script src="/fx.js?v=38"></script>
+<script src="/weapon-art.js?v=38"></script>
+<script src="/app.js?v=38"></script>
 </body>
 </html>
