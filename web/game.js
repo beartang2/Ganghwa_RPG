@@ -74,12 +74,12 @@ const CONFIG = {
   huntShardChance: 0.35,     // 일일 사냥에서 파편이 드랍될 확률(희귀도가 높을수록 개수↑)
   raidEssence: 1,            // 레이드 성공 시 참가자 1인당 확정 정수 개수
   // 인벤토리 — 슬롯 = '아이템 종류' 단위(같은 종류는 한 칸에 무제한 스택)
-  /* 인벤 칸: 기본 8 → 상점 1회 한정 패키지 +4 → 배틀패스 프리미엄 중간 보상 +4 = 상한 16.
+  /* 인벤 칸: 기본 10 → 상점 1회 한정 패키지 +4 → 배틀패스 프리미엄 중간 보상 +4 = 상한 18.
    * 스택이 커서 재료는 1~2칸만 먹는다 — 칸이 모자라지는 건 아이템 '종류' 가 늘 때다.
-   * 지금은 6종이라 기본 8칸에 여유 2칸. 컨텐츠로 종류가 늘면 그때 확장이 필요해진다.
+   * 상시 보유 종류는 8종(방지권·부스트·염색약·파편·정수·열쇠·마석 + 사용형 1)이라 기본 10칸에 여유 2칸.
    * invSlots 는 '바닥값' 이라 나중에 올리면 기존 유저도 자동으로 그만큼 받는다
    * (추가분은 p.inv.bought 에 따로 쌓여서 사라지지 않는다). */
-  invSlots: 8, invSlotsMax: 16,
+  invSlots: 10, invSlotsMax: 18,   // 8→10: 아이템 종류가 8종(🗝️열쇠·🔮마석 추가)이 되어 '여유 2칸' 원칙을 유지
   invPackSlots: 4,           // 상점 '가방 확장 패키지' 1회 구매로 열리는 칸수
   invPackPrice: 500000,      // 그 가격 — 계정당 딱 한 번
   invBpSlots: 4,             // 배틀패스 프리미엄 중간 보상으로 주는 칸수
@@ -88,6 +88,20 @@ const CONFIG = {
    * 크게 잡는 이유: 칸 압박은 '아이템 종류 수' 에서 와야 한다. 스택이 작으면
    * 초월 재료 누적만으로 칸이 다 차서, 나중에 아이템 종류가 늘 때 넣을 자리가 없어진다. */
   invStackMax: 999,
+
+  /* 장비 칸(무기 여러 자루) — 한 직업으로 만렙을 찍은 뒤 다른 직업 무기를 따로 키울 수 있다.
+   * 무기마다 강화 수치·★·속성·장인의 기운이 따로이고, 장착한 무기가 직업을 정한다.
+   * 직업당 한 자루라 최대 4칸. 칸은 💎 프리즘 상점에서 연다(직업 변경권은 판매 종료). */
+  weaponSlotsBase: 1, weaponSlotsMax: 4,
+  weaponSlotPrices: [100, 150, 200],   // 2·3·4번째 칸 가격(💎) — 갈수록 비싸진다
+
+  /* 💎 프리즘 — 골드와 별개인 두 번째 재화. 확률 시스템(상자·연금술·캡슐)에서만 나오고
+   * 프리즘 상점에서 장비 칸·특별 아이템으로 바꾼다. 확률표는 화면에 그대로 공개한다. */
+  // 사냥 드랍: 🗝️ 상자 열쇠 · 🔮 마석(연금 재료). 무한 사냥에서도 나오지만 확률이 낮다.
+  keyChance: 0.06, keyChanceOvertime: 0.015,          // 희귀도 tier 당 ×(1+0.2·tier)
+  stoneChance: 0.45, stoneChanceOvertime: 0.12,       // 개수: 일일 1+⌊tier/2⌋, 무한 1
+  capsulePrice: 30000,                                 // 🧸 캡슐 1회 가격(골드만 있으면 무제한)
+  capsuleBatchMax: 10,
 };
 
 /* ---------- 유틸 ---------- */
@@ -244,10 +258,10 @@ const ACHIEVEMENTS = [
   // 레이드 피해
   { id: 'threatdmg', title: '위협적인 피해량', grade: 'epic',  desc: '단일 레이드 3만 피해',    check: p => (p.raidDmg || 0) >= 30000 },
   // 초월(환생) — ★은 단조 증가라 한 번 얻으면 사라지지 않는다
-  { id: 'asc1',  title: '초월의 시작',  grade: 'legend',    desc: '초월 ★1 달성',  check: p => (p.ascend || 0) >= 1 },
-  { id: 'asc3',  title: '윤회자',       grade: 'legend',    desc: '초월 ★3 달성',  check: p => (p.ascend || 0) >= 3 },
-  { id: 'asc5',  title: '초월의 화신',  grade: 'transcend', desc: '초월 ★5 달성',  check: p => (p.ascend || 0) >= 5 },
-  { id: 'asc10', title: '무의 경지',    grade: 'transcend', desc: '초월 ★10 달성', check: p => (p.ascend || 0) >= 10 },
+  { id: 'asc1',  title: '초월의 시작',  grade: 'legend',    desc: '초월 ★1 달성',  check: p => ascendMax(p) >= 1 },
+  { id: 'asc3',  title: '윤회자',       grade: 'legend',    desc: '초월 ★3 달성',  check: p => ascendMax(p) >= 3 },
+  { id: 'asc5',  title: '초월의 화신',  grade: 'transcend', desc: '초월 ★5 달성',  check: p => ascendMax(p) >= 5 },
+  { id: 'asc10', title: '무의 경지',    grade: 'transcend', desc: '초월 ★10 달성', check: p => ascendMax(p) >= 10 },
   // 염색
   { id: 'colormage', title: '색채 마술사',  grade: 'epic',     desc: '염색약 40회 사용',       check: p => (p.dyeCount || 0) >= 40 },
   { id: 'fashion',  title: '패션의 완성',   grade: 'transcend', desc: '염색에서 무지개 획득',   check: p => !!p.gotRainbow },
@@ -307,7 +321,6 @@ function shopItems() {
     { id: 'protect', emoji: ITEMS.protect.emoji, name: ITEMS.protect.name, price: CONFIG.protectPrice, qty: 1, desc: ITEMS.protect.desc },
     { id: 'boost', emoji: ITEMS.boost.emoji, name: ITEMS.boost.name, price: CONFIG.boostPrice, qty: CONFIG.boostCount, desc: '강화 성공률 ' + CONFIG.boostMult + '배 · ' + CONFIG.boostCount + '개 묶음' },
     { id: 'dye', emoji: ITEMS.dye.emoji, name: ITEMS.dye.name, price: CONFIG.dyePrice, qty: 1, desc: ITEMS.dye.desc + ' (레어일수록 희귀)' },
-    { id: 'classchange', emoji: ITEMS.classtkt.emoji, name: ITEMS.classtkt.name, price: CONFIG.classChangePrice, qty: 1, desc: ITEMS.classtkt.desc },
     { id: 'invpack', emoji: '🎒', name: '가방 확장 패키지', price: CONFIG.invPackPrice, qty: CONFIG.invPackSlots, once: true,
       desc: '가방 칸 +' + CONFIG.invPackSlots + ' (계정당 1회) · 나머지 ' + CONFIG.invBpSlots + '칸은 배틀패스 프리미엄 Lv.' + CONFIG.invBpLevel + ' 보상' },
   ];
@@ -387,6 +400,12 @@ function ascendProgress(p) {
   };
 }
 function ascendReady(p) { return ascendProgress(p).ready; }
+// 지금까지 얻은 최고 ★ — 무기를 바꿔 들어도 줄지 않는다(칭호 기준)
+function ascendMax(p) {
+  let m = Math.max(p.ascendMax || 0, p.ascend || 0);
+  if (Array.isArray(p.armory)) for (const w of p.armory) m = Math.max(m, w.asc || 0);
+  return m;
+}
 function ascendReq(to) {
   return {
     shard: CONFIG.ascendShardBase + CONFIG.ascendShardStep * (to - 1),
@@ -422,6 +441,10 @@ const ITEMS = {
   classtkt: { id: 'classtkt', emoji: '🔄', name: '직업 변경권',   kind: 'use',     desc: '사용하면 직업을 다시 선택합니다 (레벨·골드 유지)' },
   shard:    { id: 'shard',    emoji: '💠', name: '초월의 파편',   kind: 'mat',     desc: '몬스터 사냥 드랍 · 초월 승급 재료' },
   essence:  { id: 'essence',  emoji: '🌟', name: '초월의 정수',   kind: 'mat',     desc: '보스 레이드 확정 드랍 · 초월 승급 재료' },
+  boxkey:   { id: 'boxkey',   emoji: '🗝️', name: '상자 열쇠',     kind: 'key',     desc: '몬스터 사냥 드랍 · 💎 프리즘 탭에서 상자 3개 중 하나를 골라 열어요' },
+  stone:    { id: 'stone',    emoji: '🔮', name: '마석',          kind: 'mat',     desc: '몬스터 사냥 드랍 · ⚗️ 연금술 재료(골드와 함께 넣어요)' },
+  hammer:   { id: 'hammer',   emoji: '🔨', name: '장인의 망치',   kind: 'use',     desc: '사용하면 장착한 무기의 장인의 기운 +50% (최대 100%)' },
+  rainbow:  { id: 'rainbow',  emoji: '🌈', name: '무지개 염색약', kind: 'use',     desc: '사용하면 닉네임이 무지개색으로 확정!' },
 };
 /* 칸수는 절대값이 아니라 '구매한 확장 횟수(bought)' 로 저장한다.
  * 이렇게 해야 CONFIG.invSlots 를 올렸을 때 기존 유저도 자동으로 늘어나고,
@@ -535,6 +558,19 @@ function useItem(db, id, itemId) {
     addLog(db, '🎨 ' + p.nick + ' 염색: ' + dye.name + (dye.rarity !== '기본' ? ' [' + dye.rarity + ']' : ''));
     return { ok: true, used: 'dye', dye, msg: '🎨 염색 결과: ' + dye.name + ' [' + dye.rarity + ']' };
   }
+  if (itemId === 'hammer') {
+    if (p.level >= CONFIG.maxLevel) return { ok: false, error: '만렙 무기에는 쓸 필요가 없어요. 🌈 초월하세요!' };
+    if ((p.pity || 0) >= 1) return { ok: false, error: '장인의 기운이 이미 100%예요.' };
+    takeItem(p, 'hammer', 1);
+    p.pity = Math.min(1, (p.pity || 0) + 0.5);
+    return { ok: true, used: 'hammer', msg: '🔨 쾅! 장인의 기운 ' + Math.round(p.pity * 100) + '%' };
+  }
+  if (itemId === 'rainbow') {
+    takeItem(p, 'rainbow', 1);
+    p.nickColor = { kind: 'rainbow', name: '무지개', rarity: '무지개' };   // 칭호 '패션의 완성' 은 염색 뽑기에서만(구매로는 X)
+    addLog(db, '🌈 ' + p.nick + ' 무지개 닉네임!');
+    return { ok: true, used: 'rainbow', msg: '🌈 닉네임이 무지개색이 됐어요!' };
+  }
   if (itemId === 'classtkt') {
     takeItem(p, 'classtkt', 1);
     p.class = null;                                  // 재선택 필요
@@ -542,6 +578,216 @@ function useItem(db, id, itemId) {
     return { ok: true, used: 'classtkt', needReselect: true, msg: '직업을 다시 선택하세요.' };
   }
   return { ok: false, error: '아직 쓸 수 없는 아이템이에요.' };
+}
+
+/* ---------- 장비 칸 (무기 여러 자루) ----------
+ * 손에 든 무기는 예전 그대로 p.class · p.level · p.element · p.pity · p.ascend 에 둔다.
+ * 강화·초월·레이드·싸움·사냥 코드가 전부 '지금 든 무기' 를 보므로 손댈 필요가 없고,
+ * 바꿔 들 때만 p.armory(보관 무기)와 맞바꾼다. 무기마다 강화·★·속성·장인의 기운이 따로다.
+ * ⚠️ 보관 무기의 키는 lv/cls/el/asc 로 쓴다 — 저장 계층이 'level'·'gold'·'nick' 키를
+ *    JSON 어디에 있든 빼 버리므로(컬럼 소유 필드), 같은 이름이면 보관 무기의 레벨이 저장 때 사라진다. */
+function ensureArmory(p) { if (!Array.isArray(p.armory)) p.armory = []; return p.armory; }
+function weaponSlots(p) { return Math.min(CONFIG.weaponSlotsMax, CONFIG.weaponSlotsBase + (p.weaponSlotBought || 0)); }
+function activeWeapon(p) { return { cls: p.class, lv: p.level || 0, el: p.element, pity: p.pity || 0, asc: p.ascend || 0 }; }
+function loadWeapon(p, w) { p.class = w.cls; p.level = w.lv || 0; p.element = w.el || randomElementKey(); p.pity = w.pity || 0; p.ascend = w.asc || 0; }
+function allWeapons(p) {
+  const list = p.class ? [Object.assign(activeWeapon(p), { equipped: true })] : [];
+  for (const w of ensureArmory(p)) list.push(Object.assign({}, w, { equipped: false }));
+  return list;
+}
+function ownedClasses(p) { return allWeapons(p).map(w => w.cls); }
+// 랭킹 기준 무기 = ★ 이 가장 높은 것, 같으면 강화가 높은 것(새 무기를 들어도 순위가 안 떨어진다)
+function bestWeapon(p) {
+  let b = null;
+  for (const w of allWeapons(p)) if (!b || w.asc > b.asc || (w.asc === b.asc && w.lv > b.lv)) b = w;
+  return b || { cls: p.class, lv: p.level || 0, asc: p.ascend || 0, el: p.element };
+}
+function rankCmp(a, b) {
+  const x = bestWeapon(a), y = bestWeapon(b);
+  return (y.asc - x.asc) || (y.lv - x.lv) || ((b.best || 0) - (a.best || 0));
+}
+function weaponCard(w) {
+  const c = CLASSES[w.cls] || CLASSES.warrior, g = grade(w.lv), em = elementOf(w.el);
+  return { cls: w.cls, classEmoji: c.emoji, className: c.name, base: c.weapon, level: w.lv, ascend: w.asc || 0,
+    name: weaponName(w.lv, w.cls, w.asc), grade: { key: g.key, emoji: g.emoji, name: g.name, color: g.color },
+    element: w.el, elementEmoji: em.emoji, elementName: em.name, pity: w.pity || 0, equipped: !!w.equipped };
+}
+function weaponsView(p) {
+  const list = allWeapons(p);
+  const bought = p.weaponSlotBought || 0;
+  return {
+    slots: weaponSlots(p), max: CONFIG.weaponSlotsMax, list: list.map(weaponCard),
+    canNew: !!p.class && list.length < weaponSlots(p),
+    missing: Object.keys(CLASSES).filter(k => !list.some(w => w.cls === k)),
+    nextSlotPrice: bought < CONFIG.weaponSlotPrices.length ? CONFIG.weaponSlotPrices[bought] : null,
+  };
+}
+function inActiveRaid(db, id) {
+  const p = db.players[id], pt = p && p.party && db.parties[p.party];
+  return !!(pt && pt.raid && pt.raid.status === 'active' && pt.raid.participants.some(m => m.id === id));
+}
+// 빈 장비 칸에 새 직업 무기를 만든다 — +0·★0·새 속성. 지금 든 무기는 보관함으로, 새 무기를 바로 든다.
+function newWeapon(db, id, cls) {
+  const p = norm(db.players[id]);
+  if (!p.class) return { ok: false, error: '먼저 직업을 고르세요.' };
+  if (!CLASSES[cls]) return { ok: false, error: '올바른 직업을 고르세요.' };
+  if (ownedClasses(p).includes(cls)) return { ok: false, error: '이미 ' + CLASSES[cls].weapon + '을(를) 갖고 있어요. 장비 칸에서 바꿔 들 수 있어요.' };
+  if (allWeapons(p).length >= weaponSlots(p)) return { ok: false, error: '장비 칸이 꽉 찼어요. 💎 프리즘 상점에서 칸을 늘리세요.' };
+  if (inActiveRaid(db, id)) return { ok: false, error: '레이드 중에는 무기를 바꿀 수 없어요.' };
+  ensureArmory(p).push(activeWeapon(p));
+  loadWeapon(p, { cls, lv: 0, el: randomElementKey(), pity: 0, asc: 0 });
+  bumpRank(db);
+  const c = CLASSES[cls], em = elementOf(p.element);
+  addLog(db, c.emoji + ' ' + p.nick + ' 님이 새 ' + c.weapon + '(' + em.name + '속성)을 만들었어요 — 이제 ' + c.name + '!');
+  return { ok: true, msg: c.emoji + ' 새 ' + c.weapon + ' 제작! (' + em.emoji + ' ' + em.name + '속성) 이제 ' + c.name + '예요.' };
+}
+// 보관 중인 무기로 바꿔 든다(직업도 그 무기를 따라 바뀐다).
+function equipWeapon(db, id, cls) {
+  const p = norm(db.players[id]);
+  if (p.class === cls) return { ok: false, error: '이미 들고 있는 무기예요.' };
+  const arm = ensureArmory(p), i = arm.findIndex(w => w.cls === cls);
+  if (i < 0) return { ok: false, error: '그 무기가 장비 칸에 없어요.' };
+  if (inActiveRaid(db, id)) return { ok: false, error: '레이드 중에는 무기를 바꿀 수 없어요.' };
+  const cur = activeWeapon(p);
+  loadWeapon(p, arm[i]);
+  arm[i] = cur;
+  bumpRank(db);
+  const c = CLASSES[p.class];
+  return { ok: true, msg: c.emoji + ' ' + weaponName(p.level, p.class, p.ascend) + ' 장착 — 이제 ' + c.name + '예요.' };
+}
+
+/* ---------- 💎 프리즘 (상자 · 연금술 · 캡슐 → 프리즘 상점) ----------
+ * 확률표는 서버가 이 표 그대로 굴리고, 화면도 이 표를 그대로 보여준다(확률 공개).
+ * 기대값(프리즘): 상자 열쇠 1개 ≈ 1.15 · 연금 약불 ≈ 1.05 / 중불 ≈ 4.05 / 강불 ≈ 12.55 · 캡슐 1회 ≈ 0.74
+ * 골드 환산: 캡슐 ≈ 3.3만G/💎(환급 포함), 연금은 불이 셀수록 마석 효율↑·골드 효율↓ */
+const BOX_TABLE = [
+  { p: 0.34, kind: 'prism', n: 1 }, { p: 0.18, kind: 'prism', n: 2 }, { p: 0.06, kind: 'prism', n: 5 }, { p: 0.01, kind: 'prism', n: 15 },
+  { p: 0.23, kind: 'gold', n: 8000 }, { p: 0.10, kind: 'item', item: 'stone', n: 3 },
+  { p: 0.05, kind: 'item', item: 'boost', n: 2 }, { p: 0.03, kind: 'item', item: 'protect', n: 1 },
+];
+const ALCHEMY = [
+  { id: 'low',  name: '약불', emoji: '🔥',       stone: 5,  gold: 20000,  table: [{ p: 0.40, n: 0 }, { p: 0.35, n: 1 }, { p: 0.18, n: 2 },  { p: 0.06, n: 4 },  { p: 0.01, n: 10 }] },
+  { id: 'mid',  name: '중불', emoji: '🔥🔥',     stone: 15, gold: 100000, table: [{ p: 0.30, n: 0 }, { p: 0.35, n: 3 }, { p: 0.22, n: 5 },  { p: 0.10, n: 10 }, { p: 0.03, n: 30 }] },
+  { id: 'high', name: '강불', emoji: '🔥🔥🔥',   stone: 40, gold: 400000, table: [{ p: 0.25, n: 0 }, { p: 0.35, n: 8 }, { p: 0.25, n: 15 }, { p: 0.12, n: 30 }, { p: 0.03, n: 80 }] },
+];
+const CAPSULE_TABLE = [
+  { p: 0.300, kind: 'prism', n: 1 }, { p: 0.080, kind: 'prism', n: 3 }, { p: 0.015, kind: 'prism', n: 10 }, { p: 0.001, kind: 'prism', n: 50 },
+  { p: 0.350, kind: 'gold', n: 10000 }, { p: 0.040, kind: 'gold', n: 50000 },
+  { p: 0.150, kind: 'item', item: 'stone', n: 2 }, { p: 0.064, kind: 'none' },
+];
+function rollTable(t) {
+  let r = Math.random();
+  for (const e of t) { r -= e.p; if (r < 0) return e; }
+  return t[t.length - 1];
+}
+function gainPrism(p, n) { n = Math.max(0, n | 0); p.prism = (p.prism || 0) + n; p.prismEarned = (p.prismEarned || 0) + n; return n; }
+function rewardText(e) {
+  if (e.kind === 'prism') return '💎 프리즘 ' + e.n;
+  if (e.kind === 'gold') return '💰 ' + e.n.toLocaleString() + 'G';
+  if (e.kind === 'item') return ITEMS[e.item].emoji + ' ' + ITEMS[e.item].name + ' ×' + e.n;
+  return '빈 캡슐';
+}
+// 표에서 뽑힌 보상을 실제로 지급하고 '받은 것' 을 돌려준다(가방이 꽉 차면 아이템은 놓친다).
+function grantRoll(p, e) {
+  if (e.kind === 'prism') return { kind: 'prism', n: gainPrism(p, e.n), text: rewardText(e) };
+  if (e.kind === 'gold') return { kind: 'gold', n: gainGold(p, e.n, true), text: rewardText(e) };
+  if (e.kind === 'item') {
+    const got = addItem(p, e.item, e.n);
+    return { kind: 'item', item: e.item, n: got, text: rewardText(e) + (got < e.n ? ' (가방이 꽉 차 ' + (e.n - got) + '개 놓침)' : '') };
+  }
+  return { kind: 'none', n: 0, text: rewardText(e) };
+}
+const tableView = t => t.map(e => ({ p: e.p, text: e.kind ? rewardText(e) : (e.n ? '💎 프리즘 ' + e.n : '💨 잿더미(꽝)') }));
+function prismInfo() {
+  return {
+    box: { table: tableView(BOX_TABLE) },
+    alchemy: ALCHEMY.map(a => ({ id: a.id, name: a.name, emoji: a.emoji, stone: a.stone, gold: a.gold, table: tableView(a.table) })),
+    capsule: { price: CONFIG.capsulePrice, batchMax: CONFIG.capsuleBatchMax, table: tableView(CAPSULE_TABLE) },
+  };
+}
+// 📦 상자 — 열쇠 1개로 상자 3개 중 하나를 고른다. 세 상자의 내용물을 그 순간 굴려서
+// 고른 것만 주고, 나머지 둘은 '이게 들어 있었어요' 로 보여준다(고른 뒤에 굴리므로 미리 알 방법이 없다).
+function openBox(db, id, pick) {
+  const p = norm(db.players[id]);
+  pick = parseInt(pick, 10);
+  if (!(pick >= 0 && pick <= 2)) return { ok: false, error: '상자를 하나 고르세요.' };
+  if (!takeItem(p, 'boxkey', 1)) return { ok: false, error: '🗝️ 상자 열쇠가 없어요. 몬스터를 사냥하면 가끔 나와요.' };
+  const rolls = [rollTable(BOX_TABLE), rollTable(BOX_TABLE), rollTable(BOX_TABLE)];
+  const got = grantRoll(p, rolls[pick]);
+  if (got.kind === 'prism' && got.n >= 5) addLog(db, '📦 ' + p.nick + ' 상자에서 💎 프리즘 ' + got.n + '개!');
+  return { ok: true, pick, boxes: rolls.map(rewardText), got, keysLeft: itemCount(p, 'boxkey'), msg: '📦 ' + got.text + ' 획득!' };
+}
+// ⚗️ 연금술 — 마석 + 골드를 함께 넣고 돌린다. 불이 셀수록 마석당 기대값↑, 골드당 기대값↓.
+function alchemy(db, id, tierId) {
+  const p = norm(db.players[id]);
+  const a = ALCHEMY.find(x => x.id === tierId);
+  if (!a) return { ok: false, error: '불 세기를 고르세요.' };
+  if (itemCount(p, 'stone') < a.stone) return { ok: false, error: '🔮 마석이 부족해요 (' + itemCount(p, 'stone') + '/' + a.stone + ') — 몬스터 사냥에서 나와요.' };
+  if (p.gold < a.gold) return { ok: false, error: '골드 부족! (필요 ' + a.gold.toLocaleString() + 'G / 보유 ' + p.gold.toLocaleString() + 'G)' };
+  takeItem(p, 'stone', a.stone);
+  p.gold -= a.gold; p.goldSpent = (p.goldSpent || 0) + a.gold;
+  const e = rollTable(a.table);
+  const n = gainPrism(p, e.n);
+  if (n >= 30) addLog(db, '⚗️ ' + p.nick + ' 연금술 대성공! 💎 프리즘 ' + n + '개');
+  return { ok: true, tier: a.id, prism: n, msg: n > 0 ? '⚗️ ' + a.name + ' 연금 성공! 💎 프리즘 +' + n : '💨 잿더미만 남았어요… (' + a.name + ')' };
+}
+// 🧸 캡슐 — 골드만 있으면 몇 번이든. 한 번에 최대 10번까지 묶어서 돌릴 수 있다.
+function capsule(db, id, times) {
+  const p = norm(db.players[id]);
+  times = Math.max(1, Math.min(CONFIG.capsuleBatchMax, parseInt(times, 10) || 1));
+  const price = CONFIG.capsulePrice;
+  if (p.gold < price) return { ok: false, error: '골드 부족! (캡슐 1회 ' + price.toLocaleString() + 'G)' };
+  const results = [];
+  let prism = 0, gold = 0;
+  for (let i = 0; i < times && p.gold >= price; i++) {
+    p.gold -= price; p.goldSpent = (p.goldSpent || 0) + price;
+    const g = grantRoll(p, rollTable(CAPSULE_TABLE));
+    results.push(g);
+    if (g.kind === 'prism') prism += g.n;
+    if (g.kind === 'gold') gold += g.n;
+  }
+  const big = results.find(r => r.kind === 'prism' && r.n >= 10);
+  if (big) addLog(db, '🧸 ' + p.nick + ' 캡슐에서 💎 프리즘 ' + big.n + '개!');
+  return { ok: true, silent: true, results, prism, gold, spent: results.length * price,
+    msg: '🧸 캡슐 ' + results.length + '회 — 💎 +' + prism + (gold ? ' · 💰 +' + gold.toLocaleString() + 'G' : '') };
+}
+// 💎 프리즘 상점
+function prismShopItems(p) {
+  const bought = (p && p.weaponSlotBought) || 0;
+  const slotMax = CONFIG.weaponSlotsBase + bought >= CONFIG.weaponSlotsMax;
+  return [
+    { id: 'slot', emoji: '🗡️', name: '장비 칸 +1', price: slotMax ? null : CONFIG.weaponSlotPrices[bought], soldOut: slotMax,
+      desc: '다른 직업 무기를 하나 더 가질 수 있어요(영구). 새 무기는 +0·★0부터 따로 키워요 · 최대 ' + CONFIG.weaponSlotsMax + '칸' },
+    { id: 'rainbow', emoji: ITEMS.rainbow.emoji, name: ITEMS.rainbow.name, price: 60, desc: ITEMS.rainbow.desc },
+    { id: 'hammer', emoji: ITEMS.hammer.emoji, name: ITEMS.hammer.name, price: 8, desc: ITEMS.hammer.desc },
+    { id: 'ascpack', emoji: '🎁', name: '초월 꾸러미', price: 25, desc: ITEMS.shard.emoji + ' 초월의 파편 30 + ' + ITEMS.essence.emoji + ' 초월의 정수 3' },
+  ];
+}
+// 💎 프리즘 탭 — 확률표·상점 목록·재료 보유량(본인 기준 가격 포함)
+function prismView(db, id) {
+  const p = norm(db.players[id]);
+  return { ok: true, prism: p.prism || 0, keys: itemCount(p, 'boxkey'), stones: itemCount(p, 'stone'), gold: p.gold,
+    info: prismInfo(), shop: prismShopItems(p) };
+}
+function buyPrism(db, id, itemId) {
+  const p = norm(db.players[id]);
+  const it = prismShopItems(p).find(x => x.id === itemId);
+  if (!it) return { ok: false, error: '없는 상품이에요.' };
+  if (it.soldOut) return { ok: false, error: '장비 칸이 이미 최대(' + CONFIG.weaponSlotsMax + '칸)예요.' };
+  if ((p.prism || 0) < it.price) return { ok: false, error: '💎 프리즘 부족! (필요 ' + it.price + ' / 보유 ' + (p.prism || 0) + ')' };
+  if (itemId === 'rainbow' || itemId === 'hammer') {
+    if (!canHold(p, itemId)) return { ok: false, error: '🎒 가방이 꽉 찼어요.' };
+    p.prism -= it.price; addItem(p, itemId, 1);
+  } else if (itemId === 'ascpack') {
+    if (freeSpace(p, 'shard') < 30 || freeSpace(p, 'essence') < 3) return { ok: false, error: '🎒 가방이 꽉 찼어요.' };
+    p.prism -= it.price; addItem(p, 'shard', 30); addItem(p, 'essence', 3);
+  } else if (itemId === 'slot') {
+    p.prism -= it.price;
+    p.weaponSlotBought = (p.weaponSlotBought || 0) + 1;
+    addLog(db, '🗡️ ' + p.nick + ' 장비 칸 확장! (' + weaponSlots(p) + '칸)');
+    return { ok: true, msg: '🗡️ 장비 칸이 ' + weaponSlots(p) + '칸이 됐어요! 무기 칸의 ➕ 를 눌러 새 직업 무기를 만들어 보세요.' };
+  }
+  return { ok: true, msg: it.emoji + ' ' + it.name + ' 구매! (💎 -' + it.price + ')' };
 }
 
 /* ---------- 몬스터 (사냥) ----------
@@ -649,6 +895,8 @@ function norm(p) {
   if (p.gotRainbow == null) p.gotRainbow = false;
   if (!Array.isArray(p.masteredClasses)) p.masteredClasses = []; // +99 달성한 직업들
   if (p.equippedTitle === undefined) p.equippedTitle = null;     // 장착 칭호 id
+  ensureArmory(p);                                               // 보관 무기(장비 칸)
+  if (p.prism == null) p.prism = 0;                              // 💎 프리즘
   return p;
 }
 
@@ -772,6 +1020,9 @@ function publicView(db, id) {
     invites: myInvites(db, id),
     rank: enhanceRank(db, id),
     missionAlert: missionAlert(p),   // 미션·패스에서 받을 수 있는 보상 개수(빨간점)
+    prism: p.prism || 0,             // 💎 프리즘
+    weapons: weaponsView(p),         // 장비 칸(무기 여러 자루)
+    ascendMax: ascendMax(p),
   };
 }
 
@@ -790,7 +1041,7 @@ function enhanceRank(db, id) {
   let c = db._rank;
   if (!c || Date.now() - c.t > RANK_TTL) {
     const ks = Object.keys(db.players);
-    ks.sort((a, b) => starsOf(db.players[b]) - starsOf(db.players[a]) || db.players[b].level - db.players[a].level || db.players[b].best - db.players[a].best);
+    ks.sort((a, b) => rankCmp(db.players[a], db.players[b]));
     c = db._rank = { t: Date.now(), map: new Map(ks.map((k, i) => [k, i + 1])) };
   }
   return { rank: c.map.get(id) || null, total: c.map.size };
@@ -834,6 +1085,7 @@ function setClass(db, id, cls) {
   const p = norm(db.players[id]);
   if (p.class) return { ok: false, error: '이미 직업을 선택했어요.' };
   if (!CLASSES[cls]) return { ok: false, error: '올바른 직업을 선택하세요.' };
+  if (ensureArmory(p).some(w => w.cls === cls)) return { ok: false, error: '이미 ' + CLASSES[cls].weapon + '이(가) 장비 칸에 있어요. 다른 직업을 고르세요.' };
   const first = !p.class;
   p.class = cls;
   if (!p.element) p.element = randomElementKey(); // 최초 1회만 속성 부여(직업 변경 시 유지)
@@ -960,6 +1212,7 @@ function ascend(db, id) {
   takeItem(p, 'essence', req.essence);
   markMastery(p);                          // 현재 직업을 '달인' 으로 확정 기록
   p.ascend = to;
+  p.ascendMax = Math.max(p.ascendMax || 0, to);   // 최고 ★ — 무기를 바꿔 들어도 칭호 기준은 유지
   p.level = 0;
   p.pity = 0;
   p.element = randomElementKey();          // 새 회차 = 새 속성
@@ -1069,7 +1322,20 @@ function hunt(db, id) {
                 : { type: 'full', text: '🎒 인벤토리가 꽉 차 파편을 놓쳤어요!' };
     }
     addLog(db, '🗡️ ' + p.nick + ' ' + m.emoji + '[' + m.name + '](' + m.rarity + ') ' + (slain ? '처치' : '사냥') + ' +' + gold + 'G');
-  } else {
+  }
+  // 💎 프리즘 재료 — 🗝️ 상자 열쇠 · 🔮 마석. 무한 사냥에서도 나오지만 확률이 낮다(요청: 무한일 때도 나오게)
+  const loot = [];
+  const kc = (overtime ? CONFIG.keyChanceOvertime : CONFIG.keyChance) * (1 + m.tier * 0.2);
+  if (Math.random() < kc) {
+    const got = addItem(p, 'boxkey', 1);
+    loot.push(got ? { type: 'boxkey', amount: got, text: ITEMS.boxkey.emoji + ' 상자 열쇠!' } : { type: 'full', text: '🎒 가방이 꽉 차 열쇠를 놓쳤어요!' });
+  }
+  if (Math.random() < (overtime ? CONFIG.stoneChanceOvertime : CONFIG.stoneChance)) {
+    const want = overtime ? 1 : 1 + Math.floor(m.tier / 2);
+    const got = addItem(p, 'stone', want);
+    loot.push(got ? { type: 'stone', amount: got, text: ITEMS.stone.emoji + ' 마석 +' + got } : { type: 'full', text: '🎒 가방이 꽉 차 마석을 놓쳤어요!' });
+  }
+  if (overtime) {
     // 무한 사냥: 기력에 여유가 있을 때만 채광 물약(꽉 차 있으면 낭비 안 함)
     const st = currentStamina(p);
     if (st < CONFIG.staminaMax && Math.random() < CONFIG.huntPotionChance) {
@@ -1078,7 +1344,7 @@ function hunt(db, id) {
       drop = { type: 'potion', stamina: Math.round(ns - st), text: '⛏️ 채광 물약! 채굴 기력 +' + Math.round(ns - st) };
     }
   }
-  return { ok: true, monster: { name: m.name, emoji: m.emoji, hp: m.hp, rarity: m.rarity, tier: m.tier }, dmg, dealt, slain, crit, gold, drop, mat, overtime };
+  return { ok: true, monster: { name: m.name, emoji: m.emoji, hp: m.hp, rarity: m.rarity, tier: m.tier }, dmg, dealt, slain, crit, gold, drop, mat, loot, overtime };
 }
 // 방지권 상점 구매는 하루 CONFIG.protectDailyBuy 개까지. 나머지는 사냥 드랍으로 얻는다.
 // 날짜 필드는 players.data JSON 에 남아 '읽을 때 지연 리셋' 된다(일일 사냥과 같은 방식).
@@ -1108,7 +1374,7 @@ function buyDye(db, id) {
   return buyIntoInv(norm(db.players[id]), 'dye', 1, CONFIG.dyePrice);
 }
 function buyClassChange(db, id) {
-  return buyIntoInv(norm(db.players[id]), 'classtkt', 1, CONFIG.classChangePrice);
+  return { ok: false, error: '직업 변경권은 판매가 끝났어요 — 💎 프리즘 상점의 장비 칸으로 새 직업 무기를 따로 키울 수 있어요. (갖고 있는 변경권은 가방에서 그대로 쓸 수 있어요)' };
 }
 function fight(db, id, targetNick) {
   targetNick = (targetNick || '').trim();
@@ -1444,9 +1710,9 @@ function profile(db, nick) {
   return { ok: true, profile: publicView(db, k) };
 }
 function ranking(db) {
-  return Object.values(db.players).map(p => p)
-    .sort((a, b) => starsOf(b) - starsOf(a) || b.level - a.level || b.best - a.best).slice(0, 20)
-    .map(p => ({ nick: p.nick, level: p.level, ascend: starsOf(p), weapon: weaponName(p.level, p.class, p.ascend), classEmoji: classOf(p).emoji, wins: p.wins, losses: p.losses, nickColor: p.nickColor || null, title: equippedTitleView(p) }));
+  // 순위·표시는 '가장 좋은 무기' 기준 — 새 직업 무기를 들고 있어도 순위가 떨어지지 않는다
+  return Object.values(db.players).sort(rankCmp).slice(0, 20)
+    .map(p => { const w = bestWeapon(p); return { nick: p.nick, level: w.lv, ascend: w.asc || 0, weapon: weaponName(w.lv, w.cls, w.asc), classEmoji: (CLASSES[w.cls] || classOf(p)).emoji, weaponCount: allWeapons(p).length, wins: p.wins, losses: p.losses, nickColor: p.nickColor || null, title: equippedTitleView(p) }; });
 }
 function goldRanking(db) {
   return Object.values(db.players).map(p => ({ nick: p.nick, gold: p.gold, nickColor: p.nickColor || null, title: equippedTitleView(p) })).sort((a, b) => b.gold - a.gold).slice(0, 20);
@@ -1649,6 +1915,8 @@ module.exports = {
   partyInvite, partyAccept, partyReject, myInvites, raidState,
   raidHit, raidSkill, raidFinish,
   buyBoost, buyDye, buyClassChange, shopItems, equipTitle,
+  newWeapon, equipWeapon, weaponsView, openBox, alchemy, capsule, buyPrism, prismShopItems, prismInfo, prismView,
+  BOX_TABLE, ALCHEMY, CAPSULE_TABLE,
   profile, ranking, goldRanking, hogu, recentLog, playerList, findByNick,
   findByAuthUid, authLink,
   // 저장 계층(server.js)용 — 일일 카운터 / 유저별 상한

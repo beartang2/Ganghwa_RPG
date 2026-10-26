@@ -319,6 +319,7 @@ const SHARED_ACTIONS = new Set([
   '/api/fight', '/api/raid', '/api/setclass', '/api/rename',
   '/api/party-create', '/api/party-join', '/api/party-leave',
   '/api/party-invite', '/api/party-accept', '/api/party-reject',
+  '/api/weapon-new', '/api/weapon-equip',   // 무기를 바꿔 들면 랭킹·파티원 표시가 바뀐다
 ]);
 
 /* ---------- 공개 조회 캐시 ----------
@@ -525,6 +526,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && p === '/api/party-raid') return sendJson(res, 200, game.raidState(db, id));
     if (req.method === 'GET' && p === '/api/missions') return sendJson(res, 200, game.missionView(db, id));
     if (req.method === 'GET' && p === '/api/battlepass') return sendJson(res, 200, game.bpView(db, id));
+    if (req.method === 'GET' && p === '/api/prism') return sendJson(res, 200, game.prismView(db, id));
 
     if (req.method === 'POST') {
       if (!allowAction(id)) return sendJson(res, 429, { ok: false, error: '너무 빠릅니다. 잠시 후 다시 시도하세요.' });
@@ -534,6 +536,12 @@ const server = http.createServer(async (req, res) => {
       else if (p === '/api/enhance') r = game.enhance(db, id);
       else if (p === '/api/ascend') r = game.ascend(db, id);
       else if (p === '/api/use-item') { const b = await readBody(req); r = game.useItem(db, id, b.item); }
+      else if (p === '/api/weapon-new') { const b = await readBody(req); r = game.newWeapon(db, id, b.class); }
+      else if (p === '/api/weapon-equip') { const b = await readBody(req); r = game.equipWeapon(db, id, b.class); }
+      else if (p === '/api/box-open') { const b = await readBody(req); r = game.openBox(db, id, b.pick); }
+      else if (p === '/api/alchemy') { const b = await readBody(req); r = game.alchemy(db, id, b.tier); }
+      else if (p === '/api/capsule') { const b = await readBody(req); r = game.capsule(db, id, b.times); }
+      else if (p === '/api/prism-buy') { const b = await readBody(req); r = game.buyPrism(db, id, b.item); }
       else if (p === '/api/attend') r = game.attend(db, id);
       else if (p === '/api/mine') r = game.mine(db, id);
       else if (p === '/api/mine-swing') r = game.mineSwing(db, id);

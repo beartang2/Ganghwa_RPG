@@ -137,6 +137,8 @@ body.loading-on #globalLoading{opacity:1}
 .chip{display:inline-flex;align-items:center;gap:5px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:6px 11px;font-size:14px}
 .chip.gold{border-color:rgba(212,162,76,.45)}
 .chip.gold b{color:var(--gold);font-variant-numeric:tabular-nums}
+.chip.prism{border-color:rgba(125,249,255,.35)}
+.chip.prism b{color:#bdf6ff;font-variant-numeric:tabular-nums}
 /* 좁은 휴대폰: 상단바는 닉네임·골드·방지권·메뉴만 — 칭호와 ✏️ 는 프로필에서 */
 @media (max-width:420px){
   .topbar{gap:6px}
@@ -348,12 +350,13 @@ body.loading-on #globalLoading{opacity:1}
 .tab:hover{color:var(--text)}
 .tab.active{color:var(--text);box-shadow:inset 0 -2px 0 var(--primary);background:linear-gradient(180deg,transparent,rgba(212,162,76,.07))}
 .tab .ti{margin-right:5px}
-/* 휴대폰: 7개 탭이 옆으로 숨지 않게 한 줄에 모두 — 아이콘 위, 이름 아래 */
+/* 휴대폰: 8개 탭이 옆으로 숨지 않게 한 줄에 모두 — 아이콘 위, 이름 아래 */
 @media (max-width:560px){
-  .tabs{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:0;overflow:visible}
+  .tabs{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:0;overflow:visible}
   .tab{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;padding:7px 0 7px;font-size:11.5px;letter-spacing:-.02em;border-radius:8px 8px 0 0}
   .tab .ti{margin:0;font-size:17px;line-height:1.1}
 }
+@media (max-width:360px){ .tab{font-size:10.5px;letter-spacing:-.04em} .tab .ti{font-size:16px} }
 .panel{min-height:120px}
 
 /* ---------- 리스트 ---------- */
@@ -675,6 +678,96 @@ body.loading-on #globalLoading{opacity:1}
 .shop-lim{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;font-weight:700;white-space:nowrap;
   background:rgba(127,180,214,.12);border:1px solid rgba(127,180,214,.4);color:var(--info)}
 .shop-lim.off{background:rgba(239,79,69,.1);border-color:rgba(239,79,69,.4);color:var(--danger)}
+
+/* ---------- 장비 칸 — 화로 위 무기 선반 ---------- */
+.armory{width:100%;display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:-2px 0 2px}
+.arm-label{font-size:12px;font-weight:800;color:var(--muted);margin-right:2px;white-space:nowrap}
+.arm-label small{font-weight:700;opacity:.8}
+.arm-slot{display:inline-flex;align-items:center;gap:4px;height:30px;padding:0 9px;border-radius:999px;cursor:pointer;
+  border:1px solid var(--line2);background:var(--bg2);color:var(--text);font-size:12px;font-weight:800;white-space:nowrap;
+  box-shadow:inset 0 2px 5px rgba(0,0,0,.45);font-variant-numeric:tabular-nums}
+.arm-slot .arm-ic{font-size:15px;line-height:1}
+.arm-slot.on{border-color:var(--primary);background:linear-gradient(180deg,rgba(212,162,76,.22),rgba(212,162,76,.06));
+  box-shadow:0 0 0 1px var(--primary),0 0 10px rgba(212,162,76,.3);cursor:default}
+.arm-slot:not(.on):not(.locked):hover{border-color:var(--primary2)}
+.arm-slot .arm-lv{color:var(--gc,var(--text))}
+.arm-slot.new{border-style:dashed;color:var(--muted)}
+.arm-slot.new .arm-lv{color:var(--muted)}
+.arm-slot.locked{padding:0 8px;border-style:dashed;border-color:var(--line);opacity:.55}
+@media (max-width:360px){ .armory{gap:5px} .arm-slot{padding:0 7px} .arm-slot.locked{padding:0 6px} .arm-label{font-size:11px} }
+.wpn-card{max-width:420px}
+.wpn-card h3{padding-right:36px}
+
+/* ---------- 💎 프리즘 탭 ---------- */
+.prism-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:0 0 10px}
+.prism-bal{font-family:var(--display);font-size:22px;font-weight:900;color:#bdf6ff;text-shadow:0 0 12px rgba(125,249,255,.35)}
+.prism-bal b{font-variant-numeric:tabular-nums}
+.prism-mats{display:flex;gap:10px;flex-wrap:wrap;font-size:13px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+.psub-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:12px}
+.psub{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px;border-radius:12px;cursor:pointer;
+  border:1px solid var(--line);background:var(--bg2);color:var(--muted);font-weight:800;font-size:12.5px;white-space:nowrap}
+.psub span{font-size:19px;line-height:1.1}
+.psub.active{color:var(--text);border-color:var(--primary);background:linear-gradient(180deg,rgba(212,162,76,.16),rgba(212,162,76,.03))}
+.prism-result{margin:10px 0;padding:11px 12px;border-radius:12px;text-align:center;font-weight:800;font-size:14px;
+  border:1px solid var(--line2);background:var(--card2);color:#d9cfc2}
+.prism-result.ok{border-color:rgba(125,249,255,.5);background:rgba(125,249,255,.08);color:#dffcff}
+.odds-table{margin-top:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg2);font-size:12.5px}
+.odds-table summary{cursor:pointer;padding:9px 12px;color:var(--muted);font-weight:800}
+.odds-table table{width:100%;border-collapse:collapse}
+.odds-table td{padding:6px 12px;border-top:1px solid var(--line)}
+.odds-table td:last-child{text-align:right;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap}
+/* 상자 3개 */
+.chests{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.chest{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px 9px;border-radius:14px;cursor:pointer;
+  border:1px solid var(--line2);background:radial-gradient(70% 60% at 50% 100%,rgba(255,122,26,.12),transparent 70%),var(--bg2);color:var(--text);
+  box-shadow:inset 0 2px 8px rgba(0,0,0,.5);transition:transform .12s,border-color .12s}
+.chest:not(:disabled):not([data-noop]):hover{transform:translateY(-3px);border-color:var(--primary)}
+.chest:disabled{cursor:not-allowed;opacity:.55}
+.chest[data-noop]{cursor:default}
+.chest-svg{width:100%;max-width:92px;height:auto;overflow:visible}
+.chest-svg .chest-lid{transform-box:fill-box;transform-origin:0% 100%;transition:transform .35s cubic-bezier(.2,1.4,.4,1)}
+.chest-svg .chest-glow{opacity:0;transition:opacity .3s}
+.chest-svg.open .chest-lid{transform:translate(-4px,-6px) rotate(-28deg)}
+.chest.opened .chest-svg .chest-glow{opacity:1}
+.chest.opened{border-color:#7df9ff;box-shadow:0 0 0 1px #7df9ff,0 0 18px rgba(125,249,255,.35)}
+.chest.opened .chest-svg{animation:chestPop .5s ease-out}
+@keyframes chestPop{0%{transform:scale(.9)}40%{transform:scale(1.08) translateY(-3px)}100%{transform:scale(1)}}
+.chest.missed{opacity:.55;filter:saturate(.5)}
+.chest-name{font-size:12px;font-weight:800;color:var(--muted)}
+.chest-reward{font-size:12px;font-weight:800;text-align:center;line-height:1.35;color:var(--text)}
+.chest.missed .chest-reward{color:var(--muted);font-weight:700}
+/* 연금술 */
+.alch-list{display:flex;flex-direction:column;gap:8px}
+.alch-card{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center;padding:11px 12px;border-radius:12px;
+  border:1px solid var(--line);background:var(--card2)}
+.alch-card.t-mid{border-color:rgba(255,122,26,.4)}
+.alch-card.t-high{border-color:rgba(255,93,108,.5);background:radial-gradient(80% 120% at 0% 100%,rgba(255,93,108,.1),transparent 70%),var(--card2)}
+.alch-top{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;grid-column:1}
+.alch-top b{font-family:var(--display);font-size:16px}
+.alch-cost{font-size:12px;color:var(--muted);font-weight:700;white-space:nowrap}
+.alch-cost .short{color:var(--danger)}
+.alch-odds{grid-column:1;display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11.5px;color:var(--muted)}
+.alch-odds b{color:var(--text);font-variant-numeric:tabular-nums}
+.alch-card .btn{grid-column:2;grid-row:1 / span 2}
+/* 캡슐 */
+.cap-machine{display:flex;align-items:center;gap:14px;justify-content:center;padding:8px 0 4px}
+.cap-svg{width:96px;height:auto;flex-shrink:0;filter:drop-shadow(0 8px 14px rgba(0,0,0,.5))}
+.cap-side{display:flex;flex-direction:column;gap:8px;min-width:0}
+.cap-price{font-size:13px;color:var(--muted);line-height:1.5}
+.cap-price b{color:var(--gold)}
+.cap-results{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:12px}
+.cap-ball{padding:5px 10px;border-radius:999px;font-size:12px;font-weight:800;white-space:nowrap;border:1px solid var(--line2);
+  background:var(--bg2);color:var(--muted);animation:capIn .3s ease-out backwards}
+.cap-ball:nth-child(2){animation-delay:.04s}.cap-ball:nth-child(3){animation-delay:.08s}.cap-ball:nth-child(4){animation-delay:.12s}
+.cap-ball:nth-child(5){animation-delay:.16s}.cap-ball:nth-child(6){animation-delay:.2s}.cap-ball:nth-child(7){animation-delay:.24s}
+.cap-ball:nth-child(8){animation-delay:.28s}.cap-ball:nth-child(9){animation-delay:.32s}.cap-ball:nth-child(10){animation-delay:.36s}
+.cap-ball.k-prism{color:#dffcff;border-color:rgba(125,249,255,.5);background:rgba(125,249,255,.08)}
+.cap-ball.k-gold{color:var(--gold);border-color:rgba(242,193,78,.4)}
+.cap-ball.k-item{color:#e3c8ff;border-color:rgba(167,112,239,.45)}
+.cap-ball.big{box-shadow:0 0 14px rgba(125,249,255,.55);border-color:#7df9ff}
+@keyframes capIn{from{opacity:0;transform:translateY(8px) scale(.8)}to{opacity:1;transform:none}}
+.pprice{color:#bdf6ff!important}
+.pf-arm{text-align:right;line-height:1.5}
 
 /* ---------- 모션 줄이기 ---------- */
 @media (prefers-reduced-motion: reduce){

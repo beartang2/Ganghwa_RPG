@@ -8,15 +8,20 @@ let currentTab = 'rank';
    유저에게 '버전당 1회' 안내창이 뜬다. (닫기 버튼은 아래 PATCH_DELAY 초 후 활성화) */
 const PATCH = {
   version: '6',
-  title: '🌈 초월 업데이트',
+  title: '🌈 초월 · 💎 프리즘 업데이트',
   notes: [
+    '🗡️ <b>장비 칸</b> — 무기를 여러 자루 가질 수 있어요(직업당 한 자루). 화로 위 장비 칸에서 바꿔 들면 직업도 같이 바뀌고, 새 무기는 <b>+0·★0</b>부터 따로 키워요',
+    '💎 <b>프리즘</b> 재화 추가 — 💎 프리즘 탭에서 📦<b>상자</b>(열쇠로 3개 중 하나) · ⚗️<b>연금술</b>(마석+골드) · 🧸<b>캡슐</b>(골드만 있으면 무제한)으로 모아요. 확률표는 탭에서 그대로 볼 수 있어요',
+    '🗝️ 사냥하면 <b>상자 열쇠</b>와 🔮<b>마석</b>이 나와요 — 무한 사냥에서도 낮은 확률로 나와요',
+    '🛒 <b>프리즘 상점</b> — 장비 칸 +1 · 🌈 무지개 염색약 · 🔨 장인의 망치 · 🎁 초월 꾸러미. 직업 변경권은 판매를 마쳤어요(갖고 있는 건 그대로 사용 가능)',
+    '🕯️ <b>호구</b> 탭 이름이 <b>추모</b>로 바뀌었어요 — 오늘 무기를 떠나보낸 분들을 기려요',
     '🌈 <b>초월 시스템</b> — +99 는 더 이상 끝이 아니에요. 초월하면 무기가 +0 으로 돌아가는 대신 <b>영구 ★</b>을 얻어요 (골드 획득·레이드 공격력·🔨장인의 기운 영구 상승)',
     '💠 <b>초월 재료</b> — ★을 올리려면 재료가 필요해요. <b>초월의 파편</b>은 🗡️사냥에서 확률로, <b>초월의 정수</b>는 🐲레이드 성공 시 확정으로 나와요',
     '⚠️ <b>초월하면 🛡️파괴방지권이 통하지 않습니다</b> — ★1부터는 파괴를 그대로 맞아요. 초월 전에 신중히!',
-    '🎒 <b>가방(인벤토리) 추가</b> — 방지권·부스트권·염색약·직업변경권이 전부 가방으로 들어갔어요. <b>8칸</b>으로 시작해요',
-    '🎒 <b>가방 확장</b> — 상점 <b>가방 확장 패키지</b>(500,000G · 계정당 1회) +4칸, 배틀패스 프리미엄 <b>Lv.15</b> 보상 +4칸 = 최대 <b>16칸</b>',
-    '🛒 <b>상점 변경</b> — 염색약·직업변경권은 이제 사면 가방에 들어가고, <b>가방에서 "사용하기"</b> 를 눌러야 발동해요',
-    '📊 <b>랭킹 개편</b> — ★ 개수가 먼저, 그다음 강화 수치로 순위를 매겨요',
+    '🎒 <b>가방(인벤토리) 추가</b> — 방지권·부스트권·염색약·초월 재료·열쇠·마석이 전부 가방으로 들어가요. <b>10칸</b>으로 시작해요',
+    '🎒 <b>가방 확장</b> — 상점 <b>가방 확장 패키지</b>(500,000G · 계정당 1회) +4칸, 배틀패스 프리미엄 <b>Lv.15</b> 보상 +4칸 = 최대 <b>18칸</b>',
+    '🛒 <b>상점 변경</b> — 염색약은 이제 사면 가방에 들어가고, <b>가방에서 "사용하기"</b> 를 눌러야 발동해요',
+    '📊 <b>랭킹 개편</b> — 가진 무기 중 가장 좋은 무기의 ★ 개수가 먼저, 그다음 강화 수치로 순위를 매겨요',
     '⚔️ <b>강화 확률 조정</b> — 초월 전 강화는 살짝 쉬워졌고, 초월 회차(★1+)는 더 어려워졌어요',
     '🐲 <b>레이드 전면 개편</b> — 보스마다 <b>무기 레벨·초월 ★ 입장 조건</b>이 생겼고, <b>초월 전용 보스 2종</b>(🌋초월의 거인 · 🌌공허의 군주)이 추가됐어요',
     '🎯 <b>레이드 난이도 상향</b> — 이제 제대로 연타해야 잡혀요. 대신 <b>실패하면 횟수가 깎이지 않아요</b> (성공했을 때만 차감)',
@@ -366,6 +371,8 @@ function render() {
   if (!me) return;
   el('hNick').innerHTML = '<span class="me-cls">' + (me.classEmoji || '') + ' </span>' + nickSpan(me.nick, me.nickColor) + titleTag(me.equippedTitle) + ' <span class="edit-hint">✏️</span>';
   setTopGold(me.gold);
+  el('hPrism').textContent = (me.prism || 0).toLocaleString();
+  renderArmory();
   updateMissionBadge();
   updateNoticeBadge();
 
@@ -442,6 +449,189 @@ async function doAscend() {
   setWeaponArt(me);
   toast(r.msg, 'ok'); weaponResult('success'); vibe([20, 50, 30, 50, 60]); sfx('guaranteed'); sfx('pang');
   if (['rank', 'log'].includes(currentTab)) loadTab();
+}
+
+/* ---------- 장비 칸 (무기 여러 자루) ----------
+ * 화로 위 한 줄: 가진 무기(장착 중은 놋쇠 테두리) · 빈 칸(➕ 새 무기) · 잠긴 칸(🔒 → 💎 프리즘 상점).
+ * 무기를 바꿔 들면 직업도 그 무기를 따라 바뀐다(무기마다 강화·★·속성·장인의 기운이 따로). */
+let lastArmoryHtml = '';
+let classesCache = null;
+function renderArmory() {
+  const w = me.weapons; if (!w) return;
+  let html = '<span class="arm-label">🗡️ 장비 <small>' + w.list.length + '/' + w.slots + '</small></span>';
+  for (const it of w.list) {
+    html += `<button class="arm-slot${it.equipped ? ' on' : ''}" data-arm="${it.cls}" style="--gc:${it.grade.color}"
+      title="${esc(it.name)}${it.equipped ? ' (장착 중)' : ' — 눌러서 바꿔 들기'}"><span class="arm-ic">${it.classEmoji}</span><span class="arm-lv">${it.ascend ? '★' + it.ascend + ' ' : ''}+${it.level}</span></button>`;
+  }
+  for (let i = w.list.length; i < w.slots; i++) html += '<button class="arm-slot new" data-arm-new title="빈 장비 칸 — 새 무기 만들기"><span class="arm-ic">➕</span><span class="arm-lv">새 무기</span></button>';
+  // 잠긴 칸은 하나로 묶어서(🔒 ×n) — 좁은 화면에서도 장비 줄이 한 줄에 들어가게
+  if (w.max > w.slots) html += `<button class="arm-slot locked" data-arm-lock title="💎 프리즘 상점에서 장비 칸 열기"><span class="arm-ic">🔒</span><span class="arm-lv">×${w.max - w.slots}</span></button>`;
+  if (html !== lastArmoryHtml) { el('armory').innerHTML = html; lastArmoryHtml = html; }
+}
+async function doEquipWeapon(cls) {
+  const r = await api('weapon-equip', 'POST', { class: cls });
+  if (!r.ok) return toast(r.error, 'bad');
+  applyMe(r.me); lastWeaponKey = ''; render();
+  toast(r.msg, 'ok'); sfx('pang');
+  if (['rank', 'raid'].includes(currentTab)) loadTab();
+}
+async function openWeaponNew() {
+  if (!me.weapons.canNew) return goPrismShop();
+  if (!classesCache) { const r = await withLoad(() => api('classes')); if (!r.ok) return; classesCache = r.classes; }
+  el('wpnGrid').innerHTML = me.weapons.missing.map(k => {
+    const c = classesCache[k];
+    return `<div class="class-card" data-newcls="${c.id}"><div class="cemoji">${c.emoji}</div><div class="cname">${esc(c.name)}</div>
+      <div class="cdesc">${esc(c.desc)}</div><div class="cweapon">무기: ${esc(c.weapon)}</div></div>`;
+  }).join('');
+  el('wpnModal').hidden = false;
+}
+async function doNewWeapon(cls) {
+  const r = await api('weapon-new', 'POST', { class: cls });
+  if (!r.ok) return toast(r.error, 'bad');
+  el('wpnModal').hidden = true;
+  applyMe(r.me); lastWeaponKey = ''; render();
+  toast(r.msg, 'ok'); weaponResult('success');
+  if (['rank', 'raid'].includes(currentTab)) loadTab();
+}
+function goPrismShop() {
+  prismSub = 'shop';
+  const t = document.querySelector('.tab[data-tab="prism"]'); if (t) t.click();
+  el('panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* ---------- 💎 프리즘 탭 — 📦 상자 · ⚗️ 연금술 · 🧸 캡슐 · 💎 상점 ----------
+ * 확률표는 서버가 굴리는 표를 그대로 받아서 보여준다(확률 공개). */
+let prismSub = 'box', prismData = null, boxReveal = null, alchLast = null, capLast = null;
+const CHESTS = [
+  { name: '루비 상자',     body: '#6e2620', body2: '#8f3a2c', trim: '#e0aa45', gem: '#ff5d6c' },
+  { name: '사파이어 상자', body: '#1f3a63', body2: '#2c5288', trim: '#d6dee8', gem: '#4facfe' },
+  { name: '에메랄드 상자', body: '#1f4f34', body2: '#2c6b47', trim: '#d4a24c', gem: '#49d17a' },
+];
+function chestSVG(c, open) {
+  return `<svg class="chest-svg${open ? ' open' : ''}" viewBox="0 0 84 76" aria-hidden="true">
+    <ellipse cx="42" cy="70" rx="32" ry="5" fill="#000" opacity=".35"/>
+    <g class="chest-glow"><circle cx="42" cy="30" r="22" fill="${c.gem}" opacity=".45"/></g>
+    <rect x="9" y="32" width="66" height="34" rx="3" fill="${c.body}" stroke="#170f0a" stroke-width="2"/>
+    <rect x="9" y="32" width="66" height="10" fill="${c.body2}"/>
+    <path d="M9 47 H75 M9 57 H75" stroke="#170f0a" stroke-width="1" opacity=".35"/>
+    <rect x="9" y="32" width="66" height="5" fill="${c.trim}"/>
+    <rect x="35" y="32" width="14" height="34" fill="${c.trim}" stroke="#170f0a" stroke-width="1"/>
+    <g class="chest-lid">
+      <path d="M9 32 Q9 9 42 9 Q75 9 75 32 Z" fill="${c.body2}" stroke="#170f0a" stroke-width="2"/>
+      <path d="M12 30 Q13 13 42 12" fill="none" stroke="#fff" stroke-width="2" opacity=".18"/>
+      <path d="M9 32 Q9 9 42 9 Q75 9 75 32" fill="none" stroke="${c.trim}" stroke-width="3"/>
+      <rect x="35" y="10" width="14" height="22" fill="${c.trim}" stroke="#170f0a" stroke-width="1"/>
+    </g>
+    <circle cx="42" cy="45" r="5.5" fill="${c.gem}" stroke="#170f0a" stroke-width="1.5"/>
+    <circle cx="40.5" cy="43.5" r="1.6" fill="#fff" opacity=".8"/>
+  </svg>`;
+}
+function capsuleMachineSVG() {
+  const balls = [['#ff5d6c', 34, 40], ['#4facfe', 50, 36], ['#ffd93d', 42, 50], ['#49d17a', 58, 50], ['#a770ef', 28, 54], ['#ff9f45', 46, 26], ['#7df9ff', 62, 30]];
+  return `<svg class="cap-svg" viewBox="0 0 92 120" aria-hidden="true">
+    <circle cx="46" cy="42" r="34" fill="rgba(200,230,255,.08)" stroke="#d6dee8" stroke-width="2.5"/>
+    ${balls.map(([c, x, y]) => `<g><circle cx="${x}" cy="${y}" r="7.5" fill="${c}" stroke="#170f0a" stroke-width="1.3"/><path d="M${x - 7.5} ${y} H${x + 7.5}" stroke="#fff" stroke-width="1.2" opacity=".7"/></g>`).join('')}
+    <path d="M22 26 Q30 14 44 12" fill="none" stroke="#fff" stroke-width="3" opacity=".3" stroke-linecap="round"/>
+    <path d="M14 74 H78 L72 112 H20 Z" fill="#b8420c" stroke="#170f0a" stroke-width="2"/>
+    <path d="M14 74 H78 V80 H14 Z" fill="#e0aa45" stroke="#170f0a" stroke-width="1.5"/>
+    <circle cx="46" cy="94" r="9" fill="#2b231d" stroke="#e0aa45" stroke-width="2.5"/>
+    <path d="M40 94 H52" stroke="#e0aa45" stroke-width="3" stroke-linecap="round"/>
+    <rect x="58" y="100" width="12" height="8" rx="2" fill="#100d0b"/>
+  </svg>`;
+}
+const pct = p => { const v = p * 100; return (v >= 1 ? (Math.round(v * 10) / 10) : (Math.round(v * 100) / 100)) + '%'; };
+function oddsTable(title, table) {
+  return `<details class="odds-table"><summary>📊 ${title}</summary><table>${table.map(e => `<tr><td>${esc(e.text)}</td><td>${pct(e.p)}</td></tr>`).join('')}</table></details>`;
+}
+function syncPrismFromMe() {
+  if (!prismData || !me) return;
+  const cnt = id => { const it = me.inv.items.find(i => i.id === id); return it ? it.count : 0; };
+  prismData.prism = me.prism || 0; prismData.gold = me.gold; prismData.keys = cnt('boxkey'); prismData.stones = cnt('stone');
+}
+function paintPrism() {
+  const d = prismData; if (!d || currentTab !== 'prism') return;
+  const subs = [['box', '📦', '상자'], ['alch', '⚗️', '연금술'], ['cap', '🧸', '캡슐'], ['shop', '💎', '상점']];
+  let h = `<div class="prism-head"><span class="prism-bal">💎 <b>${d.prism.toLocaleString()}</b></span>
+    <span class="prism-mats"><span title="상자 열쇠">🗝️ ${d.keys}</span><span title="마석">🔮 ${d.stones}</span><span title="골드">💰 ${d.gold.toLocaleString()}</span></span></div>`;
+  h += `<div class="psub-tabs">${subs.map(([k, e, l]) => `<button class="psub${prismSub === k ? ' active' : ''}" data-psub="${k}"><span>${e}</span>${l}</button>`).join('')}</div>`;
+  h += prismSub === 'box' ? boxHTML(d) : prismSub === 'alch' ? alchHTML(d) : prismSub === 'cap' ? capHTML(d) : pshopHTML(d);
+  el('panel').innerHTML = h;
+}
+function boxHTML(d) {
+  const rv = boxReveal;
+  let h = `<p class="hint" style="margin:0 0 10px">🗝️ 열쇠 1개로 상자 3개 중 <b>하나</b>를 골라 열어요. 열고 나면 나머지 둘에 뭐가 들어 있었는지도 보여 줘요.</p>`;
+  h += '<div class="chests">' + CHESTS.map((c, i) => {
+    const mine = rv && rv.pick === i;
+    return `<button class="chest${rv ? (mine ? ' opened' : ' missed') : ''}" ${rv ? 'data-noop' : `data-pick="${i}"`} ${!rv && d.keys < 1 ? 'disabled' : ''}>
+      ${chestSVG(c, !!rv)}<span class="chest-name">${c.name}</span>${rv ? `<span class="chest-reward">${mine ? '' : '놓친 보상 · '}${esc(rv.boxes[i])}</span>` : ''}</button>`;
+  }).join('') + '</div>';
+  if (rv) h += `<div class="prism-result ok">🎉 ${esc(rv.got.text)} 획득!</div>
+    <button class="btn primary big" data-box-again ${d.keys < 1 ? 'disabled' : ''}>🗝️ 다시 열기 <small>(남은 열쇠 ${d.keys})</small></button>`;
+  else if (d.keys < 1) h += '<div class="prism-result">🗝️ 열쇠가 없어요 — 🗡️ 사냥에서 가끔 나와요(무한 사냥에서도 낮은 확률로)</div>';
+  return h + oddsTable('상자 하나에 들어 있을 확률', d.info.box.table);
+}
+function alchHTML(d) {
+  let h = '<p class="hint" style="margin:0 0 10px">🔮 마석과 💰 골드를 도가니에 함께 넣고 돌려요. 불이 셀수록 <b>마석</b> 하나당 기대값은 높고, <b>골드</b> 하나당 기대값은 낮아요.</p>';
+  h += '<div class="alch-list">' + d.info.alchemy.map(a => {
+    const can = d.stones >= a.stone && d.gold >= a.gold;
+    return `<div class="alch-card t-${a.id}"><div class="alch-top"><span class="alch-fire">${a.emoji}</span><b>${a.name}</b>
+        <span class="alch-cost"><span class="${d.stones >= a.stone ? '' : 'short'}">🔮 ${a.stone}</span> + <span class="${d.gold >= a.gold ? '' : 'short'}">💰 ${a.gold.toLocaleString()}G</span></span></div>
+      <div class="alch-odds">${a.table.map(e => `<span>${e.text.replace('💎 프리즘 ', '💎')} <b>${pct(e.p)}</b></span>`).join('')}</div>
+      <button class="btn primary sm" data-alch="${a.id}" ${can ? '' : 'disabled'}>⚗️ 돌리기</button></div>`;
+  }).join('') + '</div>';
+  if (alchLast) h += `<div class="prism-result ${alchLast.prism > 0 ? 'ok' : ''}">${esc(alchLast.msg)}</div>`;
+  return h;
+}
+function capHTML(d) {
+  const price = d.info.capsule.price, n10 = d.info.capsule.batchMax;
+  let h = `<div class="cap-machine">${capsuleMachineSVG()}<div class="cap-side">
+      <div class="cap-price">한 번 <b>${price.toLocaleString()}G</b><br><small>골드만 있으면 몇 번이든</small></div>
+      <button class="btn primary" data-cap="1" ${d.gold < price ? 'disabled' : ''}>🧸 1회</button>
+      <button class="btn primary" data-cap="${n10}" ${d.gold < price ? 'disabled' : ''}>🧸 ${n10}회 <small>${(price * n10).toLocaleString()}G</small></button></div></div>`;
+  if (capLast) {
+    h += '<div class="cap-results">' + capLast.results.map(r => `<span class="cap-ball k-${r.kind}${r.kind === 'prism' && r.n >= 10 ? ' big' : ''}">${esc(r.text)}</span>`).join('') + '</div>';
+    h += `<div class="prism-result ${capLast.prism > 0 ? 'ok' : ''}">${esc(capLast.msg)}</div>`;
+  }
+  return h + oddsTable('캡슐 하나의 확률', d.info.capsule.table);
+}
+function pshopHTML(d) {
+  return '<p class="hint" style="margin:0 0 10px">💎 프리즘으로만 살 수 있는 물건이에요.</p>' + d.shop.map(it =>
+    `<div class="raid-boss"><span class="bemoji">${it.emoji}</span>
+      <div class="binfo"><div class="bname">${esc(it.name)} ${it.soldOut ? '<span class="shop-lim off">최대</span>' : `<small class="pprice">💎 ${it.price}</small>`}</div>
+        <div class="bstat">${esc(it.desc)}</div></div>
+      <button class="btn sm primary" data-pbuy="${it.id}" ${it.soldOut || d.prism < it.price ? 'disabled' : ''}>구매</button></div>`).join('');
+}
+async function doOpenBox(i) {
+  const r = await api('box-open', 'POST', { pick: i });
+  if (!r.ok) return toast(r.error, 'bad');
+  applyMe(r.me); render(); syncPrismFromMe();
+  boxReveal = { pick: r.pick, boxes: r.boxes, got: r.got };
+  paintPrism();
+  const big = r.got.kind === 'prism' && r.got.n >= 5;
+  sfx(big ? 'guaranteed' : 'pang'); vibe(big ? [20, 40, 60] : 15);
+}
+async function doAlchemy(tier) {
+  const r = await api('alchemy', 'POST', { tier });
+  if (!r.ok) return toast(r.error, 'bad');
+  applyMe(r.me); render(); syncPrismFromMe();
+  alchLast = { prism: r.prism, msg: r.msg };
+  paintPrism();
+  sfx(r.prism > 0 ? 'pang' : 'fail'); vibe(r.prism > 0 ? 20 : [10, 30, 10]);
+}
+async function doCapsule(times) {
+  const r = await api('capsule', 'POST', { times });
+  if (!r.ok) return toast(r.error, 'bad');
+  applyMe(r.me); render(); syncPrismFromMe();
+  capLast = { results: r.results, prism: r.prism, msg: r.msg };
+  paintPrism();
+  sfx(r.prism >= 10 ? 'guaranteed' : 'pang'); vibe(15);
+}
+async function doPrismBuy(item) {
+  const r = await api('prism-buy', 'POST', { item });
+  if (!r.ok) return toast(r.error, 'bad');
+  applyMe(r.me); render();
+  toast(r.msg + (item === 'rainbow' || item === 'hammer' ? ' 🎒가방에서 사용하세요.' : ''), 'ok');
+  const v = await api('prism'); if (v.ok) { prismData = v; paintPrism(); }   // 장비 칸 가격이 바뀌므로 새로 받는다
 }
 
 /* ---------- 인벤토리 ----------
@@ -742,6 +932,7 @@ function killMonster() {
   let msg = '💰 +' + r.gold.toLocaleString() + 'G' + (r.crit ? ' 💥치명타!' : '');
   if (r.drop) msg += r.drop.type === 'potion' ? '  ' + r.drop.text : '  🎁' + r.drop.text;
   if (r.mat) msg += '  ' + r.mat.text;
+  if (r.loot) for (const l of r.loot) msg += '  ' + l.text;   // 🗝️ 상자 열쇠 · 🔮 마석
   spawnHuntReward(msg, r.crit);
   updateHuntHud();
   setTimeout(() => { if (huntOpen) spawnHuntMonster(); }, HUNT_SPAWN_DELAY);
@@ -902,7 +1093,7 @@ async function doBuy(item) {
   if (!r.ok) return toast(r.error, 'bad');
   applyMe(r.me); render();
   // 염색약·직업변경권은 구매 즉시 발동하지 않는다 — 가방에서 '사용하기'
-  const useHint = (item === 'dye' || item === 'classchange') ? ' 🎒가방에서 사용하세요.' : '';
+  const useHint = item === 'dye' ? ' 🎒가방에서 사용하세요.' : '';
   toast((r.msg || '구매 완료') + useHint, 'ok');
   if (currentTab === 'shop') loadTab();
 }
@@ -1156,19 +1347,23 @@ function paintParty(panel) {
 // tabHtmlCache: 한 번 본 탭은 마지막 화면을 즉시 보여주고(로딩 표시 없이) 뒤에서 갱신.
 let tabLoadSeq = 0;
 const tabHtmlCache = {};
-function cacheableTab(t) { return t !== 'raid'; }
+function cacheableTab(t) { return t !== 'raid' && t !== 'prism'; }
 async function loadTab() {
   const panel = el('panel');
   const seq = ++tabLoadSeq;
   const stale = () => seq !== tabLoadSeq;   // 그 사이 새 loadTab 이 시작됐으면 true
   if (currentTab === 'raid') { startRaidLoop(); return; }
   stopRaidLoop();
+  if (currentTab === 'prism') {
+    const r = await api('prism'); if (stale() || !r.ok) return;
+    prismData = r; paintPrism(); return;
+  }
   if (currentTab === 'rank') {
     const { list } = await api('rank'); if (stale()) return;
     panel.innerHTML = list.length ? list.map((p, i) =>
       `<div class="row"><span class="rk">${medal(i)}</span>
         <div class="nm" data-nick="${esc(p.nick)}">${nmLine(p.nick, p.nickColor, p.title, p.classEmoji)}
-          <div class="nm-sub">${esc(p.weapon)} · ${p.wins}승 ${p.losses}패</div></div></div>`).join('') : emptyMsg('아직 참가자가 없어요');
+          <div class="nm-sub">${esc(p.weapon)} · ${p.wins}승 ${p.losses}패${p.weaponCount > 1 ? ' · 🗡️×' + p.weaponCount : ''}</div></div></div>`).join('') : emptyMsg('아직 참가자가 없어요');
   } else if (currentTab === 'goldrank') {
     const { list } = await api('goldrank'); if (stale()) return;
     panel.innerHTML = list.length ? list.map((p, i) =>
@@ -1198,7 +1393,7 @@ async function loadTab() {
     panel.innerHTML = list.length ? list.map((p, i) =>
       `<div class="row"><span class="rk">${i < 3 ? ['👑', '🥈', '🥉'][i] : (i + 1)}</span>
         <div class="nm" data-nick="${esc(p.nick)}">${nmLine(p.nick)}</div>
-        <span class="val">${p.c}번 파괴 🤡</span></div>`).join('') : emptyMsg('😌 오늘은 아직 아무도 안 깨졌어요');
+        <span class="val">🕯️ ${p.c}번 파괴</span></div>`).join('') : emptyMsg('😌 오늘은 아직 아무도 안 깨졌어요');
   } else if (currentTab === 'log') {
     const { list } = await api('log'); if (stale()) return;
     panel.innerHTML = list.length ? list.map(l => `<div class="logline">${esc(l.text)}</div>`).join('') : emptyMsg('기록 없음');
@@ -1249,6 +1444,8 @@ async function openProfile(nick) {
      ${p.class && p.grade ? `<div class="pf-weapon">${weaponArtHTML(p)}</div>` : ''}
      ${titlesSection(p, isMe, eq)}
      <div class="pf-line"><span>무기</span><b>${esc(p.weapon)}</b></div>
+     ${p.weapons && p.weapons.list.length > 1 ? `<div class="pf-line"><span>보유 무기</span><b class="pf-arm">${p.weapons.list.filter(w => !w.equipped).map(w => w.classEmoji + ' ' + esc(w.name)).join('<br>')}</b></div>` : ''}
+     <div class="pf-line"><span>프리즘</span><b>💎 ${(p.prism || 0).toLocaleString()}</b></div>
      <div class="pf-line"><span>속성</span><b>${p.elementEmoji || ''} ${esc(p.elementName || '-')}</b></div>
      <div class="pf-line"><span>골드</span><b>${p.gold.toLocaleString()}G</b></div>
      <div class="pf-line"><span>초월</span><b>${p.ascend > 0 ? '★' + p.ascend : '-'}</b></div>
@@ -1371,6 +1568,12 @@ el('panel').addEventListener('click', e => {
   const iv = e.target.closest('[data-invite]'); if (iv) return act(() => doInvite(iv.dataset.invite), iv);
   const ac = e.target.closest('[data-accept]'); if (ac) return act(() => doAccept(ac.dataset.accept), ac);
   const rj = e.target.closest('[data-reject]'); if (rj) return act(() => doReject(rj.dataset.reject), rj);
+  const ps = e.target.closest('[data-psub]'); if (ps) { prismSub = ps.dataset.psub; return paintPrism(); }
+  const pk = e.target.closest('[data-pick]'); if (pk) return act(() => doOpenBox(+pk.dataset.pick), pk);
+  if (e.target.closest('[data-box-again]')) { boxReveal = null; return paintPrism(); }
+  const al = e.target.closest('[data-alch]'); if (al) return act(() => doAlchemy(al.dataset.alch), al);
+  const ca = e.target.closest('[data-cap]'); if (ca) return act(() => doCapsule(+ca.dataset.cap), ca);
+  const pb = e.target.closest('[data-pbuy]'); if (pb) return act(() => doPrismBuy(pb.dataset.pbuy), pb);
   const cp = e.target.closest('#createPartyBtn'); if (cp) return act(doPartyCreate, cp);
   const lp = e.target.closest('#leavePartyBtn'); if (lp) return act(doPartyLeave, lp);
   if (e.target.closest('#closeRaidBtn')) return closeRaid();
@@ -1657,6 +1860,14 @@ async function buyPassPremium() {
   applyMe(r.me); await renderPass();
 }
 el('ascendBtn').onclick = () => act(doAscend, el('ascendBtn'));
+el('armory').addEventListener('click', e => {
+  const a = e.target.closest('[data-arm]'); if (a) { if (!a.classList.contains('on')) act(() => doEquipWeapon(a.dataset.arm), a); return; }
+  if (e.target.closest('[data-arm-new]')) return openWeaponNew();
+  if (e.target.closest('[data-arm-lock]')) return goPrismShop();
+});
+el('wpnGrid').addEventListener('click', e => { const c = e.target.closest('[data-newcls]'); if (c) act(() => doNewWeapon(c.dataset.newcls), null); });
+el('wpnClose').onclick = () => { el('wpnModal').hidden = true; };
+el('wpnModal').addEventListener('click', e => { if (e.target === el('wpnModal')) el('wpnModal').hidden = true; });
 el('invBtn').onclick = () => { ensureAudio(); openInv(); };
 el('invClose').onclick = closeInv;
 el('missionBtn').onclick = () => { ensureAudio(); openMissions(); };

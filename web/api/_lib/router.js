@@ -148,6 +148,11 @@ async function handle(method, pathname, ctx) {
     const db = await store.readDb(q);
     return ok(game.bpView(db, id));
   }
+  if (method === 'GET' && pathname === '/api/prism') {
+    if (!id) return bad({ ok: false, error: '로그인이 필요합니다.' }, 401);
+    const db = await store.readDb(q);
+    return ok(game.prismView(db, id));
+  }
 
   if (method === 'POST') {
     if (pathname === '/api/logout') { await store.deleteSession(q, ctx.token); return ok({ ok: true }); }
@@ -210,6 +215,12 @@ async function handle(method, pathname, ctx) {
     else if (pathname === '/api/enhance') fn = (db) => game.enhance(db, id);
     else if (pathname === '/api/ascend') fn = (db) => game.ascend(db, id);
     else if (pathname === '/api/use-item') fn = (db) => game.useItem(db, id, b.item);
+    else if (pathname === '/api/weapon-new') fn = (db) => game.newWeapon(db, id, b.class);
+    else if (pathname === '/api/weapon-equip') fn = (db) => game.equipWeapon(db, id, b.class);
+    else if (pathname === '/api/box-open') fn = (db) => game.openBox(db, id, b.pick);
+    else if (pathname === '/api/alchemy') fn = (db) => game.alchemy(db, id, b.tier);
+    else if (pathname === '/api/capsule') fn = (db) => game.capsule(db, id, b.times);
+    else if (pathname === '/api/prism-buy') fn = (db) => game.buyPrism(db, id, b.item);
     else if (pathname === '/api/attend') fn = (db) => game.attend(db, id);
     else if (pathname === '/api/mine') fn = (db) => game.mine(db, id);
     else if (pathname === '/api/mine-swing') fn = (db) => game.mineSwing(db, id);

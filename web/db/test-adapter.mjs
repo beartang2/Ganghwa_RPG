@@ -205,6 +205,35 @@ async function main() {
   ok(!(await req('POST', '/api/bp-claim', { token: tok, body: { level: 5, track: 'paid' } })).body.ok, '프리미엄 없이 유료 트랙 거부');
   ok(!(await req('POST', '/api/bp-premium', { token: tok })).body.ok, '시즌 패스 구매 준비중');
 
+  // 장비 칸(무기 여러 자루) + 💎 프리즘 — 저장 왕복(보관 무기의 레벨이 저장 때 사라지지 않는지)
+  console.log('\n[장비 칸/프리즘]');
+  await q("UPDATE players SET level = 70, gold = 3000000, data = jsonb_set(jsonb_set(data, '{prism}', '400'), '{inv,items}', $1::jsonb) WHERE nick='검사'",
+    [JSON.stringify({ boxkey: 2, stone: 30 })]);
+  let me = (await req('GET', '/api/me', { token: tok })).body.me;
+  ok(me.weapons && me.weapons.slots === 1 && me.weapons.canNew === false, '기본 장비 칸 1 · 새 무기 불가');
+  ok(!(await req('POST', '/api/weapon-new', { token: tok, body: { class: 'archer' } })).body.ok, '칸 없으면 새 무기 거부');
+  r = await req('POST', '/api/prism-buy', { token: tok, body: { item: 'slot' } });
+  ok(r.body.ok && r.body.me.weapons.slots === 2 && r.body.me.prism === 300, '💎100 으로 장비 칸 +1 (2칸)');
+  r = await req('POST', '/api/weapon-new', { token: tok, body: { class: 'archer' } });
+  ok(r.body.ok && r.body.me.class === 'archer' && r.body.me.level === 0, '새 활 제작 → 원딜 +0 장착');
+  const arm = (await q("SELECT data->'armory' AS a FROM players WHERE nick='검사'"))[0].a;
+  ok(Array.isArray(arm) && arm[0].cls === 'warrior' && arm[0].lv === 70, '보관 검 +70 저장 왕복(lv 키 보존)');
+  ok(!(await req('POST', '/api/weapon-new', { token: tok, body: { class: 'archer' } })).body.ok, '같은 직업 무기 중복 거부');
+  r = await req('POST', '/api/weapon-equip', { token: tok, body: { class: 'warrior' } });
+  ok(r.body.ok && r.body.me.class === 'warrior' && r.body.me.level === 70, '검으로 바꿔 들기 → +70 복원');
+  const rk = (await req('GET', '/api/rank')).body.list.find(x => x.nick === '검사');
+  ok(rk && rk.level === 70 && rk.weaponCount === 2, '랭킹은 가장 좋은 무기 기준');
+  r = await req('POST', '/api/box-open', { token: tok, body: { pick: 2 } });
+  ok(r.body.ok && r.body.boxes.length === 3 && r.body.keysLeft === 1, '상자 열기(3개 중 택1, 열쇠 1 소모)');
+  r = await req('POST', '/api/alchemy', { token: tok, body: { tier: 'mid' } });
+  ok(r.body.ok && r.body.me.inv.items.find(i => i.id === 'stone').count === 15, '연금 중불(마석 15 + 10만G)');
+  const goldPreCap = Number(r.body.me.gold);
+  r = await req('POST', '/api/capsule', { token: tok, body: { times: 10 } });
+  ok(r.body.ok && r.body.results.length === 10 && Number(r.body.me.gold) === goldPreCap - 300000 + r.body.gold, '캡슐 10회(30만G) 결과·골드 정산');
+  const pv = (await req('GET', '/api/prism', { token: tok })).body;
+  ok(pv.ok && pv.info.capsule.price === 30000 && pv.shop.find(x => x.id === 'slot').price === 150, '프리즘 탭 정보(확률표·다음 칸 💎150)');
+  ok(!(await req('POST', '/api/shop-buy', { token: tok, body: { item: 'classchange' } })).body.ok, '직업 변경권 판매 종료');
+
   console.log('\n결과: ' + pass + ' pass, ' + fail + ' fail');
   process.exit(fail ? 1 : 0);
 }
