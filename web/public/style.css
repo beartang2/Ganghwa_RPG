@@ -401,6 +401,23 @@ body.loading-on #globalLoading{opacity:1}
 .nick-gold{background:linear-gradient(180deg,#ffe9a0,#d4a017);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 0 5px rgba(212,160,23,.35)}
 .nick-rainbow{background:linear-gradient(90deg,#ff5d6c,#ff9f45,#ffd93d,#49d17a,#4facfe,#a770ef,#ff5d6c);background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent;animation:rainbow 3s linear infinite;font-weight:800}
 @keyframes rainbow{to{background-position:200% center}}
+/* 🫧 프리즘 오로라 — 프리즘 상점 전용 색(염색약 뽑기에서는 안 나온다).
+   흰 바탕 위로 연한 하늘색 ↔ 연한 보라색이 오팔·진주처럼 천천히 일렁이고, 빛줄기가 한 번씩 스쳐 반짝인다.
+   ① 맨 위 층: 비스듬한 흰 빛줄기(반짝) ② 아래 층: 흰·하늘·보라가 반복되는 오로라(주기적이라 반복 이음매가 안 보인다) */
+.nick-prism{
+  background-image:
+    linear-gradient(105deg,rgba(255,255,255,0) 40%,rgba(255,255,255,.95) 49%,rgba(255,255,255,0) 58%),
+    linear-gradient(90deg,#ffffff 0%,#d9f1ff 9%,#b3e0ff 17%,#f3f8ff 25%,#e4d9ff 33%,#cbb9ff 41%,#ffffff 50%,
+                          #d9f1ff 59%,#b3e0ff 67%,#f3f8ff 75%,#e4d9ff 83%,#cbb9ff 91%,#ffffff 100%);
+  background-size:300% 100%,200% 100%;
+  -webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;
+  font-weight:800;
+  filter:drop-shadow(0 0 2px rgba(214,232,255,.75)) drop-shadow(0 0 7px rgba(196,178,255,.45));
+  animation:nickPrism 5s linear infinite}
+@keyframes nickPrism{
+  0%{background-position:170% 0,0% 0}
+  45%{background-position:-70% 0,45% 0}      /* 빛줄기가 한 번 스쳐 지나감 */
+  100%{background-position:-70% 0,100% 0}}   /* 나머지 시간은 오로라만 천천히 흐른다 */
 
 /* ---------- 안내 모달 ---------- */
 .guide-card{max-width:430px;max-height:82vh;overflow:auto}

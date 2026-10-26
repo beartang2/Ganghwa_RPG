@@ -13,7 +13,7 @@ const PATCH = {
     '🗡️ <b>장비 칸</b> — 무기를 여러 자루 가질 수 있어요(직업당 한 자루). 화로 위 장비 칸에서 바꿔 들면 직업도 같이 바뀌고, 새 무기는 <b>+0·★0</b>부터 따로 키워요',
     '💎 <b>프리즘</b> 재화 추가 — 💎 프리즘 탭에서 📦<b>상자</b>(열쇠로 3개 중 하나) · ⚗️<b>연금술</b>(마석+골드) · 🧸<b>캡슐</b>(골드만 있으면 무제한)으로 모아요. 확률표는 탭에서 그대로 볼 수 있어요',
     '🗝️ 사냥하면 <b>상자 열쇠</b>와 🔮<b>마석</b>이 나와요 — 무한 사냥에서도 낮은 확률로 나와요',
-    '🛒 <b>프리즘 상점</b> — 장비 칸 +1 · 🌈 무지개 염색약 · 🔨 장인의 망치 · 🎁 초월 꾸러미. 직업 변경권은 판매를 마쳤어요(갖고 있는 건 그대로 사용 가능)',
+    '🛒 <b>프리즘 상점</b> — 장비 칸 +1 · 🫧 <span class="nick-prism">프리즘 염색약</span>(상점 전용 오로라색) · 🔨 장인의 망치 · 🎁 초월 꾸러미. 직업 변경권은 판매를 마쳤어요(갖고 있는 건 그대로 사용 가능)',
     '🕯️ <b>호구</b> 탭 이름이 <b>추모</b>로 바뀌었어요 — 오늘 무기를 떠나보낸 분들을 기려요',
     '🌈 <b>초월 시스템</b> — +99 는 더 이상 끝이 아니에요. 초월하면 무기가 +0 으로 돌아가는 대신 <b>영구 ★</b>을 얻어요 (골드 획득·레이드 공격력·🔨장인의 기운 영구 상승)',
     '💠 <b>초월 재료</b> — ★을 올리려면 재료가 필요해요. <b>초월의 파편</b>은 🗡️사냥에서 확률로, <b>초월의 정수</b>는 🐲레이드 성공 시 확정으로 나와요',
@@ -597,7 +597,7 @@ function capHTML(d) {
 function pshopHTML(d) {
   return '<p class="hint" style="margin:0 0 10px">💎 프리즘으로만 살 수 있는 물건이에요.</p>' + d.shop.map(it =>
     `<div class="raid-boss"><span class="bemoji">${it.emoji}</span>
-      <div class="binfo"><div class="bname">${esc(it.name)} ${it.soldOut ? '<span class="shop-lim off">최대</span>' : `<small class="pprice">💎 ${it.price}</small>`}</div>
+      <div class="binfo"><div class="bname">${it.nickPreview ? `<span class="nick-${it.nickPreview}">${esc(it.name)}</span>` : esc(it.name)} ${it.soldOut ? '<span class="shop-lim off">최대</span>' : `<small class="pprice">💎 ${it.price}</small>`}</div>
         <div class="bstat">${esc(it.desc)}</div></div>
       <button class="btn sm primary" data-pbuy="${it.id}" ${it.soldOut || d.prism < it.price ? 'disabled' : ''}>구매</button></div>`).join('');
 }
@@ -630,7 +630,7 @@ async function doPrismBuy(item) {
   const r = await api('prism-buy', 'POST', { item });
   if (!r.ok) return toast(r.error, 'bad');
   applyMe(r.me); render();
-  toast(r.msg + (item === 'rainbow' || item === 'hammer' ? ' 🎒가방에서 사용하세요.' : ''), 'ok');
+  toast(r.msg + (item === 'prismdye' || item === 'hammer' ? ' 🎒가방에서 사용하세요.' : ''), 'ok');
   const v = await api('prism'); if (v.ok) { prismData = v; paintPrism(); }   // 장비 칸 가격이 바뀌므로 새로 받는다
 }
 
@@ -1420,6 +1420,7 @@ function nickSpan(nick, nc) {
   if (nc.kind === 'silver') return '<span class="nick-silver">' + e + '</span>';
   if (nc.kind === 'gold') return '<span class="nick-gold">' + e + '</span>';
   if (nc.kind === 'rainbow') return '<span class="nick-rainbow">' + e + '</span>';
+  if (nc.kind === 'prism') return '<span class="nick-prism">' + e + '</span>';   // 프리즘 상점 전용 오로라색
   return e;
 }
 // 목록용 닉네임 줄: 닉네임이 길면 말줄임(…), 칭호는 자리가 모자라면 아랫줄로 내려간다

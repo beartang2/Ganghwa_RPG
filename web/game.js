@@ -444,7 +444,7 @@ const ITEMS = {
   boxkey:   { id: 'boxkey',   emoji: '🗝️', name: '상자 열쇠',     kind: 'key',     desc: '몬스터 사냥 드랍 · 💎 프리즘 탭에서 상자 3개 중 하나를 골라 열어요' },
   stone:    { id: 'stone',    emoji: '🔮', name: '마석',          kind: 'mat',     desc: '몬스터 사냥 드랍 · ⚗️ 연금술 재료(골드와 함께 넣어요)' },
   hammer:   { id: 'hammer',   emoji: '🔨', name: '장인의 망치',   kind: 'use',     desc: '사용하면 장착한 무기의 장인의 기운 +50% (최대 100%)' },
-  rainbow:  { id: 'rainbow',  emoji: '🌈', name: '무지개 염색약', kind: 'use',     desc: '사용하면 닉네임이 무지개색으로 확정!' },
+  prismdye: { id: 'prismdye', emoji: '🫧', name: '프리즘 염색약', kind: 'use',     desc: '사용하면 닉네임이 프리즘 오로라색(흰빛 위로 하늘·보랏빛이 반짝이며 일렁임)이 돼요 · 프리즘 상점 전용 색' },
 };
 /* 칸수는 절대값이 아니라 '구매한 확장 횟수(bought)' 로 저장한다.
  * 이렇게 해야 CONFIG.invSlots 를 올렸을 때 기존 유저도 자동으로 늘어나고,
@@ -565,11 +565,12 @@ function useItem(db, id, itemId) {
     p.pity = Math.min(1, (p.pity || 0) + 0.5);
     return { ok: true, used: 'hammer', msg: '🔨 쾅! 장인의 기운 ' + Math.round(p.pity * 100) + '%' };
   }
-  if (itemId === 'rainbow') {
-    takeItem(p, 'rainbow', 1);
-    p.nickColor = { kind: 'rainbow', name: '무지개', rarity: '무지개' };   // 칭호 '패션의 완성' 은 염색 뽑기에서만(구매로는 X)
-    addLog(db, '🌈 ' + p.nick + ' 무지개 닉네임!');
-    return { ok: true, used: 'rainbow', msg: '🌈 닉네임이 무지개색이 됐어요!' };
+  if (itemId === 'prismdye') {
+    takeItem(p, 'prismdye', 1);
+    // 염색약 뽑기에서는 절대 나오지 않는 프리즘 상점 전용 색 — 칭호 조건(무지개 등)과는 무관
+    p.nickColor = { kind: 'prism', name: '프리즘 오로라', rarity: '프리즘' };
+    addLog(db, '🫧 ' + p.nick + ' 프리즘 오로라 닉네임!');
+    return { ok: true, used: 'prismdye', msg: '🫧 닉네임이 프리즘 오로라색이 됐어요!' };
   }
   if (itemId === 'classtkt') {
     takeItem(p, 'classtkt', 1);
@@ -759,7 +760,7 @@ function prismShopItems(p) {
   return [
     { id: 'slot', emoji: '🗡️', name: '장비 칸 +1', price: slotMax ? null : CONFIG.weaponSlotPrices[bought], soldOut: slotMax,
       desc: '다른 직업 무기를 하나 더 가질 수 있어요(영구). 새 무기는 +0·★0부터 따로 키워요 · 최대 ' + CONFIG.weaponSlotsMax + '칸' },
-    { id: 'rainbow', emoji: ITEMS.rainbow.emoji, name: ITEMS.rainbow.name, price: 60, desc: ITEMS.rainbow.desc },
+    { id: 'prismdye', emoji: ITEMS.prismdye.emoji, name: ITEMS.prismdye.name, price: 60, desc: ITEMS.prismdye.desc, nickPreview: 'prism' },
     { id: 'hammer', emoji: ITEMS.hammer.emoji, name: ITEMS.hammer.name, price: 8, desc: ITEMS.hammer.desc },
     { id: 'ascpack', emoji: '🎁', name: '초월 꾸러미', price: 25, desc: ITEMS.shard.emoji + ' 초월의 파편 30 + ' + ITEMS.essence.emoji + ' 초월의 정수 3' },
   ];
@@ -776,7 +777,7 @@ function buyPrism(db, id, itemId) {
   if (!it) return { ok: false, error: '없는 상품이에요.' };
   if (it.soldOut) return { ok: false, error: '장비 칸이 이미 최대(' + CONFIG.weaponSlotsMax + '칸)예요.' };
   if ((p.prism || 0) < it.price) return { ok: false, error: '💎 프리즘 부족! (필요 ' + it.price + ' / 보유 ' + (p.prism || 0) + ')' };
-  if (itemId === 'rainbow' || itemId === 'hammer') {
+  if (itemId === 'prismdye' || itemId === 'hammer') {
     if (!canHold(p, itemId)) return { ok: false, error: '🎒 가방이 꽉 찼어요.' };
     p.prism -= it.price; addItem(p, itemId, 1);
   } else if (itemId === 'ascpack') {
