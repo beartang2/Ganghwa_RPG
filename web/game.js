@@ -658,22 +658,23 @@ function equipWeapon(db, id, cls) {
 
 /* ---------- 💎 프리즘 (상자 · 연금술 · 캡슐 → 프리즘 상점) ----------
  * 확률표는 서버가 이 표 그대로 굴리고, 화면도 이 표를 그대로 보여준다(확률 공개).
- * 기대값(프리즘): 상자 열쇠 1개 ≈ 1.15 · 연금 약불 ≈ 1.05 / 중불 ≈ 4.05 / 강불 ≈ 12.55 · 캡슐 1회 ≈ 0.74
- * 골드 환산: 캡슐 ≈ 3.3만G/💎(환급 포함), 연금은 불이 셀수록 마석 효율↑·골드 효율↓ */
+ * 기대값(프리즘): 상자 열쇠 1개 ≈ 0.54 · 연금 약불 ≈ 0.58 / 중불 ≈ 2.28 / 강불 ≈ 6.79 · 캡슐 1회 ≈ 0.37
+ * (2026-10-26 첫 제안값의 약 절반으로 하향 — 프리즘을 더 귀하게)
+ * 골드 환산: 캡슐 ≈ 6.5만G/💎(환급 포함), 연금은 불이 셀수록 마석 효율↑·골드 효율↓ */
 const BOX_TABLE = [
-  { p: 0.34, kind: 'prism', n: 1 }, { p: 0.18, kind: 'prism', n: 2 }, { p: 0.06, kind: 'prism', n: 5 }, { p: 0.01, kind: 'prism', n: 15 },
-  { p: 0.23, kind: 'gold', n: 8000 }, { p: 0.10, kind: 'item', item: 'stone', n: 3 },
-  { p: 0.05, kind: 'item', item: 'boost', n: 2 }, { p: 0.03, kind: 'item', item: 'protect', n: 1 },
+  { p: 0.20, kind: 'prism', n: 1 }, { p: 0.08, kind: 'prism', n: 2 }, { p: 0.02, kind: 'prism', n: 5 }, { p: 0.005, kind: 'prism', n: 15 },
+  { p: 0.35, kind: 'gold', n: 8000 }, { p: 0.18, kind: 'item', item: 'stone', n: 3 },
+  { p: 0.10, kind: 'item', item: 'boost', n: 2 }, { p: 0.065, kind: 'item', item: 'protect', n: 1 },
 ];
 const ALCHEMY = [
-  { id: 'low',  name: '약불', emoji: '🔥',       stone: 5,  gold: 20000,  table: [{ p: 0.40, n: 0 }, { p: 0.35, n: 1 }, { p: 0.18, n: 2 },  { p: 0.06, n: 4 },  { p: 0.01, n: 10 }] },
-  { id: 'mid',  name: '중불', emoji: '🔥🔥',     stone: 15, gold: 100000, table: [{ p: 0.30, n: 0 }, { p: 0.35, n: 3 }, { p: 0.22, n: 5 },  { p: 0.10, n: 10 }, { p: 0.03, n: 30 }] },
-  { id: 'high', name: '강불', emoji: '🔥🔥🔥',   stone: 40, gold: 400000, table: [{ p: 0.25, n: 0 }, { p: 0.35, n: 8 }, { p: 0.25, n: 15 }, { p: 0.12, n: 30 }, { p: 0.03, n: 80 }] },
+  { id: 'low',  name: '약불', emoji: '🔥',       stone: 5,  gold: 20000,  table: [{ p: 0.62, n: 0 }, { p: 0.27, n: 1 }, { p: 0.08, n: 2 },  { p: 0.025, n: 4 },  { p: 0.005, n: 10 }] },
+  { id: 'mid',  name: '중불', emoji: '🔥🔥',     stone: 15, gold: 100000, table: [{ p: 0.52, n: 0 }, { p: 0.30, n: 3 }, { p: 0.125, n: 5 }, { p: 0.045, n: 10 }, { p: 0.01, n: 30 }] },
+  { id: 'high', name: '강불', emoji: '🔥🔥🔥',   stone: 40, gold: 400000, table: [{ p: 0.52, n: 0 }, { p: 0.28, n: 8 }, { p: 0.13, n: 15 },  { p: 0.06, n: 30 },  { p: 0.01, n: 80 }] },
 ];
 const CAPSULE_TABLE = [
-  { p: 0.300, kind: 'prism', n: 1 }, { p: 0.080, kind: 'prism', n: 3 }, { p: 0.015, kind: 'prism', n: 10 }, { p: 0.001, kind: 'prism', n: 50 },
-  { p: 0.350, kind: 'gold', n: 10000 }, { p: 0.040, kind: 'gold', n: 50000 },
-  { p: 0.150, kind: 'item', item: 'stone', n: 2 }, { p: 0.064, kind: 'none' },
+  { p: 0.160, kind: 'prism', n: 1 }, { p: 0.040, kind: 'prism', n: 3 }, { p: 0.006, kind: 'prism', n: 10 }, { p: 0.0005, kind: 'prism', n: 50 },
+  { p: 0.420, kind: 'gold', n: 10000 }, { p: 0.040, kind: 'gold', n: 50000 },
+  { p: 0.200, kind: 'item', item: 'stone', n: 2 }, { p: 0.1335, kind: 'none' },
 ];
 function rollTable(t) {
   let r = Math.random();
