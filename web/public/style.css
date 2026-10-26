@@ -385,16 +385,17 @@ body.loading-on #globalLoading{opacity:1}
 /* ---------- 토스트 — 화면 위쪽에 잠깐 뜨는 반투명(70%) 유리판 ----------
  * 아래쪽(버튼이 몰린 곳)을 가리지 않도록 위로 올리고, pointer-events:none 으로 밑의 버튼 클릭을 막지 않는다.
  * 배경 뒤를 블러로 뭉개서 반투명이어도 글자가 아래 화면과 섞이지 않게 한다. */
+/* 색으로 종류를 바로 알아보게: 성공 초록 · 안내 주황 · 실패/경고 빨강 (70% + 블러, 글자는 흰색) */
 .toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top, 0px) + 10px);transform:translateX(-50%);
   width:max-content;max-width:min(calc(100% - 32px),440px);z-index:130;pointer-events:none;
-  border-radius:14px;padding:10px 15px;font-size:14px;font-weight:700;line-height:1.45;text-align:center;word-break:keep-all;
-  border:0;background:rgba(34,27,22,.7);color:var(--text);text-shadow:0 1px 2px rgba(0,0,0,.55);
-  box-shadow:0 10px 30px rgba(0,0,0,.35);
-  -webkit-backdrop-filter:blur(14px) saturate(1.25);backdrop-filter:blur(14px) saturate(1.25);
+  border-radius:14px;padding:10px 15px;font-size:14px;font-weight:800;line-height:1.45;text-align:center;word-break:keep-all;
+  border:0;background:rgba(236,122,26,.7);color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.35);
+  box-shadow:0 10px 28px rgba(0,0,0,.35),0 0 18px rgba(236,122,26,.3);
+  -webkit-backdrop-filter:blur(14px) saturate(1.3);backdrop-filter:blur(14px) saturate(1.3);
   animation:toastIn .2s ease-out}
-.toast.ok{background:rgba(74,50,16,.7);color:#fff1d6}
-.toast.bad{background:rgba(84,26,21,.7);color:#ffe0dc}
-.toast.info{background:rgba(22,42,56,.7);color:#e2f1fa}
+.toast.ok{background:rgba(30,168,96,.7);box-shadow:0 10px 28px rgba(0,0,0,.35),0 0 18px rgba(30,168,96,.32)}
+.toast.info{background:rgba(236,122,26,.7);box-shadow:0 10px 28px rgba(0,0,0,.35),0 0 18px rgba(236,122,26,.3)}
+.toast.bad{background:rgba(226,56,50,.72);box-shadow:0 10px 28px rgba(0,0,0,.35),0 0 18px rgba(226,56,50,.32)}
 @keyframes toastIn{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
 @media (prefers-reduced-motion:reduce){.toast{animation:none}}
 
@@ -878,3 +879,23 @@ body.loading-on #globalLoading{opacity:1}
 .dun-elbtn{border-color:transparent;color:#e4dcff;background:rgba(120,90,255,.14)}
 .dun-after{display:flex;gap:6px;margin-top:8px}
 .dun-after .btn{flex:1}
+
+/* ---------- 전투 몰입 모드 (한 단 레이아웃) ----------
+ * body.in-battle 이면 탭 패널을 화면 전체로 띄워서 보스·HP·교체·스킬·결과가 스크롤 없이 한 화면에 들어온다. */
+.raid-timerrow > .raid-timer{margin-left:auto}
+.battle-x{display:none;align-items:center;justify-content:center;width:30px;height:30px;margin-left:8px;flex:none;
+  border:0;border-radius:999px;background:rgba(255,240,220,.08);color:var(--muted);font-size:14px;font-weight:900;cursor:pointer}
+@media (max-width:879px){
+  body.in-battle{overflow:hidden}
+  body.in-battle #panel{position:fixed;inset:0;z-index:110;margin:0;max-width:none;min-height:0;border-radius:0;
+    display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain;
+    padding:calc(env(safe-area-inset-top, 0px) + 14px) 14px calc(env(safe-area-inset-bottom, 0px) + 16px);
+    background:radial-gradient(90% 45% at 50% 0%,rgba(255,110,26,.12),transparent 70%),var(--bg)}
+  body.in-battle #panel > .raid-battle{width:100%;max-width:520px;margin:auto}
+  body.in-battle .battle-x{display:inline-flex}
+}
+@media (max-width:879px) and (max-height:700px){
+  body.in-battle .raid-stage{height:100px}
+  body.in-battle .raid-mon .rmon-emoji{font-size:66px}
+  body.in-battle .raid-events{max-height:66px;overflow:hidden}
+}

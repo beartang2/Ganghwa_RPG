@@ -1127,6 +1127,17 @@ async function doFight(target) {
   loadTab();
 }
 
+/* ---------- 전투 몰입 모드(한 단 레이아웃 = 모바일·태블릿) ----------
+ * 전투 화면은 탭 패널 안에 그려지는데, 한 단 레이아웃에선 화로·탭 아래에 있어서 싸울 때마다 스크롤해야 했다.
+ * 전투(레이드·던전)가 열려 있는 동안 body.in-battle 을 붙이면 CSS 가 패널을 화면 전체로 띄운다.
+ * ✕ 로 접으면 그 전투 동안은 다시 펼치지 않는다(새 전투가 시작되면 다시 펼침). */
+let battleKey = null, battleMin = false;
+function setBattleMode(on, key) {
+  if (on && key !== battleKey) { battleKey = key; battleMin = false; }
+  document.body.classList.toggle('in-battle', !!on && !battleMin);
+}
+function battleXBtn() { return '<button class="battle-x" data-battle-min aria-label="전투 화면 접기" title="접기">✕</button>'; }
+
 /* ---------- 파티 / 레이드 (폴링 기반 실시간 관전) ---------- */
 let raidTimer = null, curRaid = null, cacheParties = [], cachePlayers = [], BOSS_CACHE = [], BOSS_HPSCALE = 0.7;
 let lastFetch = 0, dismissedRaidTs = null, lastPartyHtml = '';
@@ -1155,10 +1166,11 @@ const SKILL_LABEL = { warrior: '⚔️ 강타', archer: '🏹 난사', tanker: '
 function renderBattle(raid) {
   const panel = el('panel');
   const active = raid.status === 'active';
+  setBattleMode(true, 'r' + raid.startTs);
   panel.innerHTML =
     `<div class="raid-battle">
        <div class="raid-timerrow"><span class="raid-boss-name">${raid.boss.emoji} ${esc(raid.boss.name)}</span>
-         <span class="raid-timer">⏱ <b id="rTimer">--</b></span></div>
+         <span class="raid-timer">⏱ <b id="rTimer">--</b></span>${battleXBtn()}</div>
        <div class="raid-stage"><div id="rBoss" class="raid-mon${active ? '' : ' dead'}" role="button" aria-label="보스 공격"><span class="rmon-emoji">${raid.boss.emoji}</span></div></div>
        <div class="rbar-label">보스 HP <span id="rBossTxt"></span></div>
        <div class="rbar"><div id="rBossHp" class="rbar-fill boss"></div></div>
@@ -1293,6 +1305,7 @@ function startRaidLoop() {
   raidTimer = setInterval(raidLoopTick, 300);
 }
 function stopRaidLoop() {
+  setBattleMode(false);   // 다른 탭으로 가면 몰입 모드 해제
   if (raidTimer) { clearInterval(raidTimer); raidTimer = null; }
   if (raidFlushT) { clearTimeout(raidFlushT); raidFlushT = null; }
   if (dunFlushT) { clearTimeout(dunFlushT); dunFlushT = null; if (dunLocalHits) flushDunHits(); }   // 탭을 떠나도 친 만큼은 보낸다
@@ -1323,6 +1336,7 @@ function paintRaid() {
   else paintParty(el('panel'));
 }
 function paintParty(panel) {
+  setBattleMode(false);
   let html = raidSubBar();
   if (me.invites && me.invites.length) {
     html += `<div style="margin-bottom:6px"><b>📨 받은 파티 초대</b></div>` +
@@ -1415,6 +1429,7 @@ function dunPhaseChips(phases, cur) {
   return phases.map((ph, i) => `<span class="dph${cur === i ? ' on' : cur != null && i < cur ? ' past' : ''}">${dunElTag(ph.el)}<small>약점 ${ph.weakTo.map(k => DUN_EL[k][0]).join('')}</small></span>`).join('<span class="dph-arrow">→</span>');
 }
 function paintDungeon() {
+  setBattleMode(false);
   const d = dunData, panel = el('panel');
   let h = raidSubBar();
   if (!d) { h += '<p class="hint">불러오는 중…</p>'; }
@@ -1473,9 +1488,10 @@ async function doDunLeave() {
 }
 function renderDunBattle() {
   const f = dunF, panel = el('panel');
+  setBattleMode(true, 'd' + f.startTs);
   panel.innerHTML =
     `<div class="raid-battle dun-battle">
-       <div class="raid-timerrow"><span class="raid-boss-name">🌌 ${f.floor}층 · ${f.emoji} ${esc(f.name)}</span><span class="raid-timer">⏱ <b id="dTimer">--</b></span></div>
+       <div class="raid-timerrow"><span class="raid-boss-name">🌌 ${f.floor}층 · ${f.emoji} ${esc(f.name)}</span><span class="raid-timer">⏱ <b id="dTimer">--</b></span>${battleXBtn()}</div>
        <div id="dPhases" class="dph-row dun-bphases"></div>
        <div class="raid-stage"><div id="dBoss" class="raid-mon" role="button" aria-label="보스 공격"><span class="rmon-emoji">${f.emoji}</span><span id="dBossEl" class="dun-boss-el"></span></div></div>
        <div class="rbar-label">보스 HP <span id="dBossTxt"></span></div>
@@ -1851,6 +1867,7 @@ el('panel').addEventListener('click', e => {
   const ps = e.target.closest('[data-psub]'); if (ps) { prismSub = ps.dataset.psub; return paintPrism(); }
   // 🌌 초월 던전
   const rs = e.target.closest('[data-rsub]'); if (rs) return setRaidSub(rs.dataset.rsub);
+  if (e.target.closest('[data-battle-min]')) { battleMin = true; document.body.classList.remove('in-battle'); return el('panel').scrollIntoView({ block: 'start' }); }
   const ds = e.target.closest('[data-dun-start]'); if (ds) return act(doDunStart, ds);
   const dl = e.target.closest('[data-dun-leave]'); if (dl) return act(doDunLeave, dl);
   const dw = e.target.closest('[data-dswap]'); if (dw) return act(() => doDunSwap(dw.dataset.dswap), dw);
