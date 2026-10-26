@@ -70,11 +70,46 @@
 3. **Vercel 프로젝트** 생성 후 이 저장소 연결
    - **Root Directory 를 `web/` 로 설정** (프론트 `public/`, 함수 `api/` 가 여기 있음)
    - 환경변수 `DATABASE_URL` 에 2번 문자열 입력
-4. 배포 → `https://<프로젝트>.vercel.app` 접속. 1단계 기능(로그인·강화·사냥·채굴·
-   상점·랭킹)이 동작. 싸움/파티/레이드는 아직 안내 메시지(501).
+4. 배포 → `https://<프로젝트>.vercel.app` 접속 → 전 기능(싸움·파티·레이드 포함) 동작.
+   (선택) 환경변수 `SUPABASE_URL`, `SUPABASE_ANON_KEY` 를 넣으면 Realtime 즉시 갱신 + 이메일 계정 연결이 켜진다.
 
 > 로컬 검증: `cd web && npm install && npm run test:adapter` — Supabase 없이 pglite 로
 > 전체 파이프라인을 돌려본다.
+
+## 커스텀 도메인 — https://ganghwa.beartanh.dev
+
+코드 쪽(OG 태그·파비콘·이사 안내)은 이미 반영돼 있고, 아래는 **대시보드에서 직접** 해야 하는 것들.
+
+1. **Vercel** → Project Settings → Domains 에 `ganghwa.beartanh.dev` 추가 → 안내되는 DNS 레코드 등록.
+   그다음 `<프로젝트>.vercel.app` 항목을 **Edit → Redirect to** `ganghwa.beartanh.dev` 로 지정
+   (옛 주소로 들어와도 새 주소로 보내기).
+2. **Supabase → Authentication → URL Configuration**
+   - Site URL: `https://ganghwa.beartanh.dev`
+   - Redirect URLs: `https://ganghwa.beartanh.dev/**` (프리뷰 배포도 쓰면 `https://*-<팀슬러그>.vercel.app/**`)
+   - 프론트가 `emailRedirectTo` / `redirectTo` 에 `location.origin` 을 넘기므로, 허용 목록에 없으면
+     인증·비밀번호 재설정 메일 링크가 제대로 돌아오지 않는다.
+3. **커스텀 SMTP** (이메일 가입을 친구들에게 열려면 필수) — Supabase 기본 메일 서버는 **조직 팀원
+   주소로만** 보내고 시간당 2통 제한이라, 그 외 주소로 가입하면 `Email address not authorized` 로 실패한다.
+   Resend·Postmark·AWS SES 등에 `beartanh.dev` 도메인을 인증하고 Authentication → SMTP Settings 에 등록.
+4. **기존 유저 재로그인** — 세션 토큰이 localStorage(도메인별 저장소)에 있어서 새 주소에선 닉네임+PIN 을
+   한 번 다시 입력해야 한다. 로그인 화면 안내 문구(`.move-notice`)와 패치노트 v4 가 이를 알린다.
+5. (선택) **리전 맞추기** — `/api/health` 의 `dbRegion` 을 확인. DB 가 서울(`ap-northeast-2`)이면
+   `vercel.json` 의 `regions` 를 `["icn1"]` 로 바꾸면 요청당 여러 번인 DB 왕복이 짧아진다.
+
+## 보안 — Data API 잠금
+
+`/api/config` 가 anon 키를 공개하므로(Realtime·이메일 로그인용, 원래 공개 전제), **게임 테이블은 anon 키로
+접근할 수 없어야 한다.** `20261025000000_lockdown_data_api.sql` 이 모든 게임 테이블에 RLS 를 켜고
+anon/authenticated 권한을 회수한다(`logs` SELECT 만 허용 — Realtime 구독용). 서버는 테이블 소유자(postgres)로
+접속해 RLS 를 우회하므로 게임 로직은 영향 없다.
+
+- 새 테이블을 추가할 땐 같은 마이그레이션에 `enable row level security` 를 꼭 같이 넣을 것.
+- 노출 여부 점검(토큰 값은 가져오지 않음, `limit=0`):
+  ```bash
+  curl -s -o /dev/null -w "%{http_code}\n" \
+    "https://<ref>.supabase.co/rest/v1/sessions?select=token&limit=0" -H "apikey: <anon키>"
+  # 200 = 노출(잠금 마이그레이션 필요) / 401·404 = 막혀 있음
+  ```
 
 ## 참고 / 주의
 - **로드-올 방식**: 현재 어댑터는 요청마다 전체 플레이어를 로드한다(사내 소규모 P 기준

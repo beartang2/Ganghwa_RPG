@@ -134,13 +134,13 @@ async function main() {
 
   // 11) 인터랙티브 레이드 — 시작(active) → 연타로 딜 → 처치/종료 → 전원 보상·횟수 영속화
   console.log('[레이드]');
-  await q("UPDATE players SET level = 80 WHERE nick IN ('검사','궁수')"); // 고레벨 → 몇 타로 처치
+  await q("UPDATE players SET level = 90 WHERE nick IN ('검사','궁수')"); // 마계 군주 입장 조건(+85) 이상
   r = await req('POST', '/api/party-create', { token: tok });
   const pid2 = r.body.party.id;
   await req('POST', '/api/party-invite', { token: tok, body: { nick: '궁수' } });
   await req('POST', '/api/party-accept', { token: tok2, body: { id: pid2 } });
   const goldBefore = Number((await req('GET', '/api/me', { token: tok })).body.me.gold);
-  r = await req('POST', '/api/raid', { token: tok, body: { boss: 'demon' } }); // 큰 보스(한 방에 안 죽게)
+  r = await req('POST', '/api/raid', { token: tok, body: { boss: 'golem' } }); // 연타 한 번엔 안 죽고 스킬까지 맞으면 쓰러지는 보스(2인 스케일 HP)
   ok(r.body.ok && r.body.raid.status === 'active', '레이드 시작(active)');
   ok(r.body.raid.bossHP === r.body.raid.bossMax && r.body.raid.partyHP === 100, '보스 풀피·파티 HP 100 시작');
   ok(r.body.raid.participants.length === 2, '참가자 2명');
@@ -157,7 +157,8 @@ async function main() {
   const fin = await req('POST', '/api/raid-finish', { token: tok });
   ok(fin.body.raid.status === 'done' && typeof fin.body.raid.win === 'boolean', '전투 종료·승패 결정(win=' + fin.body.raid.win + ')');
   const meAfter = (await req('GET', '/api/me', { token: tok })).body.me;
-  ok(meAfter.raidsLeft === meAfter.dailyRaids - 1, '레이드 횟수 1 차감 영속화');
+  // 설계: 성공했을 때만 횟수 차감(실패는 보상도 차감도 없음)
+  ok(meAfter.raidsLeft === meAfter.dailyRaids - (fin.body.raid.win ? 1 : 0), '레이드 횟수 영속화(성공 시에만 차감)');
   if (fin.body.raid.win) ok(Number(meAfter.gold) > goldBefore, '승리 보상 골드 지급');
   else ok(true, '패배(보상 없음)');
   // parties.data.raid 영속화(늦게 접속해도 결과 관전)
@@ -196,10 +197,10 @@ async function main() {
     [JSON.stringify({ season: bpv.season, xp: 550, free: [], paid: [], premium: false })]);
   bpv = (await req('GET', '/api/battlepass', { token: tok })).body;
   ok(bpv.level === 5, 'xp 550 → 배틀패스 Lv5');
-  const prBefore = Number((await q("SELECT COALESCE((data->>'protects')::int,0) AS p FROM players WHERE nick='검사'"))[0].p);
+  const prBefore = Number((await q("SELECT COALESCE((data->'inv'->'items'->>'protect')::int,0) AS p FROM players WHERE nick='검사'"))[0].p);
   ok((await req('POST', '/api/bp-claim', { token: tok, body: { level: 5, track: 'free' } })).body.ok, 'BP Lv5 무료 보상 수령');
-  const prAfter = Number((await q("SELECT COALESCE((data->>'protects')::int,0) AS p FROM players WHERE nick='검사'"))[0].p);
-  ok(prAfter > prBefore, '무료 보상(방지권) 지급·저장 (' + prBefore + '→' + prAfter + ')');
+  const prAfter = Number((await q("SELECT COALESCE((data->'inv'->'items'->>'protect')::int,0) AS p FROM players WHERE nick='검사'"))[0].p);
+  ok(prAfter > prBefore, '무료 보상(방지권 → 가방) 지급·저장 (' + prBefore + '→' + prAfter + ')');
   ok(!(await req('POST', '/api/bp-claim', { token: tok, body: { level: 5, track: 'free' } })).body.ok, '중복 수령 거부');
   ok(!(await req('POST', '/api/bp-claim', { token: tok, body: { level: 5, track: 'paid' } })).body.ok, '프리미엄 없이 유료 트랙 거부');
   ok(!(await req('POST', '/api/bp-premium', { token: tok })).body.ok, '시즌 패스 구매 준비중');

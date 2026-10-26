@@ -437,10 +437,10 @@ function ensureInv(p) {
 }
 function invSlots(p) { return Math.min(CONFIG.invSlotsMax, CONFIG.invSlots + ensureInv(p).bought); }
 function itemCount(p, id) { return ensureInv(p).items[id] || 0; }
-// 한 종류가 몇 칸을 먹는지 — 99개마다 한 칸.
+// 한 종류가 몇 칸을 먹는지 — CONFIG.invStackMax(999)개마다 한 칸.
 function slotsFor(count) { return Math.ceil(count / CONFIG.invStackMax); }
 function usedSlots(p) { const it = ensureInv(p).items; let n = 0; for (const k in it) if (it[k] > 0) n += slotsFor(it[k]); return n; }
-// 지금 더 받을 수 있는 최대 개수 = 마지막 칸의 남은 자리 + 빈 칸 × 99
+// 지금 더 받을 수 있는 최대 개수 = 마지막 칸의 남은 자리 + 빈 칸 × invStackMax
 function freeSpace(p, id) {
   const inv = ensureInv(p);
   const cur = inv.items[id] || 0;
