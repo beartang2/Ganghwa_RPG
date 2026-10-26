@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- 탭(16~32px)용 단순화 버전 — 같은 검을 굵고 크게, 잔장식은 뺐다 -->
+  <defs>
+    <linearGradient id="s" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#211a15"/>
+      <stop offset="1" stop-color="#120e0b"/>
+    </linearGradient>
+    <radialGradient id="h" cx="16" cy="38" r="26" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff6e1a" stop-opacity=".5"/>
+      <stop offset="1" stop-color="#ff6e1a" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="g" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6"/></filter>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="url(#s)"/>
+  <rect width="32" height="32" rx="7" fill="url(#h)"/>
+  <g class="spark">
+    <path d="M8.2 5 Q8.6 7.6 11.2 8 Q8.6 8.4 8.2 11 Q7.8 8.4 5.2 8 Q7.8 7.6 8.2 5 Z" fill="#fff1c4"/>
+  </g>
+  <g transform="rotate(45 16 16)">
+    <path d="M12.8 19 V5.4 L16 1 L19.2 5.4 V19 Z" fill="#ff7a1a" opacity=".8" filter="url(#g)"/>
+    <path d="M12.8 19 V5.4 L16 1 V19 Z" fill="#ffd98a"/>
+    <path d="M16 1 L19.2 5.4 V19 H16 Z" fill="#ff7a1a"/>
+    <path d="M12.8 19 V5.4 L16 1 L19.2 5.4 V19 Z" fill="none" stroke="#170f0a" stroke-width="1.3" stroke-linejoin="round"/>
+    <rect x="14.6" y="21" width="2.8" height="5.4" fill="#6b4426" stroke="#170f0a" stroke-width="1.1"/>
+    <path d="M9 20.4 L10.4 19 H21.6 L23 20.4 L21.6 21.8 H10.4 Z" fill="#e0b25a" stroke="#170f0a" stroke-width="1.2" stroke-linejoin="round"/>
+    <circle cx="16" cy="28.2" r="2.1" fill="#e0b25a" stroke="#170f0a" stroke-width="1.1"/>
+  </g>
+</svg>
