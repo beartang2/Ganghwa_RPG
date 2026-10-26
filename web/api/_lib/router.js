@@ -148,6 +148,13 @@ async function handle(method, pathname, ctx) {
     const db = await store.readDb(q);
     return ok(game.bpView(db, id));
   }
+  // 🌌 초월 던전 로비 — 주간 랭킹 때문에 전체 플레이어를 읽는다(읽기 전용 투영: 주간 소탕은 다음 쓰기 때 확정)
+  if (method === 'GET' && pathname === '/api/dungeon') {
+    if (!id) return bad({ ok: false, error: '로그인이 필요합니다.' }, 401);
+    const db = await store.readDb(q);
+    if (!db.players[id]) return bad({ ok: false, error: '로그인이 필요합니다.' }, 401);
+    return ok(game.dungeonView(db, id));
+  }
   if (method === 'GET' && pathname === '/api/prism') {
     if (!id) return bad({ ok: false, error: '로그인이 필요합니다.' }, 401);
     const db = await store.readDb(q);
@@ -221,6 +228,13 @@ async function handle(method, pathname, ctx) {
     else if (pathname === '/api/alchemy') fn = (db) => game.alchemy(db, id, b.tier);
     else if (pathname === '/api/capsule') fn = (db) => game.capsule(db, id, b.times);
     else if (pathname === '/api/prism-buy') fn = (db) => game.buyPrism(db, id, b.item);
+    // 초월 던전(솔로) — 본인 행만 잠근다
+    else if (pathname === '/api/dun-start') fn = (db) => game.dunStart(db, id);
+    else if (pathname === '/api/dun-hit') fn = (db) => game.dunHit(db, id, b.hits);
+    else if (pathname === '/api/dun-skill') fn = (db) => game.dunSkill(db, id, b.kind);
+    else if (pathname === '/api/dun-swap') fn = (db) => game.dunSwap(db, id, b.class);
+    else if (pathname === '/api/dun-finish') fn = (db) => game.dunFinish(db, id);
+    else if (pathname === '/api/dun-leave') fn = (db) => game.dunLeave(db, id);
     else if (pathname === '/api/attend') fn = (db) => game.attend(db, id);
     else if (pathname === '/api/mine') fn = (db) => game.mine(db, id);
     else if (pathname === '/api/mine-swing') fn = (db) => game.mineSwing(db, id);
@@ -235,6 +249,7 @@ async function handle(method, pathname, ctx) {
         : b.item === 'boost' ? game.buyBoost(db, id)
         : b.item === 'dye' ? game.buyDye(db, id)
         : b.item === 'classchange' ? game.buyClassChange(db, id)
+        : b.item === 'eltkt' ? game.buyReroll(db, id)
         : b.item === 'invpack' ? game.buyInvPack(db, id)
         : { ok: false, error: '알 수 없는 상품' };
     }

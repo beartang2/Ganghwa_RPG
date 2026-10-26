@@ -35,7 +35,9 @@ const CONFIG = {
   boostPityMult: 2.5,        // 부스트 사용 시 장인의 기운 상승 배율(실패·방지 시 pity ×2.5)
   boostCount: 10,            // 강화 부스트권: 지속 횟수
   boostPrice: 8000,
-  classChangePrice: 30000,
+  classChangePrice: 30000,   // (판매 종료 — 남은 변경권은 속성 재련권으로 이관)
+  // 🔁 속성 재련권: 상점 골드 + 사용할 때 강화 수치의 일정 %. 에픽 이상 무기만.
+  rerollPrice: 100000, rerollLevelPct: 0.10, rerollMinGrade: 'epic',
   dyePrice: 2000,
   // 강화(로스트아크식) — 파괴 시 완전 초기화(+0)
   pityBase: 0.015,      // 장인의 기운 기본 상승폭(실패당) — 저확률에서도 결국 참
@@ -93,12 +95,11 @@ const CONFIG = {
    * 무기마다 강화 수치·★·속성·장인의 기운이 따로이고, 장착한 무기가 직업을 정한다.
    * 직업당 한 자루라 최대 4칸. 칸은 💎 프리즘 상점에서 연다(직업 변경권은 판매 종료). */
   weaponSlotsBase: 1, weaponSlotsMax: 4,
-  /* 2·3·4번째 칸 가격(💎) = '그 무기를 +0→+99 로 키우는 동안 평균적으로 모이는 💎' × 1.2 (5단위 올림).
-   * web/tools/sim-climb.js 로 실제 강화·사냥·상자·연금술 코드를 300계정씩 돌려 얻은 '보통 유저' 평균:
-   *   첫 무기 54.5💎(약 16일) → 70 · 두 번째부터 26.6 / 25.6💎(약 6일) → 35 · 35
-   * 두 번째 무기부터 싼 이유: +99 무기로 사냥·레이드하고 새 무기에 강화만 하면(장착 교체는 무료)
-   * 등반이 약 16일 → 6일로 줄어서 그동안 모이는 💎 도 절반이 된다. 확률·보상을 바꾸면 시뮬을 다시 돌릴 것. */
-  weaponSlotPrices: [70, 35, 35],
+  /* 2·3·4번째 칸 가격(💎). 첫 칸 = '첫 무기를 +0→+99 로 키우는 동안 평균적으로 모이는 💎(보통 유저 54.5)' × 1.2,
+   * 그 뒤는 2배·3배 — 칸마다 직업 달인 칭호와 초월 던전 깊은 층(무기 수 조건)이 열리므로 갈수록 비싸게.
+   * web/tools/sim-climb.js --prices 70,140,210 (보통 유저·+99 무기로 사냥): 칸마다 약 18 → 17 → 25일.
+   * 두 번째 무기부터는 +99 무기로 사냥·레이드하면 등반이 약 16일 → 6일로 줄어서, 나머지는 +99 뒤 💎 모으는 기간이다. */
+  weaponSlotPrices: [70, 140, 210],
   // 칸 해금 조건: +99 를 찍은(지금 +99 이거나 ★1 이상) 무기 한 자루마다 칸을 하나 살 수 있다.
   //   +99 무기 1자루 → 2번째 칸, 2자루 → 3번째 칸, 3자루 → 4번째 칸. 즉 가진 칸을 다 채워 +99 까지 키워야 다음 칸이 열린다.
 
@@ -269,6 +270,10 @@ const ACHIEVEMENTS = [
   { id: 'asc3',  title: '윤회자',       grade: 'legend',    desc: '초월 ★3 달성',  check: p => ascendMax(p) >= 3 },
   { id: 'asc5',  title: '초월의 화신',  grade: 'transcend', desc: '초월 ★5 달성',  check: p => ascendMax(p) >= 5 },
   { id: 'asc10', title: '무의 경지',    grade: 'transcend', desc: '초월 ★10 달성', check: p => ascendMax(p) >= 10 },
+  // 🌌 초월 던전 — 평생 최고층 기준(주간 초기화와 무관하게 남는다)
+  { id: 'dun10', title: '심연 탐험가',   grade: 'epic',      desc: '초월 던전 10층 돌파', check: p => dunBest(p) >= 10 },
+  { id: 'dun30', title: '심연의 정복자', grade: 'legend',    desc: '초월 던전 30층 돌파', check: p => dunBest(p) >= 30 },
+  { id: 'dun50', title: '초월 던전 정상', grade: 'transcend', desc: '초월 던전 50층 돌파', check: p => dunBest(p) >= 50 },
   // 염색
   { id: 'colormage', title: '색채 마술사',  grade: 'epic',     desc: '염색약 40회 사용',       check: p => (p.dyeCount || 0) >= 40 },
   { id: 'fashion',  title: '패션의 완성',   grade: 'transcend', desc: '염색에서 무지개 획득',   check: p => !!p.gotRainbow },
@@ -328,6 +333,7 @@ function shopItems() {
     { id: 'protect', emoji: ITEMS.protect.emoji, name: ITEMS.protect.name, price: CONFIG.protectPrice, qty: 1, desc: ITEMS.protect.desc },
     { id: 'boost', emoji: ITEMS.boost.emoji, name: ITEMS.boost.name, price: CONFIG.boostPrice, qty: CONFIG.boostCount, desc: '강화 성공률 ' + CONFIG.boostMult + '배 · ' + CONFIG.boostCount + '개 묶음' },
     { id: 'dye', emoji: ITEMS.dye.emoji, name: ITEMS.dye.name, price: CONFIG.dyePrice, qty: 1, desc: ITEMS.dye.desc + ' (레어일수록 희귀)' },
+    { id: 'eltkt', emoji: ITEMS.eltkt.emoji, name: ITEMS.eltkt.name, price: CONFIG.rerollPrice, qty: 1, desc: '🟣에픽(+' + rerollMinLevel() + ') 이상 무기의 속성을 다시 뽑아요 · 쓸 때 강화 수치의 ' + Math.round(CONFIG.rerollLevelPct * 100) + '%가 깎여요 · 초월 던전 상성 맞추기용' },
     { id: 'invpack', emoji: '🎒', name: '가방 확장 패키지', price: CONFIG.invPackPrice, qty: CONFIG.invPackSlots, once: true,
       desc: '가방 칸 +' + CONFIG.invPackSlots + ' (계정당 1회) · 나머지 ' + CONFIG.invBpSlots + '칸은 배틀패스 프리미엄 Lv.' + CONFIG.invBpLevel + ' 보상' },
   ];
@@ -445,7 +451,7 @@ const ITEMS = {
   protect:  { id: 'protect',  emoji: '🛡️', name: '파괴방지권',   kind: 'passive', desc: '파괴를 1회 자동으로 막아줍니다 (초월 ★1+ 무효)' },
   boost:    { id: 'boost',    emoji: '🍀', name: '강화 부스트권', kind: 'passive', desc: '강화 성공률 ' + CONFIG.boostMult + '배 (1개 = 1회 소모)' },
   dye:      { id: 'dye',      emoji: '🎨', name: '닉네임 염색약', kind: 'use',     desc: '사용하면 닉네임 색을 랜덤으로 뽑아요' },
-  classtkt: { id: 'classtkt', emoji: '🔄', name: '직업 변경권',   kind: 'use',     desc: '사용하면 직업을 다시 선택합니다 (레벨·골드 유지)' },
+  eltkt:    { id: 'eltkt',    emoji: '🔁', name: '속성 재련권',   kind: 'use',     desc: '장착한 무기(🟣에픽 +25 이상)의 속성을 무작위로 다시 뽑아요 · 강화 수치의 ' + Math.round(CONFIG.rerollLevelPct * 100) + '%가 깎여요' },
   shard:    { id: 'shard',    emoji: '💠', name: '초월의 파편',   kind: 'mat',     desc: '몬스터 사냥 드랍 · 초월 승급 재료' },
   essence:  { id: 'essence',  emoji: '🌟', name: '초월의 정수',   kind: 'mat',     desc: '보스 레이드 확정 드랍 · 초월 승급 재료' },
   boxkey:   { id: 'boxkey',   emoji: '🗝️', name: '상자 열쇠',     kind: 'key',     desc: '몬스터 사냥 드랍 · 💎 프리즘 탭에서 상자 3개 중 하나를 골라 열어요' },
@@ -550,6 +556,8 @@ function buyInvPack(db, id) {
   return { ok: true, slots: invSlots(p), gained: got, msg: '🎒 가방이 ' + invSlots(p) + '칸으로 늘었어요! (+' + got + '칸)' };
 }
 // 사용형 아이템 발동. 방지권·부스트권은 자동 소모라 여기서 쓰지 않는다.
+function rerollMinLevel() { return gradeMin(GRADES.find(g => g.key === CONFIG.rerollMinGrade)); }
+function rerollCost(level) { return Math.max(1, Math.floor(level * CONFIG.rerollLevelPct)); }
 function useItem(db, id, itemId) {
   const p = norm(db.players[id]);
   const it = ITEMS[itemId];
@@ -579,11 +587,21 @@ function useItem(db, id, itemId) {
     addLog(db, '🫧 ' + p.nick + ' 프리즘 오로라 닉네임!');
     return { ok: true, used: 'prismdye', msg: '🫧 닉네임이 프리즘 오로라색이 됐어요!' };
   }
-  if (itemId === 'classtkt') {
-    takeItem(p, 'classtkt', 1);
-    p.class = null;                                  // 재선택 필요
-    if (p.party) partyLeave(db, id);                 // 파티에 있으면 나가기(직업 재선택 중)
-    return { ok: true, used: 'classtkt', needReselect: true, msg: '직업을 다시 선택하세요.' };
+  if (itemId === 'eltkt') {
+    // 🔁 속성 재련 — 에픽 이상 무기만. 강화 수치의 일정 %(내림, 최소 1)를 내고 속성을 무작위로(지금 속성 제외) 다시 뽑는다.
+    if (!p.class) return { ok: false, error: '먼저 직업을 고르세요.' };
+    if (inDungeonFight(p)) return { ok: false, error: '던전 전투 중에는 재련할 수 없어요.' };
+    const minLv = rerollMinLevel();
+    if (p.level < minLv) return { ok: false, error: '🔁 재련은 🟣에픽(+' + minLv + ') 이상 무기만 할 수 있어요. (지금 +' + p.level + ')' };
+    const cost = rerollCost(p.level), before = elementOf(p.element), lv0 = p.level;
+    const pool = ELEMENTS.filter(e => e.key !== p.element);
+    takeItem(p, 'eltkt', 1);
+    p.element = pool[randInt(0, pool.length - 1)].key;
+    p.level = lv0 - cost;
+    bumpRank(db);
+    const after = elementOf(p.element);
+    addLog(db, '🔁 ' + p.nick + ' 속성 재련 ' + before.emoji + '→' + after.emoji + ' (+' + lv0 + '→+' + p.level + ')');
+    return { ok: true, used: 'eltkt', element: p.element, msg: '🔁 속성 재련! ' + before.emoji + ' ' + before.name + ' → ' + after.emoji + ' ' + after.name + ' · +' + lv0 + ' → +' + p.level };
   }
   return { ok: false, error: '아직 쓸 수 없는 아이템이에요.' };
 }
@@ -655,6 +673,7 @@ function newWeapon(db, id, cls) {
   if (ownedClasses(p).includes(cls)) return { ok: false, error: '이미 ' + CLASSES[cls].weapon + '을(를) 갖고 있어요. 장비 칸에서 바꿔 들 수 있어요.' };
   if (allWeapons(p).length >= weaponSlots(p)) return { ok: false, error: '장비 칸이 꽉 찼어요. 무기를 +' + CONFIG.maxLevel + '까지 키우면 💎 프리즘 상점에서 칸을 늘릴 수 있어요.' };
   if (inActiveRaid(db, id)) return { ok: false, error: '레이드 중에는 무기를 바꿀 수 없어요.' };
+  if (inDungeonFight(p)) return { ok: false, error: '던전 전투 중에는 새 무기를 만들 수 없어요.' };
   ensureArmory(p).push(activeWeapon(p));
   loadWeapon(p, { cls, lv: 0, el: randomElementKey(), pity: 0, asc: 0 });
   bumpRank(db);
@@ -665,10 +684,15 @@ function newWeapon(db, id, cls) {
 // 보관 중인 무기로 바꿔 든다(직업도 그 무기를 따라 바뀐다).
 function equipWeapon(db, id, cls) {
   const p = norm(db.players[id]);
+  if (inActiveRaid(db, id)) return { ok: false, error: '레이드 중에는 무기를 바꿀 수 없어요.' };
+  if (inDungeonFight(p)) return { ok: false, error: '던전 전투 중에는 전투 화면의 교체 버튼을 쓰세요.' };
+  return swapWeapon(db, p, cls);
+}
+// 실제 맞바꾸기 — 장비 칸 교체와 던전 전투 중 교체가 함께 쓴다
+function swapWeapon(db, p, cls) {
   if (p.class === cls) return { ok: false, error: '이미 들고 있는 무기예요.' };
   const arm = ensureArmory(p), i = arm.findIndex(w => w.cls === cls);
   if (i < 0) return { ok: false, error: '그 무기가 장비 칸에 없어요.' };
-  if (inActiveRaid(db, id)) return { ok: false, error: '레이드 중에는 무기를 바꿀 수 없어요.' };
   const cur = activeWeapon(p);
   loadWeapon(p, arm[i]);
   arm[i] = cur;
@@ -813,6 +837,341 @@ function buyPrism(db, id, itemId) {
   return { ok: true, msg: it.emoji + ' ' + it.name + ' 구매! (💎 -' + it.price + ')' };
 }
 
+/* ---------- 속성 상성 (포켓몬식 순환) ----------
+ * 7속성 순환: 앞이 바로 뒤를 이긴다 — 물이 불을 끄고 · 불이 얼음을 녹이고 · 얼음이 바람을 얼리고
+ *   · 바람이 독기를 흩고 · 독이 땅을 더럽히고 · 땅이 번개를 흘려보내고 · 번개가 물을 감전시킨다.
+ * 빛 ⇄ 어둠은 서로를 이긴다. 이기면 피해 ×2, 지면 ×0.5, 나머지 ×1. */
+const ELEMENT_CYCLE = ['water', 'fire', 'ice', 'wind', 'poison', 'earth', 'thunder'];
+const ELEMENT_BEATS = { light: ['dark'], dark: ['light'] };
+ELEMENT_CYCLE.forEach((k, i) => { ELEMENT_BEATS[k] = [ELEMENT_CYCLE[(i + 1) % ELEMENT_CYCLE.length]]; });
+function beats(a, b) { return !!(ELEMENT_BEATS[a] && ELEMENT_BEATS[a].includes(b)); }
+// 공격 속성 a 가 방어 속성 b 를 칠 때 배율. 빛·어둠은 서로 이기므로 '이김' 을 먼저 본다.
+function elemMult(a, b) { return beats(a, b) ? 2 : beats(b, a) ? 0.5 : 1; }
+function weakTo(b) { return ELEMENTS.filter(e => beats(e.key, b)).map(e => e.key); }   // b 를 이기는 속성들
+function elementChart() {
+  return ELEMENTS.map(e => ({ key: e.key, name: e.name, emoji: e.emoji, color: e.color, beats: ELEMENT_BEATS[e.key] || [], weakTo: weakTo(e.key) }));
+}
+
+/* ---------- 속성 스킬 (★1 이상 무기) ----------
+ * 초월한 무기는 직업 스킬과 별개로 그 무기 속성의 스킬을 전투마다 1회 쓸 수 있다(초월 던전).
+ * 피해량은 '연타 n회분'(tap = 공격력 × raidHitDmgMult) 으로 잡고, 보스 속성과의 상성 배율이 곱해진다. */
+const ELEMENT_SKILLS = {
+  fire:    { name: '화염 폭발', desc: '즉시 연타 35회분 + 5초간 화상(초당 9회분)', dmg: 35, dot: { per: 9, ms: 5000 } },
+  water:   { name: '치유의 비', desc: 'HP +35%', heal: 35 },
+  earth:   { name: '대지의 방벽', desc: '6초 동안 받는 피해 −40%', buff: { k: 'dr', v: 0.4, ms: 6000 } },
+  wind:    { name: '질풍', desc: '6초 동안 연타 피해 ×1.6', buff: { k: 'haste', v: 1.6, ms: 6000 } },
+  thunder: { name: '낙뢰', desc: '즉시 연타 65회분', dmg: 65 },
+  ice:     { name: '빙결', desc: '보스의 다음 공격 1회 무효 + 연타 15회분', dmg: 15, block: 1 },
+  light:   { name: '성광', desc: '연타 25회분 + HP +20%', dmg: 25, heal: 20 },
+  dark:    { name: '흡혈', desc: '연타 40회분 + HP +15%', dmg: 40, heal: 15 },
+  poison:  { name: '맹독', desc: '전투가 끝날 때까지 초당 연타 6회분 지속 피해', dot: { per: 6, ms: 0 } },   // ms 0 = 끝까지
+};
+const CLASS_SKILLS = {
+  warrior: { name: '강타', emoji: '⚔️', desc: '연타 45회분', dmg: 45 },
+  archer:  { name: '난사', emoji: '🏹', desc: '연타 60회분', dmg: 60 },
+  tanker:  { name: '철벽', emoji: '🛡️', desc: '남은 전투 동안 받는 피해 −25% · HP +10%', buff: { k: 'dr', v: 0.25, ms: 0 }, heal: 10 },
+  healer:  { name: '치유의 물결', emoji: '✨', desc: 'HP +40%', heal: 40 },
+};
+function elementSkillView(el) { const s = ELEMENT_SKILLS[el]; const e = elementOf(el); return s ? { el, emoji: e.emoji, name: s.name, desc: s.desc } : null; }
+
+/* ---------- 🌌 초월 던전 ----------
+ * ★1 무기가 있어야 들어간다(엔드 콘텐츠). 매주 월요일(KST) 1층부터 다시 오르고, 층마다 보스 속성이
+ * 주차 시드로 새로 섞인다 → 매주 다른 무기·재련이 필요하다. 지난주 기록 −5층까지는 자동 소탕.
+ *   입구(1~15)  : 속성 1개. 아무 무기로나 밀다가 막히면 약점 속성 무기로 넘긴다.
+ *   중층(16~30) : 무기 2자루 이상 · 전투 중 보스 속성이 2번 바뀐다 → 바꿔 끼며 싸운다.
+ *   심층(31~45) : 무기 3자루 · 3단계.   심연(46~50): 무기 4자루 · 4단계.
+ * 전투는 레이드와 같은 연타식(혼자). 들고 있는 무기의 공격력·직업 패시브(탱커 피해감소·힐러 회복)가
+ * 그대로 적용되고, 무기마다 직업 스킬·속성 스킬(★1+)을 1회씩 쓸 수 있다.
+ * 상태는 players.data.dun 에 실린다(⚠️ level/gold/nick·일일 필드 이름은 저장 때 빠지므로 쓰지 않는다). */
+const DUNGEON = {
+  floors: 50, sweepBack: 5, firstClearPrism: 3,
+  swapCooldown: 1200,                 // 전투 중 무기 교체 쿨타임(ms)
+  baseDuration: 15000, phaseDuration: 5000,   // 전투 시간 = 15초 + 5초 × (단계 − 1)
+  /* 보스 HP = 구간 시작값 × 성장률^(층 − 구간 첫 층).
+   * 무기 공격력은 +99 에서 멈추고 ★ 당 +8% 뿐이라, 깊은 층의 난이도는 HP 보다 '상성 맞추기(단계마다 약점 무기)'
+   * 와 위험도(회복·피해감소 필요)가 만든다. 입구는 가파르게 — 무상성 +99 가 10층 근처에서 막히고 약점 무기로 15층까지.
+   * tools/sim-dungeon.js 로 장비별 도달 층을 확인할 것. */
+  bands: [
+    { from: 1,  to: 15, weapons: 1, phases: 1, name: '입구', hp0: 22000,  g: 1.149 },
+    { from: 16, to: 30, weapons: 2, phases: 2, name: '중층', hp0: 140000, g: 1.04 },
+    { from: 31, to: 45, weapons: 3, phases: 3, name: '심층', hp0: 260000, g: 1.027 },
+    { from: 46, to: 50, weapons: 4, phases: 4, name: '심연', hp0: 420000, g: 1.054 },
+  ],
+  danger1: 40, dangerStep: 2.5,       // 보스가 전투 동안 넣는 총 피해(HP %). 100 을 넘으면 회복·감소가 필요
+  attacksBase: 3,                     // 보스 공격 횟수 = 3 + 단계 수
+  healPerSec: 2.6,                    // 힐러 무기를 들고 있는 동안 초당 HP 회복(%) — 레이드와 같음
+};
+const DUN_MONSTERS = {
+  fire: ['🔥', '불꽃 거인'], water: ['🐙', '심해의 크라켄'], earth: ['🗿', '대지의 거상'], wind: ['🦅', '폭풍의 그리폰'],
+  thunder: ['⚡', '뇌전의 군주'], ice: ['❄️', '빙결의 여왕'], light: ['😇', '타락한 천사'], dark: ['🦇', '그림자 군주'], poison: ['🐍', '역병의 히드라'],
+};
+const DUN_CHIMERA = { 2: ['🐲', '쌍두 키메라'], 3: ['👹', '원소의 군주'], 4: ['🌌', '심연의 지배자'] };
+// 이번 주 키(월요일 시작, KST) 'YYYY-MM-DD'
+function weekKey(offset) {
+  const d = new Date(Date.now() + KST_OFFSET_MS);
+  d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7 + 7 * (offset || 0));
+  return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate());
+}
+function weekResetIn() {
+  const d = new Date(Date.now() + KST_OFFSET_MS);
+  const next = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - (d.getUTCDay() + 6) % 7 + 7) - KST_OFFSET_MS;
+  return Math.max(0, next - Date.now());
+}
+// 문자열 시드 난수(mulberry32) — 같은 주·같은 층이면 모두에게 같은 보스
+function seededRng(str) {
+  let a = seedNum(str) || 1;
+  return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+function dunBand(floor) { return DUNGEON.bands.find(b => floor >= b.from && floor <= b.to) || DUNGEON.bands[DUNGEON.bands.length - 1]; }
+function dunHp(floor) { const b = dunBand(floor); return Math.round(b.hp0 * Math.pow(b.g, floor - b.from)); }
+// 층 첫 돌파(그 주) 보상 — 소탕한 층도 같은 보상을 받는다
+function dunReward(floor) { return { shard: Math.ceil(floor / 3) + 2, essence: floor % 10 === 0 ? 2 : floor % 5 === 0 ? 1 : 0 }; }
+function dunFloor(floor, wk) {
+  const band = dunBand(floor);
+  const rng = seededRng('dun:' + wk + ':' + floor);
+  const keys = ELEMENTS.map(e => e.key), els = [];
+  while (els.length < band.phases) { const k = keys[Math.floor(rng() * keys.length)]; if (!els.includes(k)) els.push(k); }
+  const duration = DUNGEON.baseDuration + DUNGEON.phaseDuration * (band.phases - 1);
+  const look = band.phases === 1 ? DUN_MONSTERS[els[0]] : DUN_CHIMERA[band.phases];
+  return {
+    floor, band: band.name, weapons: band.weapons, duration, hp: dunHp(floor),
+    danger: Math.round(DUNGEON.danger1 + DUNGEON.dangerStep * (floor - 1)),
+    emoji: look[0], name: look[1], reward: dunReward(floor),
+    phases: els.map((el, i) => ({ el, at: Math.round(duration * i / els.length) })),
+  };
+}
+function dunState(p) {
+  if (!p.dun || typeof p.dun !== 'object') p.dun = { wk: '', fl: 0, best: 0, at: 0, fight: null, sweep: null };
+  return p.dun;
+}
+function dunBest(p) { return (p && p.dun && p.dun.best) || 0; }
+// 새 주가 됐으면 지난 기록 −5층까지 소탕(보상 지급)하고 이번 주로 넘긴다 — 쓰기 경로에서만 호출
+function dunEnsure(p) {
+  const d = dunState(p), wk = weekKey();
+  if (d.wk === wk) return d;
+  const to = Math.max(0, Math.min(DUNGEON.floors, (d.fl || 0) - DUNGEON.sweepBack));
+  let shard = 0, essence = 0;
+  for (let f = 1; f <= to; f++) { const r = dunReward(f); shard += r.shard; essence += r.essence; }
+  const got = { shard: shard ? addItem(p, 'shard', shard) : 0, essence: essence ? addItem(p, 'essence', essence) : 0 };
+  d.prevWk = d.wk || null; d.prevFl = d.fl || 0;
+  d.wk = wk; d.fl = to; d.at = to ? Date.now() : 0; d.fight = null;
+  d.sweep = to ? { to, shard: got.shard, essence: got.essence } : null;
+  return d;
+}
+// 읽기 전용 — GET 화면용으로 '이번 주라면' 어떻게 보일지만 계산(저장·지급 없음)
+function dunProjectWeek(p) {
+  const d = dunState(p), wk = weekKey();
+  if (d.wk === wk) return { wk, fl: d.fl || 0, best: d.best || 0, sweep: d.sweep || null };
+  const to = Math.max(0, Math.min(DUNGEON.floors, (d.fl || 0) - DUNGEON.sweepBack));
+  return { wk, fl: to, best: d.best || 0, sweep: to ? { to, pending: true } : null };
+}
+function dunFight(p) { return p.dun && p.dun.fight; }
+function inDungeonFight(p) { const f = dunFight(p); return !!(f && f.status === 'active' && Date.now() - f.startTs < f.duration + 2000); }
+function dunPhaseIdx(f, t) { let i = 0; for (let k = 0; k < f.phases.length; k++) if (t >= f.phases[k].at) i = k; return i; }
+function dunPhaseEl(f, t) { return f.phases[dunPhaseIdx(f, t)].el; }
+function dunBuff(f, k, t) { return f.buffs.filter(b => b.k === k && t >= b.from && (b.to === 0 || t < b.to)); }
+// 받는 피해 감소: 탱커 무기를 들고 있으면 패시브(레이드 상한 0.4) + 철벽·대지의 방벽 버프, 합계 상한 0.6
+function dunDR(p, f, t) {
+  const base = p.class === 'tanker' ? Math.min(CONFIG.raidDRCap, memberStats(p).dr) : 0;
+  return Math.min(CONFIG.raidDRCapSkill, base + dunBuff(f, 'dr', t).reduce((a, b) => a + b.v, 0));
+}
+function dunEvent(f, t, text) { f.events.push({ t, text }); if (f.events.length > 30) f.events.shift(); }
+// 시계 진행(쓰기 경로) — 힐러 회복 · 지속 피해 · 단계 전환 · 보스 공격 → 종료 판정
+function dunTick(db, p, f) {
+  if (!f || f.status !== 'active') return;
+  const now = Date.now(), el = Math.min(now - f.startTs, f.duration), from = f.lastEl || 0;
+  if (el > from) {
+    if (p.class === 'healer' && f.hp > 0) f.hp = Math.min(100, f.hp + DUNGEON.healPerSec * (el - from) / 1000);
+    for (const d of f.dots) {
+      const a = Math.max(d.from, d.done), b = Math.min(d.to || f.duration, el);
+      if (b > a) { const x = d.per * (b - a) / 1000 * elemMult(d.el, dunPhaseEl(f, (a + b) / 2)); f.bossHP = Math.max(0, f.bossHP - x); f.dmg += x; d.done = b; }
+    }
+    for (let k = 1; k < f.phases.length; k++) {
+      const ph = f.phases[k];
+      if (ph.at > from && ph.at <= el) { const e = elementOf(ph.el); dunEvent(f, ph.at, '🌀 보스가 ' + e.emoji + ' ' + e.name + ' 속성으로 바뀌었다! 약점: ' + weakTo(ph.el).map(x => elementOf(x).emoji + elementOf(x).name).join('·')); }
+    }
+    f.lastEl = el;
+  }
+  if (f.bossHP <= 0) return dunResolve(db, p, f, true);
+  for (const a of f.attacks) {
+    if (a.done || a.t > el) continue;
+    a.done = true;
+    if (f.block > 0) { f.block--; dunEvent(f, a.t, '❄️ 빙결 — 보스의 공격을 막았다!'); continue; }
+    const net = a.pct * (1 - dunDR(p, f, a.t));
+    f.hp = Math.max(0, f.hp - net);
+    dunEvent(f, a.t, '💥 보스 공격! HP -' + Math.round(net) + '%');
+    if (f.hp <= 0) break;
+  }
+  if (f.hp <= 0) return dunResolve(db, p, f, false);
+  if (now - f.startTs >= f.duration) return dunResolve(db, p, f, false);
+}
+function dunResolve(db, p, f, win) {
+  if (f.status === 'done') return;
+  f.status = 'done'; f.win = !!win; f.endTs = Date.now();
+  if (!win) { dunEvent(f, f.lastEl || 0, '☠️ 패배…'); return; }
+  const d = dunState(p);
+  const rw = dunReward(f.floor), got = { shard: 0, essence: 0, prism: 0, first: false };
+  if (f.floor === (d.fl || 0) + 1) {           // 이번 주 처음 넘는 층만 보상(재도전 파밍 방지)
+    d.fl = f.floor; d.at = Date.now();
+    got.shard = addItem(p, 'shard', rw.shard);
+    if (rw.essence) got.essence = addItem(p, 'essence', rw.essence);
+    if (f.floor > (d.best || 0)) { d.best = f.floor; got.prism = gainPrism(p, DUNGEON.firstClearPrism); got.first = true; }
+  }
+  f.reward = got;
+  dunEvent(f, f.lastEl || 0, '🏆 ' + f.floor + '층 돌파!');
+  if (got.first && (f.floor % 5 === 0 || f.floor >= DUNGEON.floors)) addLog(db, '🌌 ' + p.nick + ' 초월 던전 ' + f.floor + '층 최초 돌파!');
+}
+function dunWeaponsView(p, f, t) {
+  const cur = f ? dunPhaseEl(f, t) : null;
+  return allWeapons(p).map(w => {
+    const e = elementOf(w.el), c = CLASSES[w.cls] || CLASSES.warrior, u = (f && f.used[w.cls]) || {};
+    return { cls: w.cls, emoji: c.emoji, weapon: c.weapon, lv: w.lv, asc: w.asc || 0, el: w.el, elEmoji: e.emoji, elName: e.name,
+      equipped: !!w.equipped, mult: cur ? elemMult(w.el, cur) : null, usedC: !!u.c, usedE: !!u.e,
+      classSkill: CLASS_SKILLS[w.cls] ? CLASS_SKILLS[w.cls].emoji + ' ' + CLASS_SKILLS[w.cls].name : null,
+      elemSkill: (w.asc || 0) >= 1 ? elementSkillView(w.el) : null };
+  });
+}
+// 전투 뷰(저장값 기준). 보스 공격 시각도 같이 내려서 클라가 폴링 없이 HP 를 예측한다(솔로라 숨길 이유 없음 — 오히려 '예고' 가 된다)
+function dunFightView(p) {
+  const f = dunFight(p);
+  if (!f) return null;
+  const now = Date.now(), t = Math.min(now - f.startTs, f.duration);
+  return {
+    status: f.status, floor: f.floor, name: f.name, emoji: f.emoji, startTs: f.startTs, duration: f.duration,
+    remain: Math.max(0, f.duration - (now - f.startTs)), serverNow: now,
+    phases: f.phases.map(ph => ({ el: ph.el, at: ph.at, emoji: elementOf(ph.el).emoji, name: elementOf(ph.el).name, weakTo: weakTo(ph.el) })),
+    phase: dunPhaseIdx(f, t), bossHP: Math.round(f.bossHP), bossMax: f.bossMax, hp: Math.round(f.hp * 10) / 10,
+    dr: Math.round(dunDR(p, f, t) * 100), block: f.block, haste: dunBuff(f, 'haste', t).length > 0,
+    attacks: f.attacks.map(a => ({ t: a.t, pct: a.pct, done: a.done })),
+    healPerSec: p.class === 'healer' ? DUNGEON.healPerSec : 0,
+    swapIn: Math.max(0, (f.swapAt || 0) - now), danger: f.danger,
+    weapons: dunWeaponsView(p, f, t), hits: f.hits, dmg: Math.round(f.dmg),
+    events: f.events.slice(-6), win: f.win, reward: f.reward || null,
+  };
+}
+function dungeonView(db, id) {
+  const p = norm(db.players[id]);
+  const w = dunProjectWeek(p), wk = w.wk;
+  const unlocked = ascendMax(p) >= 1;
+  const next = w.fl < DUNGEON.floors ? dunFloor(w.fl + 1, wk) : null;
+  const look = (fl) => fl && Object.assign({}, fl, {
+    phases: fl.phases.map(ph => ({ el: ph.el, emoji: elementOf(ph.el).emoji, name: elementOf(ph.el).name, weakTo: weakTo(ph.el) })),
+  });
+  const list = Object.keys(db.players).map(k => db.players[k]).filter(q => q && q.dun && q.dun.wk === wk && q.dun.fl > 0)
+    .sort((a, b) => (b.dun.fl - a.dun.fl) || ((a.dun.at || 0) - (b.dun.at || 0))).slice(0, 20)
+    .map(q => ({ nick: q.nick, floor: q.dun.fl, best: q.dun.best || 0, nickColor: q.nickColor || null, weaponCount: allWeapons(q).length }));
+  return {
+    ok: true, unlocked, week: wk, resetIn: weekResetIn(), floor: w.fl, best: w.best, sweep: w.sweep, max: DUNGEON.floors,
+    weaponCount: allWeapons(p).length, next: look(next),
+    upcoming: [2, 3, 4].map(n => w.fl + n <= DUNGEON.floors ? look(dunFloor(w.fl + n, wk)) : null).filter(Boolean),
+    weapons: dunWeaponsView(p, null, 0), chart: elementChart(), bands: DUNGEON.bands,
+    fight: dunFightView(p), rank: list,
+  };
+}
+function dunStart(db, id) {
+  const p = norm(db.players[id]);
+  if (!p.class) return { ok: false, error: '먼저 직업을 고르세요.' };
+  if (ascendMax(p) < 1) return { ok: false, error: '🔒 초월 던전은 ★1 무기가 있어야 들어갈 수 있어요. (+99 에서 🌈 초월)' };
+  const d = dunEnsure(p);
+  if (d.fight && d.fight.status === 'active') {
+    dunTick(db, p, d.fight);
+    if (d.fight.status === 'active') return { ok: false, error: '이미 전투 중이에요.' };
+  }
+  if (inActiveRaid(db, id)) return { ok: false, error: '레이드 중에는 던전에 들어갈 수 없어요.' };
+  const floor = (d.fl || 0) + 1;
+  if (floor > DUNGEON.floors) return { ok: false, error: '🏔️ 이번 주 정상(' + DUNGEON.floors + '층)을 정복했어요! 다음 주에 다시 도전하세요.' };
+  const fl = dunFloor(floor, d.wk);
+  const have = allWeapons(p).length;
+  if (have < fl.weapons) return { ok: false, error: '🗡️ ' + floor + '층(' + fl.band + ')부터는 무기 ' + fl.weapons + '자루 이상이 필요해요. (지금 ' + have + '자루)' };
+  const nA = DUNGEON.attacksBase + fl.phases.length, times = [];
+  for (let i = 0; i < nA; i++) times.push(randInt(1000, fl.duration - 600));
+  times.sort((a, b) => a - b);
+  const now = Date.now();
+  d.fight = {
+    status: 'active', floor, name: fl.name, emoji: fl.emoji, startTs: now, lastEl: 0, duration: fl.duration,
+    phases: fl.phases, bossMax: fl.hp, bossHP: fl.hp, hp: 100, danger: fl.danger,
+    attacks: times.map(t => ({ t, pct: fl.danger / nA, done: false })),
+    dots: [], buffs: [], block: 0, used: {}, swapAt: 0, hits: 0, dmg: 0, win: null, reward: null,
+    events: [{ t: 0, text: fl.emoji + ' ' + floor + '층 ' + fl.name + ' — ' + fl.phases.map(ph => elementOf(ph.el).emoji + elementOf(ph.el).name).join(' → ') }],
+  };
+  return { ok: true, silent: true, fight: dunFightView(p) };
+}
+function dunActive(db, id) {
+  const p = norm(db.players[id]), f = dunFight(p);
+  if (!f) return { p, f: null, err: { ok: false, error: '진행 중인 던전 전투가 없어요.' } };
+  dunTick(db, p, f);
+  return { p, f };
+}
+function dunHit(db, id, hits) {
+  const { p, f, err } = dunActive(db, id); if (err) return err;
+  if (f.status !== 'active') return { ok: true, silent: true, ended: true, fight: dunFightView(p) };
+  hits = Math.max(0, Math.min(parseInt(hits, 10) || 0, CONFIG.raidHitBatchMax));
+  const t = Date.now() - f.startTs;
+  const maxTotal = Math.floor(t / CONFIG.raidHitMsPerTap) + 12;   // 경과시간으로 물리적 최대치를 넘는 타수는 버린다
+  if (f.hits + hits > maxTotal) hits = Math.max(0, maxTotal - f.hits);
+  const haste = dunBuff(f, 'haste', t).reduce((m, b) => Math.max(m, b.v), 1);
+  const mult = elemMult(p.element, dunPhaseEl(f, t));
+  const dmg = hits * memberStats(p).atk * CONFIG.raidHitDmgMult * mult * haste;
+  f.bossHP = Math.max(0, f.bossHP - dmg); f.hits += hits; f.dmg += dmg;
+  if (f.bossHP <= 0) dunTick(db, p, f);
+  return { ok: true, silent: true, dmg: Math.round(dmg), mult, fight: dunFightView(p) };
+}
+// 스킬 효과 적용(직업·속성 공통) — 피해는 지금 단계 속성과의 상성 배율을 곱한다
+function dunApplySkill(p, f, s, t, srcEl) {
+  const tap = memberStats(p).atk * CONFIG.raidHitDmgMult, mult = elemMult(srcEl, dunPhaseEl(f, t)), parts = [];
+  if (s.dmg) { const d = s.dmg * tap * mult; f.bossHP = Math.max(0, f.bossHP - d); f.dmg += d; parts.push('보스 -' + Math.round(d).toLocaleString() + (mult > 1 ? ' (효과 굉장!)' : mult < 1 ? ' (효과 별로…)' : '')); }
+  if (s.dot) { f.dots.push({ per: s.dot.per * tap, el: srcEl, from: t, to: s.dot.ms ? t + s.dot.ms : 0, done: t }); parts.push('지속 피해'); }
+  if (s.heal) { f.hp = Math.min(100, f.hp + s.heal); parts.push('HP +' + s.heal + '%'); }
+  if (s.buff) { f.buffs.push({ k: s.buff.k, v: s.buff.v, from: t, to: s.buff.ms ? t + s.buff.ms : 0 }); parts.push(s.buff.k === 'dr' ? '피해 −' + Math.round(s.buff.v * 100) + '%' : '연타 ×' + s.buff.v); }
+  if (s.block) { f.block += s.block; parts.push('다음 공격 무효'); }
+  return parts.join(' · ');
+}
+function dunSkill(db, id, kind) {
+  const { p, f, err } = dunActive(db, id); if (err) return err;
+  if (f.status !== 'active') return { ok: true, silent: true, ended: true, fight: dunFightView(p) };
+  const t = Date.now() - f.startTs, u = f.used[p.class] || (f.used[p.class] = {});
+  let text;
+  if (kind === 'elem') {
+    if ((p.ascend || 0) < 1) return { ok: false, error: '속성 스킬은 ★1 이상 무기만 쓸 수 있어요.' };
+    if (u.e) return { ok: false, error: '이 무기의 속성 스킬은 이미 썼어요.' };
+    u.e = true;
+    const s = ELEMENT_SKILLS[p.element], e = elementOf(p.element);
+    text = e.emoji + ' ' + s.name + '! ' + dunApplySkill(p, f, s, t, p.element);
+  } else {
+    if (u.c) return { ok: false, error: '이 무기의 직업 스킬은 이미 썼어요.' };
+    u.c = true;
+    const s = CLASS_SKILLS[p.class] || CLASS_SKILLS.warrior;
+    text = s.emoji + ' ' + s.name + '! ' + dunApplySkill(p, f, s, t, p.element);
+  }
+  dunEvent(f, t, text);
+  dunTick(db, p, f);
+  return { ok: true, silent: true, skillText: text, fight: dunFightView(p) };
+}
+function dunSwap(db, id, cls) {
+  const { p, f, err } = dunActive(db, id); if (err) return err;
+  if (f.status !== 'active') return { ok: true, silent: true, ended: true, fight: dunFightView(p) };
+  const now = Date.now();
+  if (now < (f.swapAt || 0)) return { ok: false, error: '교체 준비 중… (' + ((f.swapAt - now) / 1000).toFixed(1) + '초)' };
+  const r = swapWeapon(db, p, cls);
+  if (!r.ok) return r;
+  f.swapAt = now + DUNGEON.swapCooldown;
+  const t = now - f.startTs, e = elementOf(p.element), m = elemMult(p.element, dunPhaseEl(f, t));
+  dunEvent(f, t, '🔄 ' + classOf(p).emoji + ' ' + classOf(p).weapon + '(' + e.emoji + e.name + ')로 교체' + (m > 1 ? ' — 약점을 찌른다!' : m < 1 ? ' — 상성 불리…' : ''));
+  dunTick(db, p, f);
+  return { ok: true, silent: true, fight: dunFightView(p) };
+}
+function dunFinish(db, id) {
+  const { p, f } = dunActive(db, id);
+  return { ok: true, silent: true, fight: f ? dunFightView(p) : null };
+}
+// 결과 화면을 닫으면 전투 기록을 지운다(다음 층 정보로)
+function dunLeave(db, id) {
+  const p = norm(db.players[id]), d = dunState(p);
+  if (d.fight && d.fight.status === 'active') { dunTick(db, p, d.fight); if (d.fight.status === 'active') return { ok: false, error: '전투가 끝난 뒤에 나갈 수 있어요.' }; }
+  d.fight = null; d.sweep = null;
+  return { ok: true, silent: true };
+}
+
 /* ---------- 몬스터 (사냥) ----------
  * 희귀도(일반~신화)가 난이도를 결정한다. 몬스터 체력은 내 레벨(=예상 데미지)에
  * 비례하므로, 무기 강화 수치와 무관하게 "희귀할수록 어렵다"가 유지된다.
@@ -894,6 +1253,9 @@ function norm(p) {
   if (p.protects > 0) inv0.items.protect = (inv0.items.protect || 0) + p.protects;
   if (p.enhanceBoost > 0) inv0.items.boost = (inv0.items.boost || 0) + p.enhanceBoost;
   delete p.protects; delete p.enhanceBoost;
+  // 직업 변경권은 장비 칸으로 대체됐다 — 갖고 있던 건 속성 재련권으로 1:1 바꿔 준다
+  if (inv0.items.classtkt > 0) { inv0.items.eltkt = (inv0.items.eltkt || 0) + inv0.items.classtkt; }
+  delete inv0.items.classtkt;
   if (p.raidDay == null) { p.raidDay = ''; p.raidsUsed = 0; }
   if (p.lastMine == null) p.lastMine = Date.now();
   if (p.party === undefined) p.party = null;
@@ -1045,6 +1407,9 @@ function publicView(db, id) {
     missionAlert: missionAlert(p),   // 미션·패스에서 받을 수 있는 보상 개수(빨간점)
     prism: p.prism || 0,             // 💎 프리즘
     weapons: weaponsView(p),         // 장비 칸(무기 여러 자루)
+    dunBest: dunBest(p), dunOpen: ascendMax(p) >= 1, inDungeon: inDungeonFight(p),
+    rerollCost: rerollCost(p.level || 0), rerollMin: rerollMinLevel(),   // 🔁 속성 재련 확인창용
+    elemSkill: (p.ascend || 0) >= 1 ? elementSkillView(p.element) : null,   // ★1+ 무기의 속성 스킬(초월 던전)
     ascendMax: ascendMax(p),
   };
 }
@@ -1134,6 +1499,7 @@ function rename(db, id, newNick) {
 function enhance(db, id) {
   const p = norm(db.players[id]);
   if (p.level >= CONFIG.maxLevel) return { ok: false, error: '이미 만렙(+' + CONFIG.maxLevel + ')! 🌈 초월로 새 회차를 시작하세요.' };
+  if (inDungeonFight(p)) return { ok: false, error: '던전 전투 중에는 강화할 수 없어요.' };
   const cost = enhanceCost(p.level, p.ascend);
   if (p.gold < cost) return { ok: false, error: '골드 부족! (필요 ' + cost + ' / 보유 ' + p.gold + ')' };
   p.gold -= cost;
@@ -1220,6 +1586,7 @@ function ascend(db, id) {
   if (p.level < CONFIG.maxLevel) {
     return { ok: false, error: '+' + CONFIG.maxLevel + ' 만렙에서만 초월할 수 있어요. (현재 +' + p.level + ')' };
   }
+  if (inDungeonFight(p)) return { ok: false, error: '던전 전투 중에는 초월할 수 없어요.' };
   const to = starsOf(p) + 1;
   const req = ascendReq(to);
   const have = { shard: itemCount(p, 'shard'), essence: itemCount(p, 'essence') };
@@ -1392,6 +1759,9 @@ function buyProtect(db, id, qty) {
 }
 function buyBoost(db, id) {
   return buyIntoInv(norm(db.players[id]), 'boost', CONFIG.boostCount, CONFIG.boostPrice);
+}
+function buyReroll(db, id) {
+  return buyIntoInv(norm(db.players[id]), 'eltkt', 1, CONFIG.rerollPrice);
 }
 function buyDye(db, id) {
   return buyIntoInv(norm(db.players[id]), 'dye', 1, CONFIG.dyePrice);
@@ -1940,6 +2310,9 @@ module.exports = {
   buyBoost, buyDye, buyClassChange, shopItems, equipTitle,
   newWeapon, equipWeapon, weaponsView, slotUnlock, openBox, alchemy, capsule, buyPrism, prismShopItems, prismInfo, prismView,
   BOX_TABLE, ALCHEMY, CAPSULE_TABLE,
+  // 속성 상성 · 초월 던전
+  ELEMENTS, elemMult, elementChart, ELEMENT_SKILLS, DUNGEON, dunFloor, dunHp, weekKey, buyReroll,
+  dungeonView, dunStart, dunHit, dunSkill, dunSwap, dunFinish, dunLeave,
   profile, ranking, goldRanking, hogu, recentLog, playerList, findByNick,
   findByAuthUid, authLink,
   // 저장 계층(server.js)용 — 일일 카운터 / 유저별 상한

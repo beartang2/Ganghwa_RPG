@@ -8,12 +8,18 @@ let currentTab = 'rank';
    유저에게 '버전당 1회' 안내창이 뜬다. (닫기 버튼은 아래 PATCH_DELAY 초 후 활성화) */
 const PATCH = {
   version: '6',
-  title: '🌈 초월 · 💎 프리즘 업데이트',
+  title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
+    '🌌 <b>초월 던전</b> — ★1 무기가 있으면 레이드 탭에서 입장! 혼자 연타로 층을 올라요. 매주 월요일 초기화되고 <b>층마다 보스 속성이 매주 바뀌어요</b>(지난주 기록 −5층까지 자동 소탕)',
+    '🔁 <b>속성 상성</b> — 💧물→🔥불→❄️얼음→🌪️바람→☠️독→⛰️대지→⚡번개→💧물 순서로 앞이 뒤를 이기고, ✨빛⇄🌑어둠은 서로 강해요. 이기면 피해 <b>×2</b>, 지면 <b>×0.5</b>',
+    '🗡️ <b>깊은 층일수록 무기가 더 필요해요</b> — 16층부터 2자루·31층부터 3자루·46층부터 4자루. 전투 중에 보스 속성이 바뀌면 <b>약점 무기로 바꿔 끼며</b> 싸워요',
+    '✨ <b>속성 스킬</b> — ★1 이상 무기는 직업 스킬과 별도로 무기 속성의 스킬을 1회 써요(🔥화염 폭발 · ❄️빙결 · ☠️맹독 등)',
+    '🔁 <b>속성 재련권</b> — 직업 변경권 자리를 대신해요. 🟣에픽(+25) 이상 무기의 속성을 다시 뽑고, 대신 강화 수치의 10%가 깎여요. 갖고 있던 직업 변경권은 자동으로 재련권이 됐어요',
+    '🏆 <b>던전 보상</b> — 층 돌파마다 💠파편(5·10층마다 🌟정수), 처음 넘는 층은 💎프리즘 3개. 10·30·50층 칭호와 <b>주간 최고층 랭킹</b>도 있어요',
     '🗡️ <b>장비 칸</b> — 무기를 여러 자루 가질 수 있어요(직업당 한 자루). 무기를 <b>+99</b>까지 키울 때마다 칸을 하나씩 열 수 있고, 화로 위 장비 칸에서 바꿔 들면 직업도 같이 바뀌어요. 새 무기는 <b>+0·★0</b>부터 따로 키워요',
     '💎 <b>프리즘</b> 재화 추가 — 💎 프리즘 탭에서 📦<b>상자</b>(열쇠로 3개 중 하나) · ⚗️<b>연금술</b>(마석+골드) · 🧸<b>캡슐</b>(골드만 있으면 무제한)으로 모아요. 확률표는 탭에서 그대로 볼 수 있어요',
     '🗝️ 사냥하면 <b>상자 열쇠</b>와 🔮<b>마석</b>이 나와요 — 무한 사냥에서도 낮은 확률로 나와요',
-    '🛒 <b>프리즘 상점</b> — 장비 칸 +1 · 🫧 <span class="nick-prism">프리즘 염색약</span>(상점 전용 오로라색) · 🔨 장인의 망치 · 🎁 초월 꾸러미. 직업 변경권은 판매를 마쳤어요(갖고 있는 건 그대로 사용 가능)',
+    '🛒 <b>프리즘 상점</b> — 장비 칸 +1(💎70 → 140 → 210) · 🫧 <span class="nick-prism">프리즘 염색약</span>(상점 전용 오로라색) · 🔨 장인의 망치 · 🎁 초월 꾸러미',
     '🕯️ <b>호구</b> 탭 이름이 <b>추모</b>로 바뀌었어요 — 오늘 무기를 떠나보낸 분들을 기려요',
     '🌈 <b>초월 시스템</b> — +99 는 더 이상 끝이 아니에요. 초월하면 무기가 +0 으로 돌아가는 대신 <b>영구 ★</b>을 얻어요 (골드 획득·레이드 공격력·🔨장인의 기운 영구 상승)',
     '💠 <b>초월 재료</b> — ★을 올리려면 재료가 필요해요. <b>초월의 파편</b>은 🗡️사냥에서 확률로, <b>초월의 정수</b>는 🐲레이드 성공 시 확정으로 나와요',
@@ -388,7 +394,8 @@ function render() {
     const flow = GRADE_FLOW[me.grade.key];
     FX.grade.enable(!!flow, flow ? { colors: flow } : null);
   }
-  el('weaponElem').textContent = (me.elementEmoji || '') + ' ' + (me.elementName || '') + '속성';
+  el('weaponElem').textContent = (me.elementEmoji || '') + ' ' + (me.elementName || '') + '속성' + (me.elemSkill ? ' · 스킬 「' + me.elemSkill.name + '」' : '');
+  el('weaponElem').title = me.elemSkill ? '속성 스킬(초월 던전): ' + me.elemSkill.desc : '';
   el('weaponElem').style.color = me.elementColor || 'var(--muted)';
   el('oddsS').textContent = fmtPct(me.odds.success);
   el('oddsD').textContent = fmtPct(me.odds.destroy);
@@ -681,7 +688,10 @@ function renderInv() {
   if (ub) ub.onclick = () => act(() => doUseItem(sel.id), ub);
 }
 async function doUseItem(itemId) {
-  if (itemId === 'classtkt' && !confirm('🔄 직업 변경권을 사용할까요?\n직업을 다시 선택합니다 (레벨·골드 유지).')) return;
+  if (itemId === 'eltkt') {
+    if (me.level < me.rerollMin) return toast('🔁 재련은 🟣에픽(+' + me.rerollMin + ') 이상 무기만 할 수 있어요. (지금 +' + me.level + ')', 'bad');
+    if (!confirm('🔁 속성 재련권을 쓸까요?\n장착한 무기: ' + me.weapon + '\n강화 +' + me.level + ' → +' + (me.level - me.rerollCost) + ' (−' + me.rerollCost + ')\n속성은 무작위로 바뀌어요 (지금 ' + me.elementEmoji + ' ' + me.elementName + ' 제외)')) return;
+  }
   const r = await api('use-item', 'POST', { item: itemId });
   if (!r.ok) return toast(r.error, 'bad');
   applyMe(r.me);
@@ -1277,14 +1287,21 @@ async function refreshRaidData() {
 }
 function startRaidLoop() {
   stopRaidLoop();
-  lastPartyHtml = ''; raidBuiltFor = null;
+  lastPartyHtml = ''; raidBuiltFor = null; lastDunHtml = ''; dunBuiltFor = null;
+  if (raidSub === 'dun') loadDungeon().then(paintRaid);
   refreshRaidData().then(paintRaid);
   raidTimer = setInterval(raidLoopTick, 300);
 }
-function stopRaidLoop() { if (raidTimer) { clearInterval(raidTimer); raidTimer = null; } if (raidFlushT) { clearTimeout(raidFlushT); raidFlushT = null; } }
+function stopRaidLoop() {
+  if (raidTimer) { clearInterval(raidTimer); raidTimer = null; }
+  if (raidFlushT) { clearTimeout(raidFlushT); raidFlushT = null; }
+  if (dunFlushT) { clearTimeout(dunFlushT); dunFlushT = null; if (dunLocalHits) flushDunHits(); }   // 탭을 떠나도 친 만큼은 보낸다
+}
 async function raidLoopTick() {
   if (currentTab !== 'raid') return;
   const inBattle = curRaid && curRaid.status && curRaid.startTs !== dismissedRaidTs;
+  // 초월 던전 화면 — 파티 레이드가 실제로 진행 중이 아니면 던전 루프가 맡는다
+  if (raidSub === 'dun' && !(inBattle && curRaid.status === 'active')) return dunLoopTick();
   if (inBattle && curRaid.status === 'active') {
     if (raidBuiltFor !== curRaid.startTs) renderBattle(curRaid);
     if (Date.now() - raidLastPoll > 850) await raidPoll();
@@ -1301,11 +1318,12 @@ async function raidLoopTick() {
 function paintRaid() {
   if (currentTab !== 'raid') return;
   const inBattle = curRaid && curRaid.status && curRaid.startTs !== dismissedRaidTs;
-  if (inBattle) renderBattle(curRaid);
+  if (inBattle && (raidSub !== 'dun' || curRaid.status === 'active')) renderBattle(curRaid);
+  else if (raidSub === 'dun') { if (dunF) { if (dunBuiltFor !== dunF.startTs) renderDunBattle(); else updateDunUI(); } else paintDungeon(); }
   else paintParty(el('panel'));
 }
 function paintParty(panel) {
-  let html = '';
+  let html = raidSubBar();
   if (me.invites && me.invites.length) {
     html += `<div style="margin-bottom:6px"><b>📨 받은 파티 초대</b></div>` +
       me.invites.map(iv => `<div class="party-member"><b class="pm-nick">${esc(iv.leaderNick)}</b> <small>파티 ${iv.count}/${iv.max}</small>
@@ -1349,6 +1367,255 @@ function paintParty(panel) {
       : emptyMsg('열린 파티가 없어요. 직접 만들어보세요!');
   }
   if (html !== lastPartyHtml) { panel.innerHTML = html; lastPartyHtml = html; }
+}
+
+/* ---------- 🌌 초월 던전 (레이드 탭의 두 번째 화면) ----------
+ * 로비: 다음 층(보스 속성·약점·최소 무기 수)·내 무기 상성·상성표·주간 랭킹.
+ * 전투: 혼자 15~30초 연타. 단계마다 보스 속성이 바뀌면 약점 무기로 바꿔 끼고, 무기마다 직업·속성 스킬 1회.
+ * 서버가 보스 공격 시각을 내려주므로 HP 는 폴링 없이 여기서 예측하고, 연타는 700ms 마다 묶어서 보낸다. */
+let raidSub = (() => { try { return localStorage.getItem('raidSub') === 'dun' ? 'dun' : 'party'; } catch (_) { return 'party'; } })();
+let dunData = null, dunF = null, dunBuiltFor = null, dunLocalHits = 0, dunLastTap = 0, dunFlushT = null;
+let dunFinishing = false, dunClockOff = 0, dunLastLoad = 0, dunLastSync = 0, lastDunHtml = '', dunRecvAt = 0;
+// 상성 — 서버 game.js 의 ELEMENT_CYCLE 과 같은 순서(앞이 뒤를 이김) + 빛⇄어둠
+const DUN_CYCLE = ['water', 'fire', 'ice', 'wind', 'poison', 'earth', 'thunder'];
+const DUN_EL = { fire: ['🔥', '불'], water: ['💧', '물'], earth: ['⛰️', '대지'], wind: ['🌪️', '바람'], thunder: ['⚡', '번개'], ice: ['❄️', '얼음'], light: ['✨', '빛'], dark: ['🌑', '어둠'], poison: ['☠️', '독'] };
+function dunBeats(a, b) {
+  if ((a === 'light' && b === 'dark') || (a === 'dark' && b === 'light')) return true;
+  const i = DUN_CYCLE.indexOf(a); return i >= 0 && DUN_CYCLE[(i + 1) % DUN_CYCLE.length] === b;
+}
+function dunMult(a, b) { return dunBeats(a, b) ? 2 : dunBeats(b, a) ? 0.5 : 1; }
+function dunElTag(k) { const e = DUN_EL[k] || ['?', k]; return `<span class="del del-${k}">${e[0]}${e[1]}</span>`; }
+function dunMultTag(m) { return `<b class="dmult ${m > 1 ? 'up' : m < 1 ? 'down' : ''}">×${m}</b>`; }
+function dunNow() { return Date.now() + dunClockOff; }
+function raidSubBar() {
+  return `<div class="psub-tabs rsub-tabs">${[['party', '🐲', '파티 레이드'], ['dun', '🌌', '초월 던전']].map(([k, e, l]) =>
+    `<button class="psub${raidSub === k ? ' active' : ''}" data-rsub="${k}"><span>${e}</span>${l}</button>`).join('')}</div>`;
+}
+function setRaidSub(k) {
+  raidSub = k === 'dun' ? 'dun' : 'party';
+  try { localStorage.setItem('raidSub', raidSub); } catch (_) { /* 저장 불가 환경 무시 */ }
+  lastPartyHtml = ''; lastDunHtml = ''; dunBuiltFor = null;
+  if (raidSub === 'dun') { loadDungeon().then(paintRaid); }
+  else refreshRaidData().then(paintRaid);
+  paintRaid();
+}
+function setDunFight(f) {
+  dunF = f || null; dunRecvAt = Date.now();
+  if (f && f.serverNow) dunClockOff = f.serverNow - Date.now();
+}
+async function loadDungeon() {
+  dunLastLoad = Date.now();
+  try {
+    const r = await api('dungeon');
+    if (r && r.ok) { dunData = r; if (r.fight && (!dunF || dunF.startTs !== r.fight.startTs || r.fight.status === 'done')) setDunFight(r.fight); if (!r.fight) setDunFight(null); }
+  } catch (_) { /* 네트워크 순간 오류 무시 */ }
+}
+function fmtLeft(ms) { const h = Math.floor(ms / 3600000); return h >= 24 ? Math.floor(h / 24) + '일 ' + (h % 24) + '시간' : h + '시간 ' + Math.floor(ms % 3600000 / 60000) + '분'; }
+function dunPhaseChips(phases, cur) {
+  return phases.map((ph, i) => `<span class="dph${cur === i ? ' on' : cur != null && i < cur ? ' past' : ''}">${dunElTag(ph.el)}<small>약점 ${ph.weakTo.map(k => DUN_EL[k][0]).join('')}</small></span>`).join('<span class="dph-arrow">→</span>');
+}
+function paintDungeon() {
+  const d = dunData, panel = el('panel');
+  let h = raidSubBar();
+  if (!d) { h += '<p class="hint">불러오는 중…</p>'; }
+  else {
+    const n = d.next;
+    h += `<div class="dun-head"><div><b class="dun-title">🌌 초월 던전</b><small>매주 월요일 초기화 · ${fmtLeft(d.resetIn)} 남음</small></div>
+      <div class="dun-floors"><span>이번 주 <b>${d.floor}</b>층</span><span>최고 <b>${d.best}</b>층</span></div></div>`;
+    if (!d.unlocked) h += `<div class="dun-lock">🔒 <b>★1 무기가 있어야 들어갈 수 있어요.</b><br>무기를 +99 까지 키우고 🌈 초월하면 열려요. 초월한 무기는 <b>속성 스킬</b>도 함께 얻어요.</div>`;
+    if (d.sweep) h += `<div class="dun-sweep">🧹 지난주 기록으로 <b>1~${d.sweep.to}층 자동 소탕</b>${d.sweep.pending ? ' — 첫 도전 때 확정돼요' : ` · 💠+${d.sweep.shard}${d.sweep.essence ? ' 🌟+' + d.sweep.essence : ''}`}</div>`;
+    if (n) {
+      const lack = d.weaponCount < n.weapons;
+      h += `<div class="dun-next">
+        <div class="dun-next-top"><span class="dun-boss">${n.emoji}</span><div class="dun-next-info">
+          <div class="bname">${n.floor}층 · ${esc(n.name)} <small class="btier">${esc(n.band)}</small></div>
+          <div class="dph-row">${dunPhaseChips(n.phases)}</div></div></div>
+        <div class="dun-stats"><span>HP <b>${n.hp.toLocaleString()}</b></span><span>위험도 <b>${n.danger}%</b></span><span>⏱ <b>${n.duration / 1000}초</b></span>
+          <span class="${lack ? 'bad' : 'good'}">🗡️ 무기 <b>${n.weapons}</b>자루 필요 · 보유 <b>${d.weaponCount}</b></span></div>
+        <div class="dun-rw">보상 💠${n.reward.shard}${n.reward.essence ? ' · 🌟' + n.reward.essence : ''}${n.floor > d.best ? ' · <b class="dun-first">💎3 첫 돌파</b>' : ''}</div>
+        <button class="btn primary dun-go" data-dun-start ${!d.unlocked || lack ? 'disabled' : ''}>${lack ? '🔒 무기 ' + n.weapons + '자루부터' : '⚔️ ' + n.floor + '층 도전'}</button>
+      </div>`;
+      // 내 무기 × 이번 층 단계별 상성
+      h += `<div class="dun-sec">내 무기 상성 <small>이 층 기준</small></div><div class="dun-wlist">` + d.weapons.map(w =>
+        `<div class="dun-w${w.equipped ? ' on' : ''}"><span class="dun-w-id">${w.emoji} <b>${w.asc ? '★' + w.asc + ' ' : ''}+${w.lv}</b> ${dunElTag(w.el)}</span>
+          <span class="dun-w-m">${n.phases.map(ph => dunMultTag(dunMult(w.el, ph.el))).join('')}</span>
+          ${w.elemSkill ? `<small class="dun-w-sk">${w.elemSkill.emoji} ${esc(w.elemSkill.name)} — ${esc(w.elemSkill.desc)}</small>` : `<small class="dun-w-sk dim">속성 스킬: ★1 필요</small>`}</div>`).join('') + `</div>`;
+      if (d.upcoming && d.upcoming.length) h += `<div class="dun-sec">다음 층들</div><div class="dun-up">` + d.upcoming.map(u =>
+        `<div class="dun-up-row"><b>${u.floor}층</b> ${u.emoji} <span class="dph-row sm">${u.phases.map(ph => dunElTag(ph.el)).join('→')}</span><small>🗡️${u.weapons}</small></div>`).join('') + `</div>`;
+    } else h += `<div class="dun-lock">🏔️ <b>이번 주 정상(${d.max}층) 정복!</b> 다음 주에 새 속성으로 다시 열려요.</div>`;
+    // 상성표
+    h += `<details class="odds-table dun-chart"><summary>🔁 속성 상성표 — 이기면 ×2 · 지면 ×0.5</summary><div class="dun-cycle">` +
+      DUN_CYCLE.concat(DUN_CYCLE[0]).map(k => DUN_EL[k][0] + '<small>' + DUN_EL[k][1] + '</small>').join('<i>→</i>') +
+      `</div><div class="dun-cycle">✨<small>빛</small><i>⇄</i>🌑<small>어둠</small> <small class="dun-note">서로 ×2</small></div>
+      <p class="hint" style="margin:6px 12px 10px">물이 불을 끄고 · 불이 얼음을 녹이고 · 얼음이 바람을 얼리고 · 바람이 독기를 흩고 · 독이 땅을 더럽히고 · 땅이 번개를 흘려보내고 · 번개가 물을 감전시켜요.
+      속성이 안 맞으면 🛒 상점의 <b>🔁 속성 재련권</b>(에픽 이상 무기 · 강화 10%)으로 다시 뽑아요.</p></details>`;
+    // 구간 안내
+    h += `<details class="odds-table"><summary>🗺️ 층 구간</summary><table>${d.bands.map(b => `<tr><td>${b.from}~${b.to}층 ${esc(b.name)}</td><td>무기 ${b.weapons}자루 · 속성 ${b.phases}단계</td></tr>`).join('')}</table></details>`;
+    // 주간 랭킹
+    h += `<div class="dun-sec">🏆 이번 주 최고층</div>` + (d.rank.length ? `<div class="dun-rank">` + d.rank.map((x, i) =>
+      `<div class="dun-rank-row${me && x.nick === me.nick ? ' me' : ''}"><span class="rk">${i + 1}</span>${nickSpan(x.nick, x.nickColor)}<small>🗡️${x.weaponCount}</small><b>${x.floor}층</b></div>`).join('') + `</div>` : emptyMsg('이번 주 도전자가 아직 없어요'));
+  }
+  if (h !== lastDunHtml) { panel.innerHTML = h; lastDunHtml = h; }
+}
+async function doDunStart() {
+  if (dunF && dunF.status === 'done') { const l = await api('dun-leave', 'POST'); if (!l.ok) return toast(l.error, 'bad'); setDunFight(null); }
+  const r = await api('dun-start', 'POST');
+  if (!r.ok) { toast(r.error, 'bad'); await loadDungeon(); return paintRaid(); }
+  applyMe(r.me); setDunFight(r.fight); dunBuiltFor = null; dunFinishing = false; dunLocalHits = 0; lastDunHtml = '';
+  paintRaid();
+}
+async function doDunLeave() {
+  const r = await api('dun-leave', 'POST');
+  if (!r.ok) return toast(r.error, 'bad');
+  setDunFight(null); dunBuiltFor = null; lastDunHtml = '';
+  await loadDungeon(); paintRaid();
+}
+function renderDunBattle() {
+  const f = dunF, panel = el('panel');
+  panel.innerHTML =
+    `<div class="raid-battle dun-battle">
+       <div class="raid-timerrow"><span class="raid-boss-name">🌌 ${f.floor}층 · ${f.emoji} ${esc(f.name)}</span><span class="raid-timer">⏱ <b id="dTimer">--</b></span></div>
+       <div id="dPhases" class="dph-row dun-bphases"></div>
+       <div class="raid-stage"><div id="dBoss" class="raid-mon" role="button" aria-label="보스 공격"><span class="rmon-emoji">${f.emoji}</span><span id="dBossEl" class="dun-boss-el"></span></div></div>
+       <div class="rbar-label">보스 HP <span id="dBossTxt"></span></div>
+       <div class="rbar"><div id="dBossHp" class="rbar-fill boss"></div></div>
+       <div class="rbar-label">내 HP <span id="dHpTxt"></span> <small id="dBuffs"></small></div>
+       <div class="rbar"><div id="dHp" class="rbar-fill party"></div></div>
+       <div id="dSwap" class="dun-swap"></div>
+       <div class="dun-skills"><button id="dSkC" class="btn primary sm" data-dskill="class"></button><button id="dSkE" class="btn sm dun-elbtn" data-dskill="elem"></button></div>
+       <div id="dEvents" class="raid-events"></div>
+       <div id="dResult" class="raid-resultwrap"></div>
+     </div>`;
+  el('dBoss').addEventListener('pointerdown', tapDunBoss);
+  dunBuiltFor = f.startTs;
+  updateDunUI();
+}
+// 화면 시각 기준 예측 — 서버 값 + (받은 뒤 흐른 시간 동안의 보스 공격·힐러 회복)
+function dunProjected() {
+  const f = dunF, t = Math.min(f.duration, Math.max(0, dunNow() - f.startTs));
+  let hp = f.hp, block = f.block;
+  if (f.status === 'active') {
+    for (const a of f.attacks) { if (a.done || a.t > t) continue; if (block > 0) { block--; continue; } hp -= a.pct * (1 - f.dr / 100); }
+    if (f.healPerSec) hp += f.healPerSec * Math.max(0, Date.now() - dunRecvAt) / 1000;
+  }
+  let ph = 0; f.phases.forEach((p, i) => { if (t >= p.at) ph = i; });
+  return { t, hp: Math.max(0, Math.min(100, hp)), ph };
+}
+function updateDunUI() {
+  const f = dunF; if (!f || dunBuiltFor !== f.startTs) return;
+  const active = f.status === 'active', pr = dunProjected(), cur = f.phases[pr.ph];
+  const tEl = el('dTimer'); if (tEl) tEl.textContent = active ? ((f.duration - pr.t) / 1000).toFixed(1) + 's' : '종료';
+  const nx = f.phases[pr.ph + 1];
+  const phEl = el('dPhases'); if (phEl) phEl.innerHTML = dunPhaseChips(f.phases, pr.ph) + (active && nx ? `<small class="dph-next">다음 단계 ${((nx.at - pr.t) / 1000).toFixed(1)}s</small>` : '');
+  const be = el('dBossEl'); if (be) be.innerHTML = dunElTag(cur.el);
+  const bh = el('dBossHp'), bt = el('dBossTxt');
+  if (bh) bh.style.width = Math.max(0, f.bossHP / f.bossMax * 100) + '%';
+  if (bt) bt.textContent = f.bossHP.toLocaleString() + ' / ' + f.bossMax.toLocaleString();
+  const hpb = el('dHp'), hpt = el('dHpTxt'), bf = el('dBuffs');
+  if (hpb) { hpb.style.width = pr.hp + '%'; hpb.classList.toggle('low', pr.hp <= 30); }
+  if (hpt) hpt.textContent = Math.round(pr.hp) + '%';
+  if (bf) bf.textContent = [f.dr ? '🛡️−' + f.dr + '%' : '', f.block ? '❄️막기 ' + f.block : '', f.haste ? '🌪️연타×1.6' : '', f.healPerSec ? '✨+' + f.healPerSec + '%/s' : ''].filter(Boolean).join(' ');
+  const cool = f.swapIn - (Date.now() - dunRecvAt) > 0;
+  const sw = el('dSwap');
+  if (sw) {
+    const html = f.weapons.map(w => { const m = dunMult(w.el, cur.el);
+      return `<button class="dswap${w.equipped ? ' on' : ''}" data-dswap="${w.cls}" ${!active || w.equipped || cool ? 'disabled' : ''}>
+        <span>${w.emoji}${DUN_EL[w.el][0]}</span>${dunMultTag(m)}<small>${w.asc ? '★' + w.asc + ' ' : ''}+${w.lv}</small></button>`; }).join('');
+    if (sw.dataset.h !== html) { sw.innerHTML = html; sw.dataset.h = html; }
+  }
+  const wq = f.weapons.find(w => w.equipped) || {};
+  const sc = el('dSkC'), se = el('dSkE');
+  if (sc) { sc.textContent = (wq.classSkill || '스킬') + (wq.usedC ? ' ✓' : ''); sc.disabled = !active || wq.usedC; }
+  if (se) {
+    if (wq.elemSkill) { se.textContent = wq.elemSkill.emoji + ' ' + wq.elemSkill.name + (wq.usedE ? ' ✓' : ''); se.disabled = !active || wq.usedE; se.title = wq.elemSkill.desc; }
+    else { se.textContent = '속성 스킬 ★1 필요'; se.disabled = true; se.title = ''; }
+  }
+  const ev = el('dEvents'); if (ev) ev.innerHTML = (f.events || []).slice(-5).map(e => `<div class="raid-ev">${esc(e.text)}</div>`).join('');
+  const boss = el('dBoss'); if (boss && !active) boss.classList.add('dead');
+  if (!active) {
+    const res = el('dResult');
+    if (res && !res.dataset.done) {
+      res.dataset.done = '1';
+      const rw = f.reward;
+      res.innerHTML = `<div class="raid-result ${f.win ? 'win' : 'lose'}"><b>${f.win ? '🏆 ' + f.floor + '층 돌파!' : '☠️ ' + f.floor + '층 패배…'}</b>` +
+        (f.win && rw ? `<br>💠 +${rw.shard}${rw.essence ? ' · 🌟 +' + rw.essence : ''}${rw.prism ? ' · <b class="dun-first">💎 +' + rw.prism + ' 첫 돌파</b>' : ''}` : '') +
+        (!f.win ? `<br><small>약점: ${f.phases.map(ph => DUN_EL[ph.el][0] + '→' + ph.weakTo.map(k => DUN_EL[k][0]).join('')).join(' · ')} — 약점 무기로 바꿔 끼거나 🔁 재련해 보세요</small>` : '') +
+        `</div><div class="dun-after"><button class="btn primary sm" data-dun-start>${f.win ? '다음 층 →' : '다시 도전'}</button><button class="btn ghost sm" data-dun-leave>로비로</button></div>`;
+      sfx(f.win ? 'jackpot' : 'destroy'); vibe(f.win ? [15, 40, 25] : [40, 60, 40]);
+      pollMe();
+    }
+  }
+}
+function tapDunBoss(e) {
+  if (e) e.preventDefault();
+  if (!dunF || dunF.status !== 'active' || dunNow() - dunF.startTs >= dunF.duration) return;
+  const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  if (now - dunLastTap < RAID_TAP_MS) return;
+  dunLastTap = now; dunLocalHits++;
+  vibe(6); sfx('hit');
+  const boss = el('dBoss');
+  if (boss) { boss.classList.remove('hit'); void boss.offsetWidth; boss.classList.add('hit'); }
+  spawnDunSpark();
+  if (!dunFlushT) dunFlushT = setTimeout(flushDunHits, RAID_FLUSH_MS);
+}
+function spawnDunSpark() {
+  const boss = el('dBoss'); if (!boss || !dunF) return;
+  const w = dunF.weapons.find(x => x.equipped), rc = boss.getBoundingClientRect(), s = document.createElement('div');
+  s.className = 'raid-spark'; s.textContent = w ? DUN_EL[w.el][0] : '⚔️';
+  s.style.left = (rc.left + rc.width * (0.3 + Math.random() * 0.4)) + 'px';
+  s.style.top = (rc.top + rc.height * 0.35) + 'px';
+  document.body.appendChild(s); setTimeout(() => s.remove(), 420);
+}
+async function flushDunHits(force) {
+  dunFlushT = null;
+  const hits = dunLocalHits; dunLocalHits = 0;
+  if ((!hits && !force) || !dunF || dunF.status !== 'active') return;
+  dunLastSync = Date.now();
+  const r = await api('dun-hit', 'POST', { hits });
+  if (r && r.ok && r.fight) { setDunFight(r.fight); updateDunUI(); }
+}
+async function doDunSwap(cls) {
+  if (dunLocalHits) { if (dunFlushT) { clearTimeout(dunFlushT); dunFlushT = null; } await flushDunHits(); }   // 바꾸기 전 연타는 원래 무기로
+  const r = await api('dun-swap', 'POST', { class: cls });
+  if (!r.ok) return toast(r.error, 'bad');
+  if (r.fight) { setDunFight(r.fight); updateDunUI(); }
+  sfx('pang'); vibe(12);
+}
+async function doDunSkill(kind) {
+  if (dunLocalHits) { if (dunFlushT) { clearTimeout(dunFlushT); dunFlushT = null; } await flushDunHits(); }
+  const r = await api('dun-skill', 'POST', { kind });
+  if (!r.ok) return toast(r.error, 'bad');
+  if (r.fight) { setDunFight(r.fight); updateDunUI(); }
+  if (r.skillText) { toast(r.skillText, 'info'); sfx('crit'); vibe([15, 30, 20]); }
+}
+async function maybeFinishDun() {
+  if (dunFinishing || !dunF || dunF.status !== 'active') return;
+  const pr = dunProjected();
+  if (pr.t >= dunF.duration || pr.hp <= 0 || dunF.bossHP <= 0) {
+    dunFinishing = true;
+    if (dunFlushT) { clearTimeout(dunFlushT); dunFlushT = null; }
+    if (dunLocalHits) await flushDunHits();
+    const r = await api('dun-finish', 'POST');
+    if (r && r.ok && r.fight) { setDunFight(r.fight); if (r.me) applyMe(r.me); }
+    dunFinishing = false;
+    updateDunUI();
+  } else if (Date.now() - dunLastSync > 1500 && !dunLocalHits) {
+    flushDunHits(true);   // 연타가 없어도 지속 피해·단계 전환을 서버 시계로 맞춘다
+  }
+}
+async function dunLoopTick() {
+  const f = dunF;
+  if (f && f.status === 'active') {
+    if (dunBuiltFor !== f.startTs) renderDunBattle();
+    updateDunUI();
+    maybeFinishDun();
+  } else if (f && f.status === 'done') {
+    if (dunBuiltFor !== f.startTs) renderDunBattle();
+  } else {
+    if (!dunData || Date.now() - dunLastLoad > 20000) await loadDungeon();
+    if (dunF) return;   // 불러온 사이 진행 중 전투가 있으면 다음 틱에 전투 화면으로
+    paintDungeon();
+  }
 }
 
 /* ---------- 탭 ---------- */
@@ -1460,6 +1727,7 @@ async function openProfile(nick) {
      <div class="pf-line"><span>속성</span><b>${p.elementEmoji || ''} ${esc(p.elementName || '-')}</b></div>
      <div class="pf-line"><span>골드</span><b>${p.gold.toLocaleString()}G</b></div>
      <div class="pf-line"><span>초월</span><b>${p.ascend > 0 ? '★' + p.ascend : '-'}</b></div>
+     ${p.dunBest ? `<div class="pf-line"><span>초월 던전</span><b>🌌 최고 ${p.dunBest}층</b></div>` : ''}
      <div class="pf-line"><span>방지권</span><b>${p.protects}개</b></div>
      <div class="pf-line"><span>전적</span><b>${p.wins}승 ${p.losses}패${p.winRate != null ? ' (' + p.winRate + '%)' : ''}</b></div>
      <div class="pf-line"><span>최고기록</span><b>+${p.best}</b></div>
@@ -1580,6 +1848,12 @@ el('panel').addEventListener('click', e => {
   const ac = e.target.closest('[data-accept]'); if (ac) return act(() => doAccept(ac.dataset.accept), ac);
   const rj = e.target.closest('[data-reject]'); if (rj) return act(() => doReject(rj.dataset.reject), rj);
   const ps = e.target.closest('[data-psub]'); if (ps) { prismSub = ps.dataset.psub; return paintPrism(); }
+  // 🌌 초월 던전
+  const rs = e.target.closest('[data-rsub]'); if (rs) return setRaidSub(rs.dataset.rsub);
+  const ds = e.target.closest('[data-dun-start]'); if (ds) return act(doDunStart, ds);
+  const dl = e.target.closest('[data-dun-leave]'); if (dl) return act(doDunLeave, dl);
+  const dw = e.target.closest('[data-dswap]'); if (dw) return act(() => doDunSwap(dw.dataset.dswap), dw);
+  const dk = e.target.closest('[data-dskill]'); if (dk) return act(() => doDunSkill(dk.dataset.dskill), dk);
   const pk = e.target.closest('[data-pick]'); if (pk) return act(() => doOpenBox(+pk.dataset.pick), pk);
   if (e.target.closest('[data-box-again]')) { boxReveal = null; return paintPrism(); }
   const al = e.target.closest('[data-alch]'); if (al) return act(() => doAlchemy(al.dataset.alch), al);

@@ -207,7 +207,7 @@ async function main() {
 
   // 장비 칸(무기 여러 자루) + 💎 프리즘 — 저장 왕복(보관 무기의 레벨이 저장 때 사라지지 않는지)
   console.log('\n[장비 칸/프리즘]');
-  await q("UPDATE players SET level = 70, gold = 3000000, data = jsonb_set(jsonb_set(data, '{prism}', '400'), '{inv,items}', $1::jsonb) WHERE nick='검사'",
+  await q("UPDATE players SET level = 70, gold = 3000000, data = jsonb_set(jsonb_set(data, '{prism}', '600'), '{inv,items}', $1::jsonb) WHERE nick='검사'",
     [JSON.stringify({ boxkey: 2, stone: 30 })]);
   let me = (await req('GET', '/api/me', { token: tok })).body.me;
   ok(me.weapons && me.weapons.slots === 1 && me.weapons.canNew === false, '기본 장비 칸 1 · 새 무기 불가');
@@ -217,7 +217,7 @@ async function main() {
   ok(!r.body.ok && /\+99/.test(r.body.error), '+99 무기 없으면 장비 칸 구매 거부');
   await q("UPDATE players SET level = 99 WHERE nick='검사'");
   r = await req('POST', '/api/prism-buy', { token: tok, body: { item: 'slot' } });
-  ok(r.body.ok && r.body.me.weapons.slots === 2 && r.body.me.prism === 330, '+99 달성 → 💎70 으로 장비 칸 +1 (2칸)');
+  ok(r.body.ok && r.body.me.weapons.slots === 2 && r.body.me.prism === 530, '+99 달성 → 💎70 으로 장비 칸 +1 (2칸)');
   r = await req('POST', '/api/weapon-new', { token: tok, body: { class: 'archer' } });
   ok(r.body.ok && r.body.me.class === 'archer' && r.body.me.level === 0, '새 활 제작 → 원딜 +0 장착');
   const arm = (await q("SELECT data->'armory' AS a FROM players WHERE nick='검사'"))[0].a;
@@ -239,13 +239,80 @@ async function main() {
   ok(r.body.ok && r.body.results.length === 10 && Number(r.body.me.gold) === goldPreCap - 300000 + r.body.gold, '캡슐 10회(30만G) 결과·골드 정산');
   const pv = (await req('GET', '/api/prism', { token: tok })).body;
   const slotItem = pv.shop.find(x => x.id === 'slot');
-  ok(pv.ok && pv.info.capsule.price === 30000 && slotItem.price === 35 && slotItem.locked === true, '프리즘 탭 정보(확률표·다음 칸 💎35 · +99 2자루 전까지 잠김)');
+  ok(pv.ok && pv.info.capsule.price === 30000 && slotItem.price === 140 && slotItem.locked === true, '프리즘 탭 정보(확률표·다음 칸 💎140 · +99 2자루 전까지 잠김)');
   ok(!(await req('POST', '/api/prism-buy', { token: tok, body: { item: 'slot' } })).body.ok, '+99 무기 1자루로는 3번째 칸 거부');
   // ★ 초월한 무기도 +99 를 찍은 무기로 친다(초월하면 +0 으로 돌아가므로 ★ 로 센다) — 보관 중인 활에 ★1
   await q("UPDATE players SET data = jsonb_set(data, '{armory,0,asc}', '1') WHERE nick='검사'");
   r = await req('POST', '/api/prism-buy', { token: tok, body: { item: 'slot' } });
-  ok(r.body.ok && r.body.me.weapons.slots === 3 && r.body.me.prism === pv.prism - 35, '★1 무기 + +99 무기 → 3번째 칸 구매(💎35)');   // 상자·연금·캡슐에서 💎 가 나왔을 수 있어 상대값으로 본다
+  ok(r.body.ok && r.body.me.weapons.slots === 3 && r.body.me.prism === pv.prism - 140, '★1 무기 + +99 무기 → 3번째 칸 구매(💎140)');   // 상자·연금·캡슐에서 💎 가 나왔을 수 있어 상대값으로 본다
   ok(!(await req('POST', '/api/shop-buy', { token: tok, body: { item: 'classchange' } })).body.ok, '직업 변경권 판매 종료');
+
+
+  // 🌌 초월 던전 · 속성 상성 · 🔁 속성 재련권
+  console.log('\n[초월 던전/재련]');
+  const G = require('../game.js');
+  ok(G.elemMult('water', 'fire') === 2 && G.elemMult('fire', 'water') === 0.5 && G.elemMult('light', 'dark') === 2 && G.elemMult('dark', 'light') === 2 && G.elemMult('fire', 'wind') === 1, '상성: 물→불 ×2 · 불→물 ×0.5 · 빛⇄어둠 ×2 · 무관 ×1');
+  r = await req('POST', '/api/login', { body: { nick: '던전러', pin: '24682468' } });
+  const tok3 = r.body.token;
+  await req('POST', '/api/setclass', { token: tok3, body: { class: 'warrior' } });
+  let dv = (await req('GET', '/api/dungeon', { token: tok3 })).body;
+  ok(dv.ok && dv.unlocked === false && dv.next && dv.next.floor === 1, '★ 없으면 던전 잠김(다음 층 정보는 보임)');
+  ok(!(await req('POST', '/api/dun-start', { token: tok3 })).body.ok, '★ 없으면 도전 거부');
+  // ★1 +99 검, 속성은 이번 주 1층 보스의 약점으로 맞춘다(결과가 운에 안 흔들리게)
+  const f1 = G.dunFloor(1, G.weekKey()), counter = dv.next.phases[0].weakTo[0];
+  ok(f1.phases[0].el === dv.next.phases[0].el, '층 속성은 주차 시드로 고정(서버·화면 일치)');
+  await q("UPDATE players SET level = 99, gold = 500000, data = data || $1::jsonb WHERE nick='던전러'", [JSON.stringify({ ascend: 1, ascendMax: 1, element: counter, prism: 0 })]);
+  r = await req('POST', '/api/dun-start', { token: tok3 });
+  ok(r.body.ok && r.body.fight.status === 'active' && r.body.fight.floor === 1 && r.body.fight.phases.length === 1, '1층 전투 시작(단계 1개)');
+  ok(!(await req('POST', '/api/enhance', { token: tok3 })).body.ok, '전투 중 강화 거부');
+  r = await req('POST', '/api/dun-skill', { token: tok3, body: { kind: 'class' } });
+  ok(r.body.ok && /강타/.test(r.body.skillText), '직업 스킬(강타) — 약점 속성이라 효과 굉장');
+  const fv = r.body.fight;
+  ok(fv.status === 'done' && fv.win === true && fv.reward && fv.reward.prism === 3 && fv.reward.shard === 3 && fv.reward.first === true, '1층 돌파 → 첫 돌파 💎3 · 파편 3');
+  let dme = (await req('GET', '/api/me', { token: tok3 })).body.me;
+  ok(dme.prism === 3 && dme.dunBest === 1, '💎·최고층 저장');
+  r = await req('POST', '/api/dun-leave', { token: tok3 });
+  dv = (await req('GET', '/api/dungeon', { token: tok3 })).body;
+  ok(dv.fight === null && dv.floor === 1 && dv.next.floor === 2 && dv.rank.some(x => x.nick === '던전러' && x.floor === 1), '결과 닫기 → 다음 층 2 · 주간 랭킹 반영');
+  // 속성 스킬(★1) — 2층에서 사용
+  r = await req('POST', '/api/dun-start', { token: tok3 });
+  r = await req('POST', '/api/dun-skill', { token: tok3, body: { kind: 'elem' } });
+  ok(r.body.ok && r.body.skillText, '★1 무기 속성 스킬 사용');
+  // 같은 무기 스킬은 전투당 1회 — 보스가 한 방에 안 죽는 15층에서 확인
+  await q("UPDATE players SET data = jsonb_set(data, '{dun}', (data->'dun') || '{\"fl\":14,\"fight\":null}'::jsonb) WHERE nick='던전러'");
+  r = await req('POST', '/api/dun-start', { token: tok3 });
+  ok(r.body.ok && r.body.fight.floor === 15, '15층 전투 시작');
+  await req('POST', '/api/dun-skill', { token: tok3, body: { kind: 'class' } });
+  r = await req('POST', '/api/dun-skill', { token: tok3, body: { kind: 'class' } });
+  ok(!r.body.ok && /이미/.test(r.body.error), '같은 무기 직업 스킬 두 번 거부');
+  ok(!(await req('POST', '/api/weapon-equip', { token: tok3, body: { class: 'archer' } })).body.ok, '전투 중 장비 칸 교체 대신 전투 교체 버튼 사용');
+  // 깊은 층 조건: 16층부터 무기 2자루
+  await q("UPDATE players SET data = jsonb_set(data, '{dun}', (data->'dun') || '{\"fl\":15,\"fight\":null}'::jsonb) WHERE nick='던전러'");
+  r = await req('POST', '/api/dun-start', { token: tok3 });
+  ok(!r.body.ok && /2자루/.test(r.body.error), '16층(중층)은 무기 2자루 이상 필요');
+  // 주간 초기화: 지난주 12층 → 이번 주 7층까지 자동 소탕(보상 지급)
+  const shardOf = m => m.inv.items.filter(i => i.id === 'shard').reduce((a, i) => a + i.count, 0);
+  const sh0 = shardOf((await req('GET', '/api/me', { token: tok3 })).body.me);
+  await q("UPDATE players SET data = jsonb_set(data, '{dun}', (data->'dun') || '{\"wk\":\"2000-01-03\",\"fl\":12,\"fight\":null}'::jsonb) WHERE nick='던전러'");
+  dv = (await req('GET', '/api/dungeon', { token: tok3 })).body;
+  ok(dv.floor === 7 && dv.sweep && dv.sweep.pending, '새 주 → 화면에 소탕 예정 7층 표시(읽기 전용)');
+  r = await req('POST', '/api/dun-start', { token: tok3 });
+  ok(r.body.ok && r.body.fight.floor === 8, '첫 도전 때 소탕 확정 → 8층부터');
+  const sweepShard = [1, 2, 3, 4, 5, 6, 7].reduce((a, f) => a + Math.ceil(f / 3) + 2, 0);
+  ok(shardOf(r.body.me) === sh0 + sweepShard, '소탕 보상(1~7층 파편 ' + sweepShard + ')');
+  // 🔁 속성 재련권
+  await q("UPDATE players SET data = jsonb_set(data, '{dun,fight}', 'null'::jsonb) WHERE nick='던전러'");
+  r = await req('POST', '/api/shop-buy', { token: tok3, body: { item: 'eltkt' } });
+  ok(r.body.ok && r.body.me.inv.items.some(i => i.id === 'eltkt'), '상점에서 🔁 속성 재련권 구매(10만G)');
+  const el0 = r.body.me.element;
+  r = await req('POST', '/api/use-item', { token: tok3, body: { item: 'eltkt' } });
+  ok(r.body.ok && r.body.me.level === 90 && r.body.me.element !== el0, '재련: +99 → +90(10%) · 속성 바뀜');
+  await q("UPDATE players SET level = 20, data = jsonb_set(data, '{inv,items,eltkt}', '1') WHERE nick='던전러'");
+  ok(!(await req('POST', '/api/use-item', { token: tok3, body: { item: 'eltkt' } })).body.ok, '에픽(+25) 미만 무기는 재련 거부');
+  // 직업 변경권 → 속성 재련권 1:1 이관
+  await q("UPDATE players SET data = jsonb_set(data, '{inv,items,classtkt}', '2') WHERE nick='던전러'");
+  dme = (await req('GET', '/api/me', { token: tok3 })).body.me;
+  ok(dme.inv.items.find(i => i.id === 'eltkt').count === 3 && !dme.inv.items.some(i => i.id === 'classtkt'), '남은 직업 변경권 2장 → 재련권으로 이관(1+2=3)');
 
   console.log('\n결과: ' + pass + ' pass, ' + fail + ' fail');
   process.exit(fail ? 1 : 0);

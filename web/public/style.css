@@ -795,3 +795,82 @@ body.loading-on #globalLoading{opacity:1}
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
   #embers{display:none}
 }
+
+/* ---------- 🌌 초월 던전 ---------- */
+.rsub-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}
+.del{display:inline-flex;align-items:center;gap:1px;padding:1px 6px;border-radius:999px;font-size:12px;font-weight:800;white-space:nowrap;
+  border:1px solid currentColor;background:rgba(0,0,0,.25);line-height:1.5}
+.del-fire{color:#ff6b4a}.del-water{color:#4facfe}.del-earth{color:#c9a46a}.del-wind{color:#7ee8a2}.del-thunder{color:#ffd93d}
+.del-ice{color:#9fe6ff}.del-light{color:#fff3b0}.del-dark{color:#b48bea}.del-poison{color:#a3e635}
+.dmult{display:inline-block;min-width:34px;text-align:center;font-size:12px;font-weight:900;padding:1px 4px;border-radius:7px;
+  color:var(--muted);background:var(--bg2);border:1px solid var(--line);font-variant-numeric:tabular-nums}
+.dmult.up{color:#0d2a1c;background:var(--success);border-color:var(--success)}
+.dmult.down{color:#fff;background:rgba(239,79,69,.75);border-color:var(--danger)}
+.dun-head{display:flex;justify-content:space-between;align-items:flex-end;gap:8px;flex-wrap:wrap;margin:0 0 10px}
+.dun-head small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.dun-title{font-family:var(--display);font-size:20px;font-weight:900;color:#d9d2ff;text-shadow:0 0 12px rgba(160,140,255,.35)}
+.dun-floors{display:flex;gap:10px;font-size:13px;color:var(--muted);font-weight:700}
+.dun-floors b{color:var(--text);font-size:16px;font-variant-numeric:tabular-nums}
+.dun-lock,.dun-sweep{padding:11px 12px;border-radius:12px;font-size:13px;line-height:1.5;margin:0 0 10px;word-break:keep-all}
+.dun-lock{border:1px dashed var(--line2);background:var(--bg2);color:#d9cfc2}
+.dun-sweep{border:1px solid rgba(125,249,255,.35);background:rgba(125,249,255,.06);color:#dffcff}
+.dun-next{padding:12px;border-radius:14px;border:1px solid rgba(160,140,255,.45);
+  background:radial-gradient(90% 70% at 15% 0%,rgba(120,90,255,.16),transparent 70%),var(--card2);margin-bottom:12px}
+.dun-next-top{display:flex;gap:10px;align-items:center}
+.dun-boss{font-size:44px;line-height:1;filter:drop-shadow(0 4px 10px rgba(0,0,0,.5))}
+.dun-next-info{min-width:0;flex:1}
+.dun-next-info .bname{font-weight:900;font-size:15px;word-break:keep-all}
+.dph-row{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:5px}
+.dph{display:inline-flex;flex-direction:column;align-items:center;gap:1px}
+.dph small{font-size:10.5px;color:var(--muted);white-space:nowrap}
+.dph.past{opacity:.4}
+.dph.on .del{box-shadow:0 0 0 2px rgba(255,255,255,.18),0 0 12px currentColor}
+.dph-arrow{color:var(--muted);font-size:12px;margin-top:-12px}
+.dph-row.sm .del{font-size:11px;padding:0 5px}
+.dph-next{margin-left:auto;font-size:11.5px;color:var(--info);font-weight:800;font-variant-numeric:tabular-nums}
+.dun-stats{display:flex;flex-wrap:wrap;gap:6px 12px;margin:10px 0 4px;font-size:12.5px;color:var(--muted)}
+.dun-stats b{color:var(--text);font-variant-numeric:tabular-nums}
+.dun-stats .bad,.dun-stats .bad b{color:var(--danger)}
+.dun-stats .good b{color:var(--success)}
+.dun-rw{font-size:12.5px;color:#d9cfc2;margin-bottom:10px}
+.dun-first{color:#bdf6ff;text-shadow:0 0 8px rgba(125,249,255,.4)}
+.dun-go{width:100%}
+.dun-sec{font-weight:900;font-size:13px;margin:12px 0 6px;color:var(--text)}
+.dun-sec small{color:var(--muted);font-weight:700;margin-left:4px}
+.dun-wlist{display:flex;flex-direction:column;gap:6px}
+.dun-w{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 8px;align-items:center;padding:8px 10px;border-radius:12px;border:1px solid var(--line);background:var(--bg2)}
+.dun-w.on{border-color:var(--primary)}
+.dun-w-id{font-size:13px;display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0}
+.dun-w-m{display:flex;gap:3px}
+.dun-w-sk{grid-column:1 / -1;font-size:11.5px;color:#d9cfc2;word-break:keep-all}
+.dun-w-sk.dim{color:var(--muted)}
+.dun-up{display:flex;flex-direction:column;gap:4px}
+.dun-up-row{display:flex;align-items:center;gap:6px;font-size:12.5px;padding:5px 8px;border-radius:10px;background:var(--bg2);border:1px solid var(--line)}
+.dun-up-row .dph-row{margin:0;flex:1;min-width:0}
+.dun-up-row small{color:var(--muted);white-space:nowrap}
+.dun-cycle{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:3px;padding:10px 8px 2px;font-size:20px}
+.dun-cycle small{font-size:10.5px;color:var(--muted);margin-left:1px}
+.dun-cycle i{font-style:normal;color:var(--muted);font-size:12px}
+.dun-note{font-size:11px !important;margin-left:6px !important}
+.dun-rank{display:flex;flex-direction:column;gap:4px}
+.dun-rank-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:10px;background:var(--bg2);border:1px solid var(--line);font-size:13px;min-width:0}
+.dun-rank-row > span:nth-child(2){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dun-rank-row.me{border-color:var(--primary)}
+.dun-rank-row .rk{width:20px;text-align:center;font-weight:900;color:var(--muted)}
+.dun-rank-row small{color:var(--muted)}
+.dun-rank-row b{margin-left:auto;font-variant-numeric:tabular-nums}
+/* 전투 */
+.dun-bphases{justify-content:center;margin:2px 0 0}
+.dun-boss-el{position:absolute;left:50%;bottom:-4px;transform:translateX(-50%)}
+.dun-swap{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:10px 0 6px}
+.dswap{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;border-radius:12px;cursor:pointer;
+  border:1px solid var(--line2);background:var(--bg2);color:var(--text);font-weight:800}
+.dswap span{font-size:18px;line-height:1.1;white-space:nowrap}
+.dswap small{font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.dswap.on{border-color:var(--primary);background:linear-gradient(180deg,rgba(212,162,76,.22),rgba(212,162,76,.06))}
+.dswap:disabled:not(.on){opacity:.5;cursor:not-allowed}
+.dun-skills{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:4px 0 8px}
+.dun-skills .btn{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dun-elbtn{border-color:rgba(160,140,255,.6);color:#e4dcff;background:rgba(120,90,255,.14)}
+.dun-after{display:flex;gap:6px;margin-top:8px}
+.dun-after .btn{flex:1}
