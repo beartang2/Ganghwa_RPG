@@ -954,15 +954,17 @@ body.loading-on #globalLoading{opacity:1}
   #game[data-view="more"] .tab[data-tab="prism"],#game[data-view="more"] .tab[data-tab="raid"],#game[data-view="more"] .tab[data-tab="fight"]{display:none}
   #game[data-view="more"] .tab{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;padding:7px 0;font-size:12px;border-radius:8px 8px 0 0}
   #game[data-view="more"] .tab .ti{margin:0;font-size:18px;line-height:1.1}
-  /* 대장간: 무기 그림이 남는 높이에 맞춰 줄어들어서 강화 버튼까지 한 화면에 */
+  /* 대장간: 무기 그림이 남는 높이에 맞춰 줄어들어서 강화 버튼까지 한 화면에.
+   * svh(주소창이 펼쳐진 '가장 작은' 화면 높이) 기준 — dvh 는 스크롤로 주소창이 접힐 때마다 값이 커져서
+   * 그림이 따라 커졌다. svh 는 스크롤해도 변하지 않고, 주소창이 펼쳐진 상태에서도 한 화면에 들어온다. */
   #game[data-view="forge"] .weapon-panel{gap:8px;padding:14px 14px 14px}
   #game[data-view="forge"] .hearth{padding:10px 0 12px}
-  #game[data-view="forge"] .weapon-art,#game[data-view="forge"] .weapon-art svg{height:clamp(96px,calc(100vh - 494px),220px);height:clamp(96px,calc(100dvh - 494px),220px)}
-  #game[data-view="forge"] .weapon-art .weapon-img{max-height:clamp(90px,calc(100dvh - 504px),200px)}
+  #game[data-view="forge"] .weapon-art,#game[data-view="forge"] .weapon-art svg{height:clamp(96px,calc(100vh - 494px),220px);height:clamp(96px,calc(100svh - 494px),220px)}
+  #game[data-view="forge"] .weapon-art .weapon-img{max-height:clamp(90px,calc(100svh - 504px),200px)}
   /* +99: 강화 버튼(만렙) 대신 초월 단이 주인공 — 재료 칩은 한 줄로 */
   #game .weapon-panel.at-max #enhanceBtn{display:none}
   #game .weapon-panel.at-max .ascend-mats{flex-wrap:nowrap}
-  #game[data-view="forge"] .weapon-panel.at-max .weapon-art,#game[data-view="forge"] .weapon-panel.at-max .weapon-art svg{height:clamp(84px,calc(100vh - 544px),210px);height:clamp(84px,calc(100dvh - 544px),210px)}
+  #game[data-view="forge"] .weapon-panel.at-max .weapon-art,#game[data-view="forge"] .weapon-panel.at-max .weapon-art svg{height:clamp(84px,calc(100vh - 544px),210px);height:clamp(84px,calc(100svh - 544px),210px)}
   /* 하단 탭바 */
   .bottombar{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));position:fixed;left:0;right:0;bottom:0;z-index:60;
     padding:6px 6px calc(env(safe-area-inset-bottom, 0px) + 6px);background:rgba(21,17,14,.88);
