@@ -850,6 +850,8 @@ void main() {
       spawn(event.clientX, event.clientY, extra(m.b, m.hit));
     };
     const onClick = event => {
+      // 강화 RPG 추가: 아이폰 햅틱용 숨은 스위치(label.hx > input)가 받는 2차 클릭은 무시(불꽃이 중앙에 한 번 더 터지지 않게)
+      if (event.target instanceof Element && event.target.matches('.hx > input')) return;
       const m = match(event.target);
       if (!m) return;
       if (event.detail === 0) {
@@ -963,6 +965,13 @@ void main() {
       direction: o.direction === 'counterclockwise' ? -1 : 1,
       hover: SB_HOVERS.includes(o.hover) ? o.hover : 'lap',
       clickPulse: o.clickPulse ?? true,
+      // 강화 RPG 추가: 꼬리가 머리 쪽에서 흰색으로 달아오르는 정도(0~1)와 머리 심지·십자 반짝임을 흰색으로 그릴지.
+      // 밝은 색 버튼 위에서는 흰 꼬리가 '깨진 선' 처럼 보여서 끌 수 있게 했다(기본값은 원본 그대로).
+      whiten: clamp(o.whiten ?? 0.65, 0, 1),
+      whiteCore: o.whiteCore ?? true,
+      // 강화 RPG 추가: 겹치는 빛(꼬리 글로우+심지)을 더해서(lighter) 그릴지. 더하면 겹친 곳이 흰색으로 포화된다 —
+      // 주황 버튼 위에서는 꺼야(source-over) 금빛이 그대로 남는다.
+      additive: o.additive ?? true,
     });
     let opts = Object.assign({}, options);
     let settings = read(opts);
@@ -1024,7 +1033,7 @@ void main() {
         const u = 1 - (i - 0.5) / steps;
         const fade = u * u * intensity;
         let tone = mix3(colors.tail, colors.head, u);
-        if (!s.light) tone = mix3(tone, WHITE, u ** 6 * 0.65);
+        if (!s.light && s.whiten > 0) tone = mix3(tone, WHITE, u ** 6 * s.whiten);
         ctx.lineCap = tip && i === 1 ? 'round' : 'butt';
         stroke(px, py, point.x, point.y, 2 + 6 * s.glow, rgba(tone, fade * (s.light ? 0.1 : 0.2) * s.glow));
         stroke(px, py, point.x, point.y, s.thickness, rgba(tone, fade));
@@ -1046,14 +1055,15 @@ void main() {
       if (!s.sparkle) return;
       const size = (1 + s.thickness * 0.6) * (s.light ? 0.85 : 1);
       const core = ctx.createRadialGradient(x, y, 0, x, y, size * 2.2);
-      core.addColorStop(0, rgba(s.light ? tone : WHITE, intensity));
-      core.addColorStop(s.light ? 0.3 : 0.4, rgba(s.light ? tone : mix3(tone, WHITE, 0.5), intensity * 0.9));
+      const hot = !s.light && s.whiteCore;
+      core.addColorStop(0, rgba(hot ? WHITE : tone, intensity));
+      core.addColorStop(s.light ? 0.3 : 0.4, rgba(hot ? mix3(tone, WHITE, 0.5) : tone, intensity * 0.9));
       core.addColorStop(s.light ? 0.55 : 1, rgba(tone, s.light ? intensity * 0.12 : 0));
       core.addColorStop(1, rgba(tone, 0));
       ctx.fillStyle = core;
       ctx.beginPath(); ctx.arc(x, y, size * 2.2, 0, TAU); ctx.fill();
       const spike = (3 + 4 * s.glow + s.thickness * 1.5) * twinkle;
-      const center = s.light ? tone : WHITE;
+      const center = hot ? WHITE : tone;
       const horizontal = ctx.createLinearGradient(x - spike, y, x + spike, y);
       horizontal.addColorStop(0, rgba(tone, 0));
       horizontal.addColorStop(0.5, rgba(center, intensity * 0.95));
@@ -1082,7 +1092,7 @@ void main() {
       if (state.width < 2 || state.height < 2) return;
       const offset = (SB_BLEED + s.thickness / 2) * state.dpr;
       ctx.setTransform(state.dpr, 0, 0, state.dpr, offset, offset);
-      ctx.globalCompositeOperation = s.light ? 'source-over' : 'lighter';
+      ctx.globalCompositeOperation = s.light || !s.additive ? 'source-over' : 'lighter';
       ctx.lineCap = 'butt';
       const total = shape.total;
       const spacing = total / s.stars;
@@ -1131,7 +1141,7 @@ void main() {
         const shimmer = 0.45 + 0.55 * Math.sin(state.time * 20 + mote.seed);
         const alpha = left * shimmer * state.reveal * (s.light ? 0.35 : 0.9);
         if (alpha <= 0.01) return;
-        ctx.fillStyle = rgba(s.light ? colors.head : mix3(colors.tail, WHITE, 0.6), alpha);
+        ctx.fillStyle = rgba(s.light || !s.whiteCore ? colors.head : mix3(colors.tail, WHITE, 0.6), alpha);
         ctx.beginPath(); ctx.arc(mote.x, mote.y, mote.size * (0.6 + 0.4 * left), 0, TAU); ctx.fill();
       });
     };

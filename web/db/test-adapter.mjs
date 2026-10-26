@@ -165,6 +165,11 @@ async function main() {
   const prow = (await q('SELECT data FROM parties WHERE id=$1', [pid2]))[0];
   const pdata = typeof prow.data === 'string' ? JSON.parse(prow.data) : prow.data;
   ok(pdata.raid && pdata.raid.status === 'done', 'parties.data.raid 종료상태 영속화');
+  // 끝난 지 1분 지난 결과는 다시 안 보여준다(레이드 탭 들어갈 때마다 지난 보스 화면이 뜨던 버그)
+  ok((await req('GET', '/api/party-raid', { token: tok2 })).body.raid, '막 끝난 결과는 관전 가능');
+  pdata.raid.endTs = Date.now() - 61000;
+  await q('UPDATE parties SET data=$2 WHERE id=$1', [pid2, JSON.stringify(pdata)]);
+  ok((await req('GET', '/api/party-raid', { token: tok2 })).body.raid === null, '1분 지난 결과는 숨김(로비로)');
 
   // 12) 속도제한 — 전용 테스트만 rateLimit:true
   console.log('[속도제한]');
@@ -273,6 +278,9 @@ async function main() {
   ok(fv.status === 'done' && fv.win === true && fv.reward && fv.reward.prism === 3 && fv.reward.shard === 3 && fv.reward.first === true, '1층 돌파 → 첫 돌파 💎3 · 파편 3');
   let dme = (await req('GET', '/api/me', { token: tok3 })).body.me;
   ok(dme.prism === 3 && dme.dunBest === 1, '💎·최고층 저장');
+  ok((await req('GET', '/api/dungeon', { token: tok3 })).body.fight.status === 'done', '막 끝난 던전 결과는 다시 볼 수 있음');
+  await q("UPDATE players SET data = jsonb_set(data, '{dun,fight,endTs}', to_jsonb($1::bigint)) WHERE nick='던전러'", [Date.now() - 61000]);
+  ok((await req('GET', '/api/dungeon', { token: tok3 })).body.fight === null, '1분 지난 던전 결과는 숨김(로비로)');
   r = await req('POST', '/api/dun-leave', { token: tok3 });
   dv = (await req('GET', '/api/dungeon', { token: tok3 })).body;
   ok(dv.fight === null && dv.floor === 1 && dv.next.floor === 2 && dv.rank.some(x => x.nick === '던전러' && x.floor === 1), '결과 닫기 → 다음 층 2 · 주간 랭킹 반영');

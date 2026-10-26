@@ -36,6 +36,12 @@ body{
   touch-action:manipulation;   /* 더블탭 확대 차단(일반 탭·클릭은 정상, 핀치는 JS로 별도 차단) */
 }
 :focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+/* 모바일 브라우저 기본 '탭 하이라이트'(청록·회색 사각형)를 끈다 — 눌림은 버튼 자체 효과(눌림·불꽃)로 보여준다 */
+button,a,label,summary,[role="button"],[data-nick]{-webkit-tap-highlight-color:transparent}
+/* 아이폰 햅틱 오버레이(app.js hxAttach): 버튼 위를 덮는 투명 라벨 + 안 보이는 스위치. 손가락 탭이 라벨에 닿아야 '톡' */
+.hx{position:absolute;inset:0;z-index:3;display:block;margin:0;padding:0;border-radius:inherit;background:transparent;
+  cursor:inherit;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.hx>input{position:absolute;left:0;top:0;width:1px;height:1px;margin:0;opacity:0;visibility:hidden;pointer-events:none}
 .screen{position:relative;z-index:1;max-width:520px;margin:0 auto;padding:16px}
 /* 휴대폰: 화면 가장자리 바로 옆 패널의 번짐 효과를 화면 폭에서 잘라낸다(html 의 overflow-x 를 무시하는 브라우저 대비) */
 @media (max-width:640px){ .screen{overflow-x:hidden;overflow-x:clip} }
