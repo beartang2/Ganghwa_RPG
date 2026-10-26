@@ -981,3 +981,49 @@ body.loading-on #globalLoading{opacity:1}
   #quickRow .btn.action{padding:7px 4px}
   #game[data-view="forge"] .weapon-name{font-size:23px}
 }
+
+/* ---------- 회원 탈퇴 ---------- */
+.menu-item.danger{color:#ff8f87}
+.btn.danger{background:linear-gradient(180deg,#e5484d,#b8322f);color:#fff;box-shadow:inset 0 1px 0 rgba(255,220,220,.35),inset 0 -2px 0 rgba(90,0,0,.35)}
+.del-card h3{margin:0 0 10px}
+.del-warn{font-size:14px;line-height:1.6;margin:0 0 8px;word-break:keep-all}
+.del-warn b{color:#ff8f87}
+.del-hint{margin:0 0 10px}
+.del-label{display:block;font-size:13px;color:var(--muted);margin:6px 0 6px;word-break:keep-all}
+.del-label b{color:var(--text)}
+.del-input{width:100%;padding:12px;border-radius:12px;border:1px solid transparent;background:var(--bg2);color:var(--text);font-size:16px;
+  box-shadow:inset 0 2px 6px rgba(0,0,0,.35)}
+.del-input:focus{outline:none;border-color:var(--danger)}
+.del-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+
+/* ---------- ⚙️ 설정 화면 ---------- */
+.set-card{max-width:400px}
+.set-head{display:flex;align-items:center;justify-content:space-between;margin:-2px 0 12px}
+.set-head h3{margin:0}
+.set-sec{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.set-label{font-size:12px;font-weight:800;color:var(--muted);margin:0 2px 2px}
+.set-acc{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:12px;background:var(--bg2)}
+.set-acc-row{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;min-width:0}
+.set-acc-row span{color:var(--muted);flex:none}
+.set-acc-row b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
+.set-row{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:13px 14px;border:0;border-radius:12px;
+  background:var(--card2);color:var(--text);font-size:15px;font-weight:700;text-align:left;cursor:pointer}
+.set-row:hover{filter:brightness(1.1)}
+.set-row > span{display:inline-flex;align-items:center;gap:6px;min-width:0}
+.set-row i{font-style:normal;color:var(--muted);font-size:18px;line-height:1}
+.set-row.danger{color:#ff8f87}
+.set-row[hidden]{display:none}
+/* 효과음 스위치 */
+.set-row .sw{position:relative;flex:none;width:44px;height:26px;border-radius:999px;background:rgba(255,240,220,.14);transition:background .15s}
+.set-row .sw::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#e9e1d6;transition:transform .15s}
+.set-row.on .sw{background:var(--success)}
+.set-row.on .sw::after{transform:translateX(18px)}
+.set-row:disabled{opacity:.5;cursor:not-allowed;filter:none}
+.set-note{margin:-2px 4px 0;font-size:12px;color:var(--muted);word-break:keep-all}
+.set-ver{margin:4px 0 0;text-align:center;font-size:11.5px;color:var(--muted)}
+/* 휴대폰·태블릿: 설정은 화면 전체(페이지처럼) */
+@media (max-width:879px){
+  .set-modal{padding:0;align-items:stretch}
+  .set-modal .set-card{max-width:none;width:100%;min-height:100%;margin:0;border-radius:0;
+    padding:calc(env(safe-area-inset-top, 0px) + 14px) 16px calc(env(safe-area-inset-bottom, 0px) + 20px)}
+}

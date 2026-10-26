@@ -32,7 +32,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@600;800;900&display=swap">
-<link rel="stylesheet" href="/style.css?v=51">
+<link rel="stylesheet" href="/style.css?v=54">
 </head>
 <body>
 <!-- 화로 불씨 배경 (fx.js / React Bits Particles 이식) -->
@@ -78,14 +78,7 @@
       <span class="chip prism" title="💎 프리즘 — 상자·연금술·캡슐에서 얻어요">💎 <b id="hPrism">0</b></span>
     </span>
     <div class="menu-wrap">
-      <button id="menuBtn" class="btn ghost sm" aria-label="메뉴">☰<span id="menuDot" class="dot" hidden></span></button>
-      <div id="menuDrop" class="menu-drop" hidden>
-        <button class="menu-item" id="noticeItem">📢 공지사항<span id="noticeDot" class="dot" hidden></span></button>
-        <button class="menu-item" id="accountItem">✉️ 계정 만들기</button>
-        <button class="menu-item" id="soundItem">🔊 효과음 ON</button>
-        <button class="menu-item" id="helpItem">❔ 플레이 방법</button>
-        <button class="menu-item" id="logoutItem">🚪 로그아웃</button>
-      </div>
+      <button id="menuBtn" class="btn ghost sm" aria-label="설정">⚙️<span id="menuDot" class="dot" hidden></span></button>
     </div>
   </header>
 
@@ -173,9 +166,9 @@
     <button class="bb-btn" data-view="prism"><span>💎</span>프리즘</button>
     <button class="bb-btn" data-view="more"><span>🏅</span>더보기</button>
   </nav>
-
-  <div id="toast" class="toast" hidden></div>
 </div>
+<!-- 토스트는 어느 화면에서든 보이도록 화면(.screen) 밖에 둔다 -->
+<div id="toast" class="toast" hidden></div>
 
 <!-- 플레이 안내 (세션당 1회) -->
 <div id="guide" class="modal" hidden>
@@ -297,6 +290,51 @@
 </div>
 
 <!-- 프로필 모달 -->
+<!-- ⚙️ 설정 — 상단 오른쪽 버튼. 휴대폰은 화면 전체, 넓은 화면은 가운데 창 -->
+<div id="setModal" class="modal set-modal" hidden>
+  <div class="card modal-card set-card" role="dialog" aria-labelledby="setTitle">
+    <div class="set-head"><h3 id="setTitle">⚙️ 설정</h3><button id="setClose" class="btn ghost sm" aria-label="닫기">✕</button></div>
+    <section class="set-sec">
+      <div class="set-label">내 계정</div>
+      <div class="set-acc">
+        <div class="set-acc-row"><span>아이디(닉네임)</span><b id="setNick">-</b></div>
+        <div class="set-acc-row"><span>로그인 방식</span><b id="setKind">-</b></div>
+      </div>
+      <button class="set-row" id="profileItem"><span>📇 내 프로필 · 닉네임 변경</span><i>›</i></button>
+      <button class="set-row" id="accountItem"><span>✉️ 계정 만들기</span><i>›</i></button>
+    </section>
+    <section class="set-sec">
+      <div class="set-label">환경</div>
+      <button class="set-row" id="soundItem" role="switch" aria-checked="true"><span id="soundLabel">🔊 효과음</span><b class="sw" aria-hidden="true"></b></button>
+      <button class="set-row" id="vibeItem" role="switch" aria-checked="true"><span id="vibeLabel">📳 진동</span><b class="sw" aria-hidden="true"></b></button>
+      <p id="vibeNote" class="set-note" hidden>이 기기·브라우저는 웹 진동을 지원하지 않아요</p>
+    </section>
+    <section class="set-sec">
+      <div class="set-label">안내</div>
+      <button class="set-row" id="noticeItem"><span>📢 공지사항<span id="noticeDot" class="dot" hidden></span></span><i>›</i></button>
+      <button class="set-row" id="helpItem"><span>❔ 플레이 방법</span><i>›</i></button>
+    </section>
+    <section class="set-sec">
+      <button class="set-row" id="logoutItem"><span>🚪 로그아웃</span></button>
+      <button class="set-row danger" id="deleteItem"><span>🗑️ 회원 탈퇴</span></button>
+    </section>
+    <p id="setVer" class="set-ver"></p>
+  </div>
+</div>
+
+<!-- 회원 탈퇴 — 되돌릴 수 없으니 닉네임을 다시 입력해야 버튼이 열린다 -->
+<div id="delModal" class="modal" hidden>
+  <div class="card modal-card del-card">
+    <button id="delClose" class="btn ghost sm close" aria-label="닫기">✕</button>
+    <h3>🗑️ 회원 탈퇴</h3>
+    <p class="del-warn">탈퇴하면 캐릭터와 무기·골드·💎 프리즘·가방·칭호·기록이 <b>모두 지워지고 되돌릴 수 없어요.</b> 모든 기기에서 로그아웃돼요.</p>
+    <p id="delLinked" class="hint del-hint" hidden>✉️ 이메일 계정과의 연결도 함께 풀려요. 같은 이메일로 다시 로그인하면 새 캐릭터를 만들 수 있어요.</p>
+    <label class="del-label" for="delNick">확인을 위해 닉네임 <b id="delNickShow"></b> 을(를) 그대로 입력하세요</label>
+    <input id="delNick" class="del-input" maxlength="12" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <div class="del-actions"><button id="delCancel" class="btn ghost">취소</button><button id="delGo" class="btn danger" disabled>탈퇴하기</button></div>
+  </div>
+</div>
+
 <div id="modal" class="modal" hidden>
   <div class="card modal-card">
     <button id="modalClose" class="btn ghost sm close">✕</button>
@@ -306,8 +344,8 @@
 
 <!-- Supabase Realtime (선택) — 로드 실패해도 게임은 폴링으로 동작 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/fx.js?v=51"></script>
-<script src="/weapon-art.js?v=51"></script>
-<script src="/app.js?v=51"></script>
+<script src="/fx.js?v=54"></script>
+<script src="/weapon-art.js?v=54"></script>
+<script src="/app.js?v=54"></script>
 </body>
 </html>

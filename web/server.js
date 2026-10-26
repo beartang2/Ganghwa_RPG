@@ -168,6 +168,9 @@ const upsertParty = sqlite.prepare(
   `INSERT INTO parties (id, data) VALUES (@id, @data)
    ON CONFLICT(id) DO UPDATE SET data=@data`);
 const deleteParty = sqlite.prepare('DELETE FROM parties WHERE id = ?');
+// 회원 탈퇴: 플레이어 소유 행(메모리 세션은 아래 sessions Map 에서 따로 지운다)
+const deletePlayerStmt = sqlite.prepare('DELETE FROM players WHERE id = ?');
+const deleteDailyStmt = sqlite.prepare('DELETE FROM player_daily WHERE player_id = ?');
 const insLog = sqlite.prepare('INSERT INTO logs (ts, text) VALUES (?, ?)');
 const pruneLogs = sqlite.prepare('DELETE FROM logs WHERE seq <= (SELECT max(seq) FROM logs) - ?');
 
@@ -529,6 +532,19 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && p === '/api/prism') return sendJson(res, 200, game.prismView(db, id));
     if (req.method === 'GET' && p === '/api/dungeon') return sendJson(res, 200, game.dungeonView(db, id));
 
+    if (req.method === 'POST' && p === '/api/delete-account') {
+      const b = await readBody(req);
+      const r = game.deleteAccount(db, id, b.nick);
+      if (!r.ok) return sendJson(res, 400, r);
+      // 메모리에서 지운 플레이어를 DB 에서도 지운다(persist 는 '없어진 플레이어' 를 모른다)
+      deletePlayerStmt.run(id); deleteDailyStmt.run(id); deleteLimits.run(id);
+      writtenPlayer.delete(id); writtenDaily.delete(id);
+      for (const [t, sv] of sessions) if (sv.id === id) sessions.delete(t);   // 모든 기기 로그아웃
+      const set = clients.get(id); if (set) { for (const c of set) c.end(); clients.delete(id); }
+      buckets.delete(id);
+      save(); invalidateReads(); markRefresh();   // 파티 해산 등은 다음 persist 가 반영
+      return sendJson(res, 200, { ok: true, msg: r.msg, wasLinked: r.wasLinked });
+    }
     if (req.method === 'POST') {
       if (!allowAction(id)) return sendJson(res, 429, { ok: false, error: '너무 빠릅니다. 잠시 후 다시 시도하세요.' });
       let r;

@@ -316,6 +316,38 @@ async function main() {
   dme = (await req('GET', '/api/me', { token: tok3 })).body.me;
   ok(dme.inv.items.find(i => i.id === 'eltkt').count === 3 && !dme.inv.items.some(i => i.id === 'classtkt'), '남은 직업 변경권 2장 → 재련권으로 이관(1+2=3)');
 
+  // 🗑️ 회원 탈퇴 — 파티장 탈퇴 시 해산, 모든 세션 무효, 소유 행 삭제, 닉네임 재사용 가능
+  console.log('\n[회원 탈퇴]');
+  r = await req('POST', '/api/login', { body: { nick: '탈퇴러', pin: '13579135' } });
+  const tokD = r.body.token;
+  await req('POST', '/api/setclass', { token: tokD, body: { class: 'warrior' } });
+  const tokD2 = (await req('POST', '/api/login', { body: { nick: '탈퇴러', pin: '13579135' } })).body.token;   // 다른 기기 세션
+  r = await req('POST', '/api/login', { body: { nick: '파티원', pin: '24680246' } });
+  const tokE = r.body.token;
+  await req('POST', '/api/setclass', { token: tokE, body: { class: 'archer' } });
+  r = await req('POST', '/api/party-create', { token: tokD });
+  const dParty = r.body.party && r.body.party.id;
+  await req('POST', '/api/party-invite', { token: tokD, body: { nick: '파티원' } });
+  r = await req('POST', '/api/party-accept', { token: tokE, body: { id: dParty } });
+  ok(r.body.ok && r.body.me.party && r.body.me.party.id === dParty, '탈퇴러 파티에 파티원 합류');
+  await req('POST', '/api/hunt', { token: tokD });   // 일일 기록 행 생성
+  const dId = (await q("SELECT id FROM players WHERE nick='탈퇴러'"))[0].id;
+  ok((await q('SELECT count(*)::int n FROM player_daily WHERE player_id=$1', [dId]))[0].n === 1, '탈퇴 전 일일 기록 있음');
+  r = await req('POST', '/api/delete-account', { token: tokD, body: { nick: '틀린닉' } });
+  ok(!r.body.ok && /닉네임/.test(r.body.error), '닉네임이 다르면 탈퇴 거부');
+  r = await req('POST', '/api/delete-account', { token: tokD, body: { nick: '탈퇴러' } });
+  ok(r.body.ok && r.body.msg, '닉네임 확인 후 탈퇴 성공');
+  ok((await req('GET', '/api/me', { token: tokD })).status === 401 && (await req('GET', '/api/me', { token: tokD2 })).status === 401, '모든 기기 세션 무효(401)');
+  const left = await q(`SELECT (SELECT count(*)::int FROM players WHERE id=$1) p, (SELECT count(*)::int FROM sessions WHERE player_id=$1) s,
+                               (SELECT count(*)::int FROM player_daily WHERE player_id=$1) d, (SELECT count(*)::int FROM parties WHERE id=$2) pt`, [dId, dParty]);
+  ok(left[0].p === 0 && left[0].s === 0 && left[0].d === 0, '플레이어·세션·일일 기록 행 삭제');
+  ok(left[0].pt === 0, '파티장이 탈퇴하면 파티 해산');
+  const meE = (await req('GET', '/api/me', { token: tokE })).body.me;
+  ok(meE && !meE.party, '남은 파티원은 파티에서 풀림');
+  ok(!(await req('GET', '/api/rank')).body.list.some(x => x.nick === '탈퇴러'), '랭킹에서 사라짐');
+  r = await req('POST', '/api/login', { body: { nick: '탈퇴러', pin: '97531975' } });
+  ok(r.body.ok && r.body.isNew, '탈퇴한 닉네임은 다시 쓸 수 있음');
+
   console.log('\n결과: ' + pass + ' pass, ' + fail + ' fail');
   process.exit(fail ? 1 : 0);
 }

@@ -1467,6 +1467,25 @@ function login(db, nick, pin) {
   bumpRank(db); // 총원 변동
   return { ok: true, id: key, isNew: true, needClass: true };
 }
+/* 회원 탈퇴 — 캐릭터를 통째로 지운다(되돌릴 수 없음). 확인용으로 닉네임을 정확히 다시 입력받는다.
+ * 여기서는 인메모리 db 만 정리한다(파티 해산·탈퇴, 남의 파티 초대 목록, 닉네임 색인).
+ * 저장 계층이 players 행·일일 기록·상한·세션·속도제한 행을 따로 지운다(diff 저장은 '없어진 플레이어' 를 모른다). */
+function deleteAccount(db, id, confirmNick) {
+  const p = db.players[id] && norm(db.players[id]);
+  if (!p) return { ok: false, error: '계정을 찾을 수 없어요.' };
+  if (String(confirmNick || '').trim() !== p.nick) return { ok: false, error: '닉네임이 일치하지 않아요. 탈퇴하려면 닉네임을 정확히 입력하세요.' };
+  if (inActiveRaid(db, id)) return { ok: false, error: '레이드 전투 중에는 탈퇴할 수 없어요. 전투가 끝난 뒤에 다시 시도하세요.' };
+  if (p.party && db.parties[p.party]) partyLeave(db, id);      // 파티장이면 해산, 파티원이면 빠지기
+  for (const k in db.parties) {                                // 받은 초대 목록에서도 지운다
+    const pt = db.parties[k];
+    if (pt.pending && pt.pending.includes(id)) pt.pending = pt.pending.filter(x => x !== id);
+    if (pt.members && pt.members.includes(id)) pt.members = pt.members.filter(x => x !== id);
+  }
+  unindexNick(db, p.nick);
+  delete db.players[id];
+  bumpRank(db);
+  return { ok: true, deletedId: id, nick: p.nick, wasLinked: !!p.authUid, msg: '탈퇴가 완료됐어요. 그동안 함께해 줘서 고마워요!' };
+}
 // 게스트(PIN) 캐릭터를 Supabase Auth 계정(uid+email)에 연결 = '계정 만들기'.
 // 이후 다른 기기에서 이메일 로그인하면 authLogin 이 이 캐릭터를 복원한다.
 function authLink(db, playerId, uid, email) {
@@ -2326,7 +2345,7 @@ module.exports = {
   ELEMENTS, elemMult, elementChart, ELEMENT_SKILLS, DUNGEON, dunFloor, dunHp, weekKey, buyReroll,
   dungeonView, dunStart, dunHit, dunSkill, dunSwap, dunFinish, dunLeave,
   profile, ranking, goldRanking, hogu, recentLog, playerList, findByNick,
-  findByAuthUid, authLink,
+  findByAuthUid, authLink, deleteAccount,
   // 저장 계층(server.js)용 — 일일 카운터 / 유저별 상한
   today, normalizeDay, LIMIT_KEYS, DAILY_FIELDS, limitOf, setLimits, dailyUsage, applyDaily, norm,
   // 서버리스(Vercel/Supabase) 어댑터용

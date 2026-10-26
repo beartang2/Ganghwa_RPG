@@ -147,6 +147,14 @@ async function putSession(q, token, id) {
   await q('INSERT INTO sessions (token, player_id, seen) VALUES ($1,$2,$3) ON CONFLICT (token) DO UPDATE SET player_id=$2, seen=$3', [token, id, Date.now()]);
 }
 async function deleteSession(q, token) { if (token) await q('DELETE FROM sessions WHERE token = $1', [token]); }
+// 회원 탈퇴: 그 플레이어가 소유한 행 전부(모든 기기 세션 포함)
+async function deletePlayerRows(q, id) {
+  await q('DELETE FROM sessions WHERE player_id = $1', [id]);
+  await q('DELETE FROM player_daily WHERE player_id = $1', [id]);
+  await q('DELETE FROM player_limits WHERE player_id = $1', [id]);
+  await q('DELETE FROM rate_buckets WHERE key = $1', ['act:' + id]);
+  await q('DELETE FROM players WHERE id = $1', [id]);
+}
 
 /* ---------- 속도제한 (Postgres 토큰버킷) ----------
  * 같은 key 는 FOR UPDATE 로 직렬화(요청 트랜잭션 안에서 원자적 소모).
@@ -173,4 +181,4 @@ async function rateAllow(q, key, cap, refillPerSec) {
   return !!(rows[0] && rows[0].allowed);
 }
 
-module.exports = { loadAllDb, readDb, runGame, snapshot, persistDiff, lockPlayer, getSession, putSession, deleteSession, playerData, rateAllow };
+module.exports = { loadAllDb, readDb, runGame, snapshot, persistDiff, lockPlayer, getSession, putSession, deleteSession, deletePlayerRows, playerData, rateAllow };
