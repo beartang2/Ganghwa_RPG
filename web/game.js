@@ -93,7 +93,14 @@ const CONFIG = {
    * 무기마다 강화 수치·★·속성·장인의 기운이 따로이고, 장착한 무기가 직업을 정한다.
    * 직업당 한 자루라 최대 4칸. 칸은 💎 프리즘 상점에서 연다(직업 변경권은 판매 종료). */
   weaponSlotsBase: 1, weaponSlotsMax: 4,
-  weaponSlotPrices: [100, 150, 200],   // 2·3·4번째 칸 가격(💎) — 갈수록 비싸진다
+  /* 2·3·4번째 칸 가격(💎) = '그 무기를 +0→+99 로 키우는 동안 평균적으로 모이는 💎' × 1.2 (5단위 올림).
+   * web/tools/sim-climb.js 로 실제 강화·사냥·상자·연금술 코드를 300계정씩 돌려 얻은 '보통 유저' 평균:
+   *   첫 무기 54.5💎(약 16일) → 70 · 두 번째부터 26.6 / 25.6💎(약 6일) → 35 · 35
+   * 두 번째 무기부터 싼 이유: +99 무기로 사냥·레이드하고 새 무기에 강화만 하면(장착 교체는 무료)
+   * 등반이 약 16일 → 6일로 줄어서 그동안 모이는 💎 도 절반이 된다. 확률·보상을 바꾸면 시뮬을 다시 돌릴 것. */
+  weaponSlotPrices: [70, 35, 35],
+  // 칸 해금 조건: +99 를 찍은(지금 +99 이거나 ★1 이상) 무기 한 자루마다 칸을 하나 살 수 있다.
+  //   +99 무기 1자루 → 2번째 칸, 2자루 → 3번째 칸, 3자루 → 4번째 칸. 즉 가진 칸을 다 채워 +99 까지 키워야 다음 칸이 열린다.
 
   /* 💎 프리즘 — 골드와 별개인 두 번째 재화. 확률 시스템(상자·연금술·캡슐)에서만 나오고
    * 프리즘 상점에서 장비 칸·특별 아이템으로 바꾼다. 확률표는 화면에 그대로 공개한다. */
@@ -613,14 +620,27 @@ function weaponCard(w) {
     name: weaponName(w.lv, w.cls, w.asc), grade: { key: g.key, emoji: g.emoji, name: g.name, color: g.color },
     element: w.el, elementEmoji: em.emoji, elementName: em.name, pity: w.pity || 0, equipped: !!w.equipped };
 }
+// +99 를 한 번이라도 찍은 무기 — 지금 +99 이거나, 이미 초월해서 ★ 이 붙은 무기(초월하면 +0 으로 돌아가므로 ★ 로 센다)
+function isTopped(w) { return (w.lv || 0) >= CONFIG.maxLevel || (w.asc || 0) >= 1; }
+function toppedCount(p) { return allWeapons(p).filter(isTopped).length; }
+// 다음 장비 칸을 살 수 있는지 — 산 칸 수보다 +99 무기가 많아야 한다(need = 지금까지 산 칸 + 1)
+function slotUnlock(p) {
+  const bought = p.weaponSlotBought || 0;
+  const maxed = weaponSlots(p) >= CONFIG.weaponSlotsMax;
+  const need = bought + 1, have = toppedCount(p);
+  return { maxed, need, have, ok: !maxed && have >= need, price: maxed ? null : CONFIG.weaponSlotPrices[bought] };
+}
+function slotLockMsg(su) { return '+' + CONFIG.maxLevel + ' 무기 ' + su.have + '/' + su.need + '자루'; }   // 좁은 화면에서도 한 줄
 function weaponsView(p) {
   const list = allWeapons(p);
-  const bought = p.weaponSlotBought || 0;
+  const su = slotUnlock(p);
   return {
     slots: weaponSlots(p), max: CONFIG.weaponSlotsMax, list: list.map(weaponCard),
     canNew: !!p.class && list.length < weaponSlots(p),
     missing: Object.keys(CLASSES).filter(k => !list.some(w => w.cls === k)),
-    nextSlotPrice: bought < CONFIG.weaponSlotPrices.length ? CONFIG.weaponSlotPrices[bought] : null,
+    nextSlotPrice: su.price,
+    // 다음 칸 해금 상태(최대면 null) — 화로 위 🔒 칸이 '살 수 있음/조건 미달' 을 구분해 보여준다
+    nextSlot: su.maxed ? null : { price: su.price, need: su.need, have: su.have, ok: su.ok, msg: slotLockMsg(su) },
   };
 }
 function inActiveRaid(db, id) {
@@ -633,7 +653,7 @@ function newWeapon(db, id, cls) {
   if (!p.class) return { ok: false, error: '먼저 직업을 고르세요.' };
   if (!CLASSES[cls]) return { ok: false, error: '올바른 직업을 고르세요.' };
   if (ownedClasses(p).includes(cls)) return { ok: false, error: '이미 ' + CLASSES[cls].weapon + '을(를) 갖고 있어요. 장비 칸에서 바꿔 들 수 있어요.' };
-  if (allWeapons(p).length >= weaponSlots(p)) return { ok: false, error: '장비 칸이 꽉 찼어요. 💎 프리즘 상점에서 칸을 늘리세요.' };
+  if (allWeapons(p).length >= weaponSlots(p)) return { ok: false, error: '장비 칸이 꽉 찼어요. 무기를 +' + CONFIG.maxLevel + '까지 키우면 💎 프리즘 상점에서 칸을 늘릴 수 있어요.' };
   if (inActiveRaid(db, id)) return { ok: false, error: '레이드 중에는 무기를 바꿀 수 없어요.' };
   ensureArmory(p).push(activeWeapon(p));
   loadWeapon(p, { cls, lv: 0, el: randomElementKey(), pity: 0, asc: 0 });
@@ -755,11 +775,11 @@ function capsule(db, id, times) {
 }
 // 💎 프리즘 상점
 function prismShopItems(p) {
-  const bought = (p && p.weaponSlotBought) || 0;
-  const slotMax = CONFIG.weaponSlotsBase + bought >= CONFIG.weaponSlotsMax;
+  const su = slotUnlock(p || {});
   return [
-    { id: 'slot', emoji: '🗡️', name: '장비 칸 +1', price: slotMax ? null : CONFIG.weaponSlotPrices[bought], soldOut: slotMax,
-      desc: '다른 직업 무기를 하나 더 가질 수 있어요(영구). 새 무기는 +0·★0부터 따로 키워요 · 최대 ' + CONFIG.weaponSlotsMax + '칸' },
+    { id: 'slot', emoji: '🗡️', name: '장비 칸 +1', price: su.price, soldOut: su.maxed,
+      locked: !su.maxed && !su.ok, lockMsg: su.maxed ? '' : slotLockMsg(su),
+      desc: '+' + CONFIG.maxLevel + ' 을 찍은 무기 한 자루마다 한 칸(★ 초월 무기 포함). 새 직업 무기를 +0·★0부터 따로 키워요 · 영구 · 최대 ' + CONFIG.weaponSlotsMax + '칸' },
     { id: 'prismdye', emoji: ITEMS.prismdye.emoji, name: ITEMS.prismdye.name, price: 60, desc: ITEMS.prismdye.desc, nickPreview: 'prism' },
     { id: 'hammer', emoji: ITEMS.hammer.emoji, name: ITEMS.hammer.name, price: 8, desc: ITEMS.hammer.desc },
     { id: 'ascpack', emoji: '🎁', name: '초월 꾸러미', price: 25, desc: ITEMS.shard.emoji + ' 초월의 파편 30 + ' + ITEMS.essence.emoji + ' 초월의 정수 3' },
@@ -776,6 +796,7 @@ function buyPrism(db, id, itemId) {
   const it = prismShopItems(p).find(x => x.id === itemId);
   if (!it) return { ok: false, error: '없는 상품이에요.' };
   if (it.soldOut) return { ok: false, error: '장비 칸이 이미 최대(' + CONFIG.weaponSlotsMax + '칸)예요.' };
+  if (it.locked) return { ok: false, error: '🔒 장비 칸은 +' + CONFIG.maxLevel + ' 무기 한 자루마다 하나씩 열려요 (' + it.lockMsg + ')' };
   if ((p.prism || 0) < it.price) return { ok: false, error: '💎 프리즘 부족! (필요 ' + it.price + ' / 보유 ' + (p.prism || 0) + ')' };
   if (itemId === 'prismdye' || itemId === 'hammer') {
     if (!canHold(p, itemId)) return { ok: false, error: '🎒 가방이 꽉 찼어요.' };
@@ -1917,7 +1938,7 @@ module.exports = {
   partyInvite, partyAccept, partyReject, myInvites, raidState,
   raidHit, raidSkill, raidFinish,
   buyBoost, buyDye, buyClassChange, shopItems, equipTitle,
-  newWeapon, equipWeapon, weaponsView, openBox, alchemy, capsule, buyPrism, prismShopItems, prismInfo, prismView,
+  newWeapon, equipWeapon, weaponsView, slotUnlock, openBox, alchemy, capsule, buyPrism, prismShopItems, prismInfo, prismView,
   BOX_TABLE, ALCHEMY, CAPSULE_TABLE,
   profile, ranking, goldRanking, hogu, recentLog, playerList, findByNick,
   findByAuthUid, authLink,

@@ -212,17 +212,21 @@ async function main() {
   let me = (await req('GET', '/api/me', { token: tok })).body.me;
   ok(me.weapons && me.weapons.slots === 1 && me.weapons.canNew === false, '기본 장비 칸 1 · 새 무기 불가');
   ok(!(await req('POST', '/api/weapon-new', { token: tok, body: { class: 'archer' } })).body.ok, '칸 없으면 새 무기 거부');
+  ok(me.weapons.nextSlot && me.weapons.nextSlot.ok === false && me.weapons.nextSlot.need === 1 && me.weapons.nextSlot.have === 0, '+70 무기뿐 → 다음 칸 잠김(+99 1자루 필요)');
   r = await req('POST', '/api/prism-buy', { token: tok, body: { item: 'slot' } });
-  ok(r.body.ok && r.body.me.weapons.slots === 2 && r.body.me.prism === 300, '💎100 으로 장비 칸 +1 (2칸)');
+  ok(!r.body.ok && /\+99/.test(r.body.error), '+99 무기 없으면 장비 칸 구매 거부');
+  await q("UPDATE players SET level = 99 WHERE nick='검사'");
+  r = await req('POST', '/api/prism-buy', { token: tok, body: { item: 'slot' } });
+  ok(r.body.ok && r.body.me.weapons.slots === 2 && r.body.me.prism === 330, '+99 달성 → 💎70 으로 장비 칸 +1 (2칸)');
   r = await req('POST', '/api/weapon-new', { token: tok, body: { class: 'archer' } });
   ok(r.body.ok && r.body.me.class === 'archer' && r.body.me.level === 0, '새 활 제작 → 원딜 +0 장착');
   const arm = (await q("SELECT data->'armory' AS a FROM players WHERE nick='검사'"))[0].a;
-  ok(Array.isArray(arm) && arm[0].cls === 'warrior' && arm[0].lv === 70, '보관 검 +70 저장 왕복(lv 키 보존)');
+  ok(Array.isArray(arm) && arm[0].cls === 'warrior' && arm[0].lv === 99, '보관 검 +99 저장 왕복(lv 키 보존)');
   ok(!(await req('POST', '/api/weapon-new', { token: tok, body: { class: 'archer' } })).body.ok, '같은 직업 무기 중복 거부');
   r = await req('POST', '/api/weapon-equip', { token: tok, body: { class: 'warrior' } });
-  ok(r.body.ok && r.body.me.class === 'warrior' && r.body.me.level === 70, '검으로 바꿔 들기 → +70 복원');
+  ok(r.body.ok && r.body.me.class === 'warrior' && r.body.me.level === 99, '검으로 바꿔 들기 → +99 복원');
   const rk = (await req('GET', '/api/rank')).body.list.find(x => x.nick === '검사');
-  ok(rk && rk.level === 70 && rk.weaponCount === 2, '랭킹은 가장 좋은 무기 기준');
+  ok(rk && rk.level === 99 && rk.weaponCount === 2, '랭킹은 가장 좋은 무기 기준');
   r = await req('POST', '/api/box-open', { token: tok, body: { pick: 2 } });
   ok(r.body.ok && r.body.boxes.length === 3 && r.body.keysLeft === 1, '상자 열기(3개 중 택1, 열쇠 1 소모)');
   r = await req('POST', '/api/alchemy', { token: tok, body: { tier: 'mid' } });
@@ -231,7 +235,13 @@ async function main() {
   r = await req('POST', '/api/capsule', { token: tok, body: { times: 10 } });
   ok(r.body.ok && r.body.results.length === 10 && Number(r.body.me.gold) === goldPreCap - 300000 + r.body.gold, '캡슐 10회(30만G) 결과·골드 정산');
   const pv = (await req('GET', '/api/prism', { token: tok })).body;
-  ok(pv.ok && pv.info.capsule.price === 30000 && pv.shop.find(x => x.id === 'slot').price === 150, '프리즘 탭 정보(확률표·다음 칸 💎150)');
+  const slotItem = pv.shop.find(x => x.id === 'slot');
+  ok(pv.ok && pv.info.capsule.price === 30000 && slotItem.price === 35 && slotItem.locked === true, '프리즘 탭 정보(확률표·다음 칸 💎35 · +99 2자루 전까지 잠김)');
+  ok(!(await req('POST', '/api/prism-buy', { token: tok, body: { item: 'slot' } })).body.ok, '+99 무기 1자루로는 3번째 칸 거부');
+  // ★ 초월한 무기도 +99 를 찍은 무기로 친다(초월하면 +0 으로 돌아가므로 ★ 로 센다) — 보관 중인 활에 ★1
+  await q("UPDATE players SET data = jsonb_set(data, '{armory,0,asc}', '1') WHERE nick='검사'");
+  r = await req('POST', '/api/prism-buy', { token: tok, body: { item: 'slot' } });
+  ok(r.body.ok && r.body.me.weapons.slots === 3 && r.body.me.prism === pv.prism - 35, '★1 무기 + +99 무기 → 3번째 칸 구매(💎35)');   // 상자·연금·캡슐에서 💎 가 나왔을 수 있어 상대값으로 본다
   ok(!(await req('POST', '/api/shop-buy', { token: tok, body: { item: 'classchange' } })).body.ok, '직업 변경권 판매 종료');
 
   console.log('\n결과: ' + pass + ' pass, ' + fail + ' fail');

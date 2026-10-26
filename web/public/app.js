@@ -10,7 +10,7 @@ const PATCH = {
   version: '6',
   title: '🌈 초월 · 💎 프리즘 업데이트',
   notes: [
-    '🗡️ <b>장비 칸</b> — 무기를 여러 자루 가질 수 있어요(직업당 한 자루). 화로 위 장비 칸에서 바꿔 들면 직업도 같이 바뀌고, 새 무기는 <b>+0·★0</b>부터 따로 키워요',
+    '🗡️ <b>장비 칸</b> — 무기를 여러 자루 가질 수 있어요(직업당 한 자루). 무기를 <b>+99</b>까지 키울 때마다 칸을 하나씩 열 수 있고, 화로 위 장비 칸에서 바꿔 들면 직업도 같이 바뀌어요. 새 무기는 <b>+0·★0</b>부터 따로 키워요',
     '💎 <b>프리즘</b> 재화 추가 — 💎 프리즘 탭에서 📦<b>상자</b>(열쇠로 3개 중 하나) · ⚗️<b>연금술</b>(마석+골드) · 🧸<b>캡슐</b>(골드만 있으면 무제한)으로 모아요. 확률표는 탭에서 그대로 볼 수 있어요',
     '🗝️ 사냥하면 <b>상자 열쇠</b>와 🔮<b>마석</b>이 나와요 — 무한 사냥에서도 낮은 확률로 나와요',
     '🛒 <b>프리즘 상점</b> — 장비 칸 +1 · 🫧 <span class="nick-prism">프리즘 염색약</span>(상점 전용 오로라색) · 🔨 장인의 망치 · 🎁 초월 꾸러미. 직업 변경권은 판매를 마쳤어요(갖고 있는 건 그대로 사용 가능)',
@@ -464,8 +464,12 @@ function renderArmory() {
       title="${esc(it.name)}${it.equipped ? ' (장착 중)' : ' — 눌러서 바꿔 들기'}"><span class="arm-ic">${it.classEmoji}</span><span class="arm-lv">${it.ascend ? '★' + it.ascend + ' ' : ''}+${it.level}</span></button>`;
   }
   for (let i = w.list.length; i < w.slots; i++) html += '<button class="arm-slot new" data-arm-new title="빈 장비 칸 — 새 무기 만들기"><span class="arm-ic">➕</span><span class="arm-lv">새 무기</span></button>';
-  // 잠긴 칸은 하나로 묶어서(🔒 ×n) — 좁은 화면에서도 장비 줄이 한 줄에 들어가게
-  if (w.max > w.slots) html += `<button class="arm-slot locked" data-arm-lock title="💎 프리즘 상점에서 장비 칸 열기"><span class="arm-ic">🔒</span><span class="arm-lv">×${w.max - w.slots}</span></button>`;
+  // 잠긴 칸은 하나로 묶어서(🔒 ×n) — 좁은 화면에서도 장비 줄이 한 줄에 들어가게.
+  // 다음 칸을 지금 살 수 있으면(+99 무기 조건 충족) 놋쇠빛으로 깨워서 상점으로 안내한다.
+  if (w.max > w.slots) {
+    const ns = w.nextSlot, ready = !!(ns && ns.ok);
+    html += `<button class="arm-slot locked${ready ? ' ready' : ''}" data-arm-lock title="${ready ? '💎 프리즘 상점에서 장비 칸 열기' : '🔒 ' + esc(ns ? ns.msg : '')}"><span class="arm-ic">${ready ? '💎' : '🔒'}</span><span class="arm-lv">×${w.max - w.slots}</span></button>`;
+  }
   if (html !== lastArmoryHtml) { el('armory').innerHTML = html; lastArmoryHtml = html; }
 }
 async function doEquipWeapon(cls) {
@@ -475,8 +479,14 @@ async function doEquipWeapon(cls) {
   toast(r.msg, 'ok'); sfx('pang');
   if (['rank', 'raid'].includes(currentTab)) loadTab();
 }
+// 🔒 칸·꽉 찬 ➕ 를 눌렀을 때 — 조건 미달이면 무엇이 필요한지 바로 알려주고, 살 수 있으면 상점으로
+function armLockedClick() {
+  const ns = me.weapons && me.weapons.nextSlot;
+  if (ns && !ns.ok) return toast('🔒 다음 장비 칸은 무기를 +' + me.maxLevel + '까지 키워야 열려요 (' + ns.msg + ')', 'info');
+  goPrismShop();
+}
 async function openWeaponNew() {
-  if (!me.weapons.canNew) return goPrismShop();
+  if (!me.weapons.canNew) return armLockedClick();
   if (!classesCache) { const r = await withLoad(() => api('classes')); if (!r.ok) return; classesCache = r.classes; }
   el('wpnGrid').innerHTML = me.weapons.missing.map(k => {
     const c = classesCache[k];
@@ -598,8 +608,8 @@ function pshopHTML(d) {
   return '<p class="hint" style="margin:0 0 10px">💎 프리즘으로만 살 수 있는 물건이에요.</p>' + d.shop.map(it =>
     `<div class="raid-boss"><span class="bemoji">${it.emoji}</span>
       <div class="binfo"><div class="bname">${it.nickPreview ? `<span class="nick-${it.nickPreview}">${esc(it.name)}</span>` : esc(it.name)} ${it.soldOut ? '<span class="shop-lim off">최대</span>' : `<small class="pprice">💎 ${it.price}</small>`}</div>
-        <div class="bstat">${esc(it.desc)}</div></div>
-      <button class="btn sm primary" data-pbuy="${it.id}" ${it.soldOut || d.prism < it.price ? 'disabled' : ''}>구매</button></div>`).join('');
+        ${it.locked ? `<div class="plock">🔒 ${esc(it.lockMsg)} 필요</div>` : ''}<div class="bstat">${esc(it.desc)}</div></div>
+      <button class="btn sm primary" data-pbuy="${it.id}" ${it.soldOut || it.locked || d.prism < it.price ? 'disabled' : ''}>구매</button></div>`).join('');
 }
 async function doOpenBox(i) {
   const r = await api('box-open', 'POST', { pick: i });
@@ -1864,7 +1874,7 @@ el('ascendBtn').onclick = () => act(doAscend, el('ascendBtn'));
 el('armory').addEventListener('click', e => {
   const a = e.target.closest('[data-arm]'); if (a) { if (!a.classList.contains('on')) act(() => doEquipWeapon(a.dataset.arm), a); return; }
   if (e.target.closest('[data-arm-new]')) return openWeaponNew();
-  if (e.target.closest('[data-arm-lock]')) return goPrismShop();
+  if (e.target.closest('[data-arm-lock]')) return armLockedClick();
 });
 el('wpnGrid').addEventListener('click', e => { const c = e.target.closest('[data-newcls]'); if (c) act(() => doNewWeapon(c.dataset.newcls), null); });
 el('wpnClose').onclick = () => { el('wpnModal').hidden = true; };

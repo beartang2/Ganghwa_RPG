@@ -711,6 +711,10 @@ body.loading-on #globalLoading{opacity:1}
 .arm-slot.new{border-style:dashed;color:var(--muted)}
 .arm-slot.new .arm-lv{color:var(--muted)}
 .arm-slot.locked{padding:0 8px;border-style:dashed;border-color:var(--line);opacity:.55}
+.arm-slot.locked.ready{opacity:1;border-style:solid;border-color:var(--primary);box-shadow:0 0 0 1px rgba(212,162,76,.25),0 0 10px rgba(212,162,76,.35);animation:armReady 2.4s ease-in-out infinite}
+@keyframes armReady{50%{box-shadow:0 0 0 1px rgba(212,162,76,.45),0 0 16px rgba(212,162,76,.6)}}
+@media (prefers-reduced-motion:reduce){.arm-slot.locked.ready{animation:none}}
+.plock{font-size:12px;font-weight:700;color:var(--danger);margin:2px 0 3px;word-break:keep-all}
 @media (max-width:360px){ .armory{gap:5px} .arm-slot{padding:0 7px} .arm-slot.locked{padding:0 6px} .arm-label{font-size:11px} }
 .wpn-card{max-width:420px}
 .wpn-card h3{padding-right:36px}
