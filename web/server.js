@@ -319,6 +319,7 @@ const SHARED_ACTIONS = new Set([
   '/api/fight', '/api/raid', '/api/setclass', '/api/rename',
   '/api/party-create', '/api/party-join', '/api/party-leave',
   '/api/party-invite', '/api/party-accept', '/api/party-reject',
+  '/api/weapon-new', '/api/weapon-equip',   // 무기를 바꿔 들면 랭킹·파티원 표시가 바뀐다
 ]);
 
 /* ---------- 공개 조회 캐시 ----------
@@ -435,7 +436,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === 'GET' && p === '/api/classes') return sendJson(res, 200, { ok: true, classes: game.CLASSES });
   if (req.method === 'GET' && p === '/api/shop') return sendJson(res, 200, { ok: true, items: game.shopItems() });
-  if (req.method === 'GET' && p === '/api/bosses') return sendJson(res, 200, { ok: true, bosses: game.BOSSES });
+  if (req.method === 'GET' && p === '/api/bosses') return sendJson(res, 200, { ok: true, bosses: game.BOSSES, partyHpScale: game.CONFIG.raidPartyHpScale });
   if (req.method === 'GET' && p === '/api/parties') return sendJson(res, 200, { ok: true, list: cachedRead('parties', () => game.partyList(db)) });
 
   /* ---------- 관리자 API (ADMIN_TOKEN 설정 시에만 활성) ----------
@@ -525,6 +526,8 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && p === '/api/party-raid') return sendJson(res, 200, game.raidState(db, id));
     if (req.method === 'GET' && p === '/api/missions') return sendJson(res, 200, game.missionView(db, id));
     if (req.method === 'GET' && p === '/api/battlepass') return sendJson(res, 200, game.bpView(db, id));
+    if (req.method === 'GET' && p === '/api/prism') return sendJson(res, 200, game.prismView(db, id));
+    if (req.method === 'GET' && p === '/api/dungeon') return sendJson(res, 200, game.dungeonView(db, id));
 
     if (req.method === 'POST') {
       if (!allowAction(id)) return sendJson(res, 429, { ok: false, error: '너무 빠릅니다. 잠시 후 다시 시도하세요.' });
@@ -532,6 +535,20 @@ const server = http.createServer(async (req, res) => {
       if (p === '/api/setclass') { const b = await readBody(req); r = game.setClass(db, id, b.class); }
       else if (p === '/api/rename') { const b = await readBody(req); r = game.rename(db, id, b.nick); }
       else if (p === '/api/enhance') r = game.enhance(db, id);
+      else if (p === '/api/ascend') r = game.ascend(db, id);
+      else if (p === '/api/use-item') { const b = await readBody(req); r = game.useItem(db, id, b.item); }
+      else if (p === '/api/weapon-new') { const b = await readBody(req); r = game.newWeapon(db, id, b.class); }
+      else if (p === '/api/weapon-equip') { const b = await readBody(req); r = game.equipWeapon(db, id, b.class); }
+      else if (p === '/api/box-open') { const b = await readBody(req); r = game.openBox(db, id, b.pick); }
+      else if (p === '/api/alchemy') { const b = await readBody(req); r = game.alchemy(db, id, b.tier); }
+      else if (p === '/api/capsule') { const b = await readBody(req); r = game.capsule(db, id, b.times); }
+      else if (p === '/api/prism-buy') { const b = await readBody(req); r = game.buyPrism(db, id, b.item); }
+      else if (p === '/api/dun-start') r = game.dunStart(db, id);
+      else if (p === '/api/dun-hit') { const b = await readBody(req); r = game.dunHit(db, id, b.hits); }
+      else if (p === '/api/dun-skill') { const b = await readBody(req); r = game.dunSkill(db, id, b.kind); }
+      else if (p === '/api/dun-swap') { const b = await readBody(req); r = game.dunSwap(db, id, b.class); }
+      else if (p === '/api/dun-finish') r = game.dunFinish(db, id);
+      else if (p === '/api/dun-leave') r = game.dunLeave(db, id);
       else if (p === '/api/attend') r = game.attend(db, id);
       else if (p === '/api/mine') r = game.mine(db, id);
       else if (p === '/api/mine-swing') r = game.mineSwing(db, id);
@@ -547,6 +564,8 @@ const server = http.createServer(async (req, res) => {
         else if (b.item === 'boost') r = game.buyBoost(db, id);
         else if (b.item === 'dye') r = game.buyDye(db, id);
         else if (b.item === 'classchange') r = game.buyClassChange(db, id);
+        else if (b.item === 'eltkt') r = game.buyReroll(db, id);
+        else if (b.item === 'invpack') r = game.buyInvPack(db, id);
         else r = { ok: false, error: '알 수 없는 상품' };
       }
       else if (p === '/api/fight') { const b = await readBody(req); r = game.fight(db, id, b.target); }

@@ -30,7 +30,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@600;800;900&display=swap">
-<link rel="stylesheet" href="/style.css?v=39">
+<link rel="stylesheet" href="/style.css?v=50">
 </head>
 <body>
 <!-- 화로 불씨 배경 (fx.js / React Bits Particles 이식) -->
@@ -39,7 +39,7 @@
 <!-- 로그인 -->
 <div id="login" class="screen">
   <div class="card login-card">
-    <img class="login-emblem" src="/icon-512.png" alt="" width="76" height="76">
+    <img class="login-emblem" src="/icon-512.png?v=2" alt="" width="76" height="76">
     <h1><span id="loginTitle">강화 RPG</span></h1>
     <p class="sub">닉네임과 PIN으로 시작하세요</p>
     <!-- 도메인 이사 안내(2026-10). localStorage 는 도메인별이라 새 주소에선 한 번 다시 로그인해야 한다.
@@ -68,12 +68,12 @@
 </div>
 
 <!-- 게임 -->
-<div id="game" class="screen" hidden>
+<div id="game" class="screen" data-view="forge" hidden>
   <header class="topbar">
     <span class="me-nick" id="hNick">-</span>
     <span class="chips">
       <span class="chip gold">💰 <b id="hGold">0</b></span>
-      <span class="chip">🛡️ <b id="hProtect">0</b></span>
+      <span class="chip prism" title="💎 프리즘 — 상자·연금술·캡슐에서 얻어요">💎 <b id="hPrism">0</b></span>
     </span>
     <div class="menu-wrap">
       <button id="menuBtn" class="btn ghost sm" aria-label="메뉴">☰<span id="menuDot" class="dot" hidden></span></button>
@@ -90,6 +90,7 @@
   <main class="wrap">
     <div class="col-left">
       <section class="card weapon-panel">
+        <div id="armory" class="armory" aria-label="장비 칸"></div>
         <div class="hearth"><div id="weaponArt" class="weapon-art"></div></div>
         <div class="weapon-info">
           <div id="weaponName" class="weapon-name">+0 ⚪ 일반</div>
@@ -105,19 +106,25 @@
           <div class="pity-track"><div id="pityBar" class="pity-fill"></div></div>
         </div>
         <button id="enhanceBtn" class="btn primary big enhance"><span id="enhLabel" class="enh-label">⚒️ 강화</span><span id="enhCost" class="enh-cost"></span></button>
+        <div id="ascendWrap" class="ascend-wrap" hidden>
+          <div id="ascendMats" class="ascend-mats"></div>
+          <button id="ascendBtn" class="btn big ascend">🌈 초월</button>
+        </div>
       </section>
 
-      <section class="actions">
+      <section class="actions" id="actRow">
         <button id="huntBtn" class="btn action">🗡️ 사냥 <small id="huntLeft"></small></button>
         <button id="mineBtn" class="btn action">⛏️ 채굴 <small id="mineAmt"></small></button>
       </section>
-      <section class="actions">
+      <section class="actions" id="quickRow">
         <button id="attendBtn" class="btn action">📅 출석</button>
+        <button id="invBtn" class="btn action">🎒 가방 <small id="invCount"></small></button>
         <button id="missionBtn" class="btn action">🎯 미션<span id="missionDot" class="dot" hidden></span></button>
         <button id="passBtn" class="btn action">🎟️ 패스</button>
       </section>
 
       <section class="card stats">
+        <div><span>초월</span><b id="sAscend">-</b></div>
         <div><span>최고기록</span><b id="sBest">+0</b></div>
         <div><span>파괴</span><b id="sBreaks">0</b></div>
         <div><span>전적</span><b id="sRecord">0승 0패</b></div>
@@ -130,14 +137,40 @@
         <button class="tab active" data-tab="rank"><span class="ti">🏅</span><span class="tl">랭킹</span></button>
         <button class="tab" data-tab="goldrank"><span class="ti">💰</span><span class="tl">부자</span></button>
         <button class="tab" data-tab="shop"><span class="ti">🛒</span><span class="tl">상점</span></button>
+        <button class="tab" data-tab="prism"><span class="ti">💎</span><span class="tl">프리즘</span></button>
         <button class="tab" data-tab="raid"><span class="ti">🐉</span><span class="tl">레이드</span></button>
         <button class="tab" data-tab="fight"><span class="ti">⚔️</span><span class="tl">싸움</span></button>
-        <button class="tab" data-tab="hogu"><span class="ti">🤡</span><span class="tl">호구</span></button>
+        <button class="tab" data-tab="hogu"><span class="ti">🕯️</span><span class="tl">추모</span></button>
         <button class="tab" data-tab="log"><span class="ti">📜</span><span class="tl">로그</span></button>
       </nav>
       <section id="panel" class="card panel"></section>
     </div>
+
+    <!-- 넓은 데스크톱(1280px+) 오른쪽 단: 오늘 미션 · 강화 랭킹 · 실시간 로그 -->
+    <aside class="col-side" aria-label="요약">
+      <section class="card side-card">
+        <div class="side-h">🎯 오늘 미션 <button class="side-more" id="sideMissionMore">전체 보기</button></div>
+        <div id="sideMissions" class="side-list"></div>
+      </section>
+      <section class="card side-card">
+        <div class="side-h">🏅 강화 랭킹</div>
+        <div id="sideRank" class="side-list"></div>
+      </section>
+      <section class="card side-card">
+        <div class="side-h">📜 실시간 로그</div>
+        <div id="sideLog" class="side-list side-log"></div>
+      </section>
+    </aside>
   </main>
+
+  <!-- 휴대폰·태블릿(한 단) 하단 탭바 — 화면 하나씩 바꿔 보며 페이지 스크롤을 줄인다 -->
+  <nav id="bottomBar" class="bottombar" aria-label="화면">
+    <button class="bb-btn on" data-view="forge"><span>⚒️</span>대장간</button>
+    <button class="bb-btn" data-view="act"><span>🗡️</span>사냥</button>
+    <button class="bb-btn" data-view="raid"><span>🐉</span>레이드<i id="bbRaidDot" class="dot" hidden></i></button>
+    <button class="bb-btn" data-view="prism"><span>💎</span>프리즘</button>
+    <button class="bb-btn" data-view="more"><span>🏅</span>더보기</button>
+  </nav>
 
   <div id="toast" class="toast" hidden></div>
 </div>
@@ -147,13 +180,18 @@
   <div class="card modal-card guide-card">
     <h3>🎮 플레이 방법</h3>
     <ul class="guide-list">
-      <li>⚒️ <b>강화</b> — 골드로 무기 강화(+0~99). 고레벨일수록 성공률이 급감하고 대부분 <b>실패</b>해요. 실패가 쌓이면 🔨<b>장인의 기운</b>이 차고 <b>100%면 확정 성공!</b> 💥<b>파괴되면 +0로 완전 초기화</b>(+새 속성 랜덤 부여) — 드물지만 치명적이니 🛡️<b>방지권</b>으로 결정적 순간을 지키세요! 초반엔 +1~3도!</li>
+      <li>⚒️ <b>강화</b> — 골드로 무기 강화(+0~99). 고레벨일수록 성공률이 급감하고 대부분 <b>실패</b>해요. 실패가 쌓이면 🔨<b>장인의 기운</b>이 차고 <b>100%면 확정 성공!</b> 💥<b>파괴되면 뒤로 밀려나요</b>(한 등급 아래 시작점 또는 최대 −15레벨 중 덜 떨어지는 쪽, +0까지 떨어지면 새 속성) — 🛡️<b>방지권</b>으로 결정적 순간을 지키세요! 초반엔 +1~3도!</li>
+      <li>🌈 <b>초월</b> — +99에 닿으면 재료(💠사냥 <b>파편</b> · 🌟레이드 <b>정수</b>)로 초월! 무기는 +0으로 돌아가지만 영구 <b>★</b>을 얻어요(골드·레이드 공격력·장인의 기운↑). 대신 ★1부터는 강화가 더 어렵고 <b>방지권이 통하지 않아요</b></li>
+      <li>🗡️ <b>장비 칸</b> — 무기를 여러 자루 가질 수 있어요(직업당 한 자루). 무기를 <b>+99</b>까지 키울 때마다 💎 프리즘 상점에서 칸을 하나씩 열 수 있고(★ 초월한 무기도 포함), 새 무기는 +0·★0부터 따로 키워요. 화로 위 장비 칸을 눌러 바꿔 들면 직업도 같이 바뀌어요</li>
+      <li>🌌 <b>초월 던전</b> — ★1 무기가 있으면 레이드 탭에서 입장. 혼자 연타로 층을 올라요(매주 초기화, 층 속성도 매주 바뀜). 보스 속성의 <b>약점 무기</b>로 치면 피해 ×2 — 깊은 층은 무기 여러 자루를 <b>전투 중에 바꿔 끼며</b> 넘겨요. ★1 무기는 <b>속성 스킬</b>도 써요</li>
+      <li>💎 <b>프리즘</b> — 사냥에서 나오는 🗝️<b>상자 열쇠</b>로 상자 3개 중 하나를 열거나, 🔮<b>마석</b>과 골드로 ⚗️<b>연금술</b>, 골드만으로 🧸<b>캡슐</b>을 돌려 모아요. 확률은 화면에 그대로 공개돼 있어요</li>
+      <li>🎒 <b>가방</b> — 방지권·부스트권·염색약·초월 재료·열쇠·마석이 모두 가방에. 10칸으로 시작(한 칸 999개), 염색약·재련권은 가방에서 <b>사용하기</b></li>
       <li>💰 <b>골드 수급</b> — <b>출석</b>(하루1회)·<b>채굴</b>(시간당 누적)·<b>사냥</b>·<b>싸움 승리</b>(상대 골드 약탈)</li>
       <li>🗡️ <b>사냥</b> — 무기가 강할수록 <b>희귀·강한 몬스터</b>가 자주 나와요(어렵지만 골드↑). 치명타💥도! 하루 20회 이후엔 <b>♾️무한 사냥</b>(보상↓)으로 계속 가능하고, 가끔 <b>⛏️채광 물약</b>(채굴 기력 회복)이 나와요</li>
       <li>⚔️ <b>싸움</b> — 다른 유저에게 도전(하루5회). 이기면 골드 20% 획득</li>
-      <li>🐲 <b>파티 레이드</b> — 파티를 만들어 <b>초대</b>하고, 15초 동안 <b>다같이 보스를 연타</b>! 보스는 랜덤하게 반격하니 <b>탱커</b>(피해감소)·<b>힐러</b>(파티 HP 회복)가 생존을 좌우해요. 직업별 <b>스킬</b> 1회씩!</li>
+      <li>🐲 <b>파티 레이드</b> — 파티를 만들어 <b>초대</b>하고, 15초 동안 <b>다같이 보스를 연타</b>! 보스는 랜덤하게 반격하니 <b>탱커</b>(피해감소)·<b>힐러</b>(파티 HP 회복)가 생존을 좌우해요. 직업별 <b>스킬</b> 1회씩! 보스마다 <b>입장 조건</b>(무기 레벨·★)이 있고, <b>실패하면 횟수가 깎이지 않아요</b></li>
       <li>✨ <b>직업</b> — 근딜·원딜·탱커·힐러. 닉네임은 <b>프로필</b>에서 변경 가능</li>
-      <li>🔥 <b>무기 속성</b> — 무기마다 랜덤 속성(불·물·대지·바람·번개·얼음·빛·어둠·독). <b>파괴되면 속성이 새로 부여</b>돼요</li>
+      <li>🔥 <b>무기 속성</b> — 무기마다 랜덤 속성(불·물·대지·바람·번개·얼음·빛·어둠·독). 물→불→얼음→바람→독→대지→번개→물 순서로 앞이 뒤를 이기고 빛⇄어둠은 서로 강해요. <b>파괴되면 속성이 새로 부여</b>되고, 🔁 <b>속성 재련권</b>(에픽 이상·강화 10%)으로 다시 뽑을 수도 있어요</li>
     </ul>
     <button id="guideClose" class="btn primary big" style="margin-top:6px">시작하기</button>
   </div>
@@ -190,6 +228,28 @@
   <div class="card modal-card mine-card">
     <button id="mineClose" class="btn ghost sm close">✕</button>
     <div id="mineBody"></div>
+  </div>
+</div>
+
+<!-- 새 무기 만들기 (빈 장비 칸) -->
+<div id="wpnModal" class="modal" hidden>
+  <div class="card modal-card wpn-card">
+    <button id="wpnClose" class="btn ghost sm close">✕</button>
+    <h3>🗡️ 새 무기 만들기</h3>
+    <p class="hint" style="margin:0 0 10px">빈 장비 칸에 다른 직업 무기를 만들어요. 새 무기는 <b>+0 · ★0 · 새 속성</b>부터 따로 키우고, 지금 무기는 장비 칸에 그대로 보관돼요.</p>
+    <div id="wpnGrid" class="class-grid"></div>
+  </div>
+</div>
+
+<!-- 가방 (인벤토리) -->
+<div id="invModal" class="modal" hidden>
+  <div class="card modal-card inv-card">
+    <button id="invClose" class="btn ghost sm close">✕</button>
+    <h3>🎒 가방 <small id="invSlotInfo" class="inv-slotinfo"></small></h3>
+    <div class="inv-gold">💰 <b id="invGold">0</b>G <small>골드는 칸을 차지하지 않아요</small></div>
+    <div id="invGrid" class="inv-grid"></div>
+    <div id="invDetail" class="inv-detail"></div>
+    <div id="invSlotHint" class="inv-slothint"></div>
   </div>
 </div>
 
@@ -244,8 +304,8 @@
 
 <!-- Supabase Realtime (선택) — 로드 실패해도 게임은 폴링으로 동작 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/fx.js?v=39"></script>
-<script src="/weapon-art.js?v=39"></script>
-<script src="/app.js?v=39"></script>
+<script src="/fx.js?v=50"></script>
+<script src="/weapon-art.js?v=50"></script>
+<script src="/app.js?v=50"></script>
 </body>
 </html>

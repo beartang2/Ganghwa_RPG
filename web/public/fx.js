@@ -703,7 +703,7 @@ void main() {
           ctx.fill();
           ctx.fillStyle = spark.color;
           ctx.beginPath();
-          ctx.arc(hx, hy, width * 0.5 * spreadWidth, 0, TAU);
+          ctx.arc(hx, hy, Math.max(0, width * 0.5 * spreadWidth), 0, TAU);
           ctx.fill();
         };
         if (spark.glow > 0) paint(3.2, fade * 0.16 * spark.glow);
@@ -712,7 +712,7 @@ void main() {
       }
       if (s.shape === 'dot') {
         const [x, y] = position(burst, spark, distance, seconds);
-        const radius = width * 1.25 * (1 - 0.5 * e);
+        const radius = Math.max(0, width * 1.25 * (1 - 0.5 * e));
         if (spark.glow > 0) {
           ctx.globalAlpha = fade * 0.18 * spark.glow;
           ctx.beginPath(); ctx.arc(x, y, radius * 2.6, 0, TAU); ctx.fill();
@@ -741,7 +741,7 @@ void main() {
       const life = reduced ? CS_REDUCED_MS : s.duration * 0.8;
       const p = elapsed / life;
       if (p >= 1) return false;
-      const radius = 2 + s.radius * 0.6 * (reduced ? 0.6 : CS_EASINGS['ease-out'](p));
+      const radius = Math.max(0, 2 + s.radius * 0.6 * (reduced ? 0.6 : CS_EASINGS['ease-out'](p)));
       ctx.globalAlpha = Math.pow(1 - p, 2) * 0.7;
       ctx.strokeStyle = (burst.sparks[0] && burst.sparks[0].color) || s.colors[0];
       ctx.lineWidth = Math.max(0.5, s.width * (1 - p) * 0.9);
@@ -760,7 +760,8 @@ void main() {
     const frame = now => {
       raf = 0;
       for (const burst of bursts.slice()) {
-        const elapsed = now - burst.start;
+        // rAF 시각은 '이번 프레임 시작' 이라 방금 만든 폭발의 start(performance.now)보다 이를 수 있다 → 음수 방지
+        const elapsed = Math.max(0, now - burst.start);
         const ctx = burst.ctx;
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, burst.canvas.width, burst.canvas.height);

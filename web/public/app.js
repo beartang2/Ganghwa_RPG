@@ -7,16 +7,38 @@ let currentTab = 'rank';
 /* 업데이트 패치노트 — 업데이트할 때마다 version 을 올리고 notes 를 갱신하면
    유저에게 '버전당 1회' 안내창이 뜬다. (닫기 버튼은 아래 PATCH_DELAY 초 후 활성화) */
 const PATCH = {
-  version: '5',
-  title: '🎉 업데이트 안내',
+  version: '6',
+  title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
-    '🔥 <b>대장간 테마로 새 단장</b> — 화로 불씨, 망치질 불꽃, 등급별로 달아오르는 화로',
-    '⚡ 장인의 기운이 <b>100%</b>면 화로에 전류가 흘러요 — 다음 강화는 확정 성공!',
-    '⚔️ <b>무기 그림 전면 교체</b> — 직업·속성·등급마다 다른 180가지 무기. 속성은 무기 표면의 재질(용암 균열·서리·성운…)로 드러나고, 전설부터는 무기가 살아 움직여요',
-    '🌐 <b>새 주소로 이사</b>했어요 — <b>ganghwa.beartanh.dev</b> 를 즐겨찾기 해 주세요',
-    '💬 카톡으로 링크를 보내면 <b>미리보기 카드</b>가 떠요 — 친구 초대가 쉬워졌어요',
-    '📱 홈 화면에 추가하면 <b>앱 아이콘</b>으로 바로 실행',
-    '🔒 <b>보안 강화</b> — 게임 데이터 접근 권한을 서버 전용으로 정리했어요',
+    '📱 <b>모바일 화면 개편</b> — 아래 탭바(⚒️대장간 · 🗡️사냥 · 🐉레이드 · 💎프리즘 · 🏅더보기)로 화면을 바꿔요. 대장간은 스크롤 없이 한 화면, 전투는 화면 전체로 열려요',
+    '🖥️ <b>넓은 화면</b> — 1280px 이상이면 오른쪽에 오늘 미션 · 강화 랭킹 · 실시간 로그가 같이 보여요',
+    '🌌 <b>초월 던전</b> — ★1 무기가 있으면 레이드 탭에서 입장! 혼자 연타로 층을 올라요. 매주 월요일 초기화되고 <b>층마다 보스 속성이 매주 바뀌어요</b>(지난주 기록 −5층까지 자동 소탕)',
+    '🔁 <b>속성 상성</b> — 💧물→🔥불→❄️얼음→🌪️바람→☠️독→⛰️대지→⚡번개→💧물 순서로 앞이 뒤를 이기고, ✨빛⇄🌑어둠은 서로 강해요. 이기면 피해 <b>×2</b>, 지면 <b>×0.5</b>',
+    '🗡️ <b>깊은 층일수록 무기가 더 필요해요</b> — 16층부터 2자루·31층부터 3자루·46층부터 4자루. 전투 중에 보스 속성이 바뀌면 <b>약점 무기로 바꿔 끼며</b> 싸워요',
+    '✨ <b>속성 스킬</b> — ★1 이상 무기는 직업 스킬과 별도로 무기 속성의 스킬을 1회 써요(🔥화염 폭발 · ❄️빙결 · ☠️맹독 등). 던전 보스는 🛡️<b>보호막</b>이 있어서 스킬 한 번에 최대 체력의 40%까지만 깎여요',
+    '🔁 <b>속성 재련권</b> — 직업 변경권 자리를 대신해요. 🟣에픽(+25) 이상 무기의 속성을 다시 뽑고, 대신 강화 수치의 10%가 깎여요. 갖고 있던 직업 변경권은 자동으로 재련권이 됐어요',
+    '🏆 <b>던전 보상</b> — 층 돌파마다 💠파편(5·10층마다 🌟정수), 처음 넘는 층은 💎프리즘 3개. 10·30·50층 칭호와 <b>주간 최고층 랭킹</b>도 있어요',
+    '🗡️ <b>장비 칸</b> — 무기를 여러 자루 가질 수 있어요(직업당 한 자루). 무기를 <b>+99</b>까지 키울 때마다 칸을 하나씩 열 수 있고, 화로 위 장비 칸에서 바꿔 들면 직업도 같이 바뀌어요. 새 무기는 <b>+0·★0</b>부터 따로 키워요',
+    '💎 <b>프리즘</b> 재화 추가 — 💎 프리즘 탭에서 📦<b>상자</b>(열쇠로 3개 중 하나) · ⚗️<b>연금술</b>(마석+골드) · 🧸<b>캡슐</b>(골드만 있으면 무제한)으로 모아요. 확률표는 탭에서 그대로 볼 수 있어요',
+    '🗝️ 사냥하면 <b>상자 열쇠</b>와 🔮<b>마석</b>이 나와요 — 무한 사냥에서도 낮은 확률로 나와요',
+    '🛒 <b>프리즘 상점</b> — 장비 칸 +1(💎70 → 140 → 210) · 🫧 <span class="nick-prism">프리즘 염색약</span>(상점 전용 오로라색) · 🔨 장인의 망치 · 🎁 초월 꾸러미',
+    '🕯️ <b>호구</b> 탭 이름이 <b>추모</b>로 바뀌었어요 — 오늘 무기를 떠나보낸 분들을 기려요',
+    '🌈 <b>초월 시스템</b> — +99 는 더 이상 끝이 아니에요. 초월하면 무기가 +0 으로 돌아가는 대신 <b>영구 ★</b>을 얻어요 (골드 획득·레이드 공격력·🔨장인의 기운 영구 상승)',
+    '💠 <b>초월 재료</b> — ★을 올리려면 재료가 필요해요. <b>초월의 파편</b>은 🗡️사냥에서 확률로, <b>초월의 정수</b>는 🐲레이드 성공 시 확정으로 나와요',
+    '⚠️ <b>초월하면 🛡️파괴방지권이 통하지 않습니다</b> — ★1부터는 파괴를 그대로 맞아요. 초월 전에 신중히!',
+    '🎒 <b>가방(인벤토리) 추가</b> — 방지권·부스트권·염색약·초월 재료·열쇠·마석이 전부 가방으로 들어가요. <b>10칸</b>으로 시작해요',
+    '🎒 <b>가방 확장</b> — 상점 <b>가방 확장 패키지</b>(500,000G · 계정당 1회) +4칸, 배틀패스 프리미엄 <b>Lv.15</b> 보상 +4칸 = 최대 <b>18칸</b>',
+    '🛒 <b>상점 변경</b> — 염색약은 이제 사면 가방에 들어가고, <b>가방에서 "사용하기"</b> 를 눌러야 발동해요',
+    '📊 <b>랭킹 개편</b> — 가진 무기 중 가장 좋은 무기의 ★ 개수가 먼저, 그다음 강화 수치로 순위를 매겨요',
+    '⚔️ <b>강화 확률 조정</b> — 초월 전 강화는 살짝 쉬워졌고, 초월 회차(★1+)는 더 어려워졌어요',
+    '🐲 <b>레이드 전면 개편</b> — 보스마다 <b>무기 레벨·초월 ★ 입장 조건</b>이 생겼고, <b>초월 전용 보스 2종</b>(🌋초월의 거인 · 🌌공허의 군주)이 추가됐어요',
+    '🎯 <b>레이드 난이도 상향</b> — 이제 제대로 연타해야 잡혀요. 대신 <b>실패하면 횟수가 깎이지 않아요</b> (성공했을 때만 차감)',
+    '👥 <b>인원 비례 난이도</b> — 파티 인원이 늘면 보스 체력·화력도 같이 올라가고 보상도 커져요',
+    '🛡️ <b>방지권 상점 하루 3개 제한</b> — 나머지는 🗡️사냥 드랍으로 얻으세요 (드랍률 대폭 상향)',
+    '🎒 <b>한 칸당 999개</b> — 999개를 넘기면 다음 칸을 하나 더 씁니다. 칸이 모자라는 건 재료가 쌓여서가 아니라 <b>아이템 종류</b>가 늘 때예요',
+    '💥 <b>파괴 완화</b> — 파괴 시 등급 바닥까지 떨어지던 걸 <b>최대 −15레벨</b>로 묶었어요. 고레벨에서 며칠치가 한 번에 날아가지 않아요',
+    '📉 <b>고레벨 파괴율 하향</b> — 상단 1.6% → 0.7%. 대신 초월 승급 재료가 크게 늘어 <b>재료가 주 관문</b>이 됐어요',
+    '💠 <b>초월 재료 상향</b> — ★1 파편 200·정수 20 / ★5 파편 1,000·정수 100. 사냥과 레이드를 꾸준히 돌아야 ★이 올라가요',
   ],
 };
 const PATCH_DELAY = 3;   // 닫기 버튼 활성화까지 대기(초) — 실수로 닫지 않고 읽게
@@ -53,7 +75,7 @@ const FX = (() => {
   // 강화 버튼: 달군 쇠판 테두리를 도는 빛
   tryFx('star', () => F.starBorder(el('enhanceBtn'), {
     color: '#fff1c1', trailColor: '#ff9a3c', duration: 3.2, thickness: 1.5, radius: 14,
-    trailLength: 0.35, glow: 0.9, sparkle: true, borderColor: 'rgba(255,214,150,.35)',
+    trailLength: 0.35, glow: 0.9, sparkle: true, borderColor: 'transparent',   // 고정 테두리 선 없이 흐르는 빛만
   }));
   // 장인의 기운 100%(다음 강화 확정) 일 때만 화로 테두리에 전류가 흐른다
   tryFx('electric', () => F.electricBorder(document.querySelector('.weapon-panel'), {
@@ -121,10 +143,12 @@ async function pollMe() {
 }
 
 /* ---------- 무기 SVG (직업별 모양 + 등급별 장식 업그레이드) ---------- */
-function gradeTier(level) { return level >= 70 ? 4 : level >= 50 ? 3 : level >= 26 ? 2 : level >= 16 ? 1 : 0; }
+const GRADE_TIERS = { common: 0, rare: 1, epic: 2, legend: 3, transcend: 4 };
+// 서버가 내려준 등급 key 로 판정한다(경계가 maxLevel 비율이라 레벨로 재계산하면 어긋난다)
+function gradeTier(gradeKey) { return GRADE_TIERS[gradeKey] || 0; }
 function sparkle(x, y, c) { return `<path d="M${x} ${y - 3.2} L${x + 1.8} ${y} L${x} ${y + 3.2} L${x - 1.8} ${y} Z" fill="${c}"/>`; }
-function weaponSVG(cls, level, color) {
-  const tier = gradeTier(level);
+function weaponSVG(cls, gradeKey, color) {
+  const tier = gradeTier(gradeKey);
   const glow = 3 + tier * 6;
   const defs = `<defs><linearGradient id="bl" x1="0" y1="0" x2="1" y2="1">
     <stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="${color}"/><stop offset="1" stop-color="${color}"/>
@@ -204,7 +228,11 @@ function closePatch() {
   el('patchModal').hidden = true;
   updateNoticeBadge();
 }
-function enterGame() { show('game'); seedInvites(); seedTitles(); render(); withLoad(loadTab); const shownGuide = maybeShowGuide(); if (!shownGuide) maybeShowPatch(); openEvents(); initRealtime(); }
+function enterGame() {
+  show('game'); seedInvites(); seedTitles(); render();
+  if (oneCol.matches) { currentTab = 'forge'; el('game').dataset.view = 'forge'; document.querySelectorAll('.bb-btn').forEach(b => b.classList.toggle('on', b.dataset.view === 'forge')); }
+  else withLoad(loadTab);
+  refreshSide(); const shownGuide = maybeShowGuide(); if (!shownGuide) maybeShowPatch(); openEvents(); initRealtime(); }
 
 /* 파티 레이드 초대 알림 — 어느 탭에 있어도 새 초대가 오면 토스트로 띄운다.
  * 폴링(api('me'))으로 me.invites 가 갱신될 때마다 새로 생긴 초대를 감지. */
@@ -315,7 +343,7 @@ async function showClassSelect() {
 const USE_WEAPON_PNG = false;
 function weaponArtHTML(m) {
   if (window.WeaponArt) return window.WeaponArt.svg({ cls: m.class, element: m.element, grade: m.grade && m.grade.key, label: m.weapon });
-  return weaponSVG(m.class, m.level, m.grade.color);
+  return weaponSVG(m.class, m.grade && m.grade.key, m.grade.color);
 }
 let lastWeaponKey = '';
 function setWeaponArt(m) {
@@ -355,7 +383,8 @@ function render() {
   if (!me) return;
   el('hNick').innerHTML = '<span class="me-cls">' + (me.classEmoji || '') + ' </span>' + nickSpan(me.nick, me.nickColor) + titleTag(me.equippedTitle) + ' <span class="edit-hint">✏️</span>';
   setTopGold(me.gold);
-  el('hProtect').textContent = me.protects;
+  el('hPrism').textContent = (me.prism || 0).toLocaleString();
+  renderArmory();
   updateMissionBadge();
   updateNoticeBadge();
 
@@ -367,11 +396,14 @@ function render() {
     : esc(me.weapon);
   const panel = document.querySelector('.weapon-panel');
   panel.style.setProperty('--heat', me.grade.color);
+  panel.classList.toggle('at-max', !!me.atMax);   // 한 단 화면: +99 면 강화 버튼 대신 초월 단
+  const rd = el('bbRaidDot'); if (rd) rd.hidden = !(me.invites && me.invites.length);
   if (FX && FX.grade) {
     const flow = GRADE_FLOW[me.grade.key];
     FX.grade.enable(!!flow, flow ? { colors: flow } : null);
   }
-  el('weaponElem').textContent = (me.elementEmoji || '') + ' ' + (me.elementName || '') + '속성';
+  el('weaponElem').textContent = (me.elementEmoji || '') + ' ' + (me.elementName || '') + '속성' + (me.elemSkill ? ' · 스킬 「' + me.elemSkill.name + '」' : '');
+  el('weaponElem').title = me.elemSkill ? '속성 스킬(초월 던전): ' + me.elemSkill.desc : '';
   el('weaponElem').style.color = me.elementColor || 'var(--muted)';
   el('oddsS').textContent = fmtPct(me.odds.success);
   el('oddsD').textContent = fmtPct(me.odds.destroy);
@@ -392,18 +424,291 @@ function render() {
       : { color: '#fff1c1', trailColor: '#ff9a3c', sparkle: true, glow: 0.9 });
   }
   lastEnhDisabled = enhDisabled;
+  renderAscend();
+  el('invCount').textContent = me.inv.used + '/' + me.inv.slots;
+  el('invCount').classList.toggle('full', !!me.inv.full);
 
   el('huntLeft').textContent = me.huntsLeft > 0 ? '(' + me.huntsLeft + '/' + me.dailyHunts + ')' : '♾️';
   el('huntBtn').disabled = false;   // 무한 사냥: 항상 가능(소진 후엔 보상 축소)
   el('mineAmt').textContent = me.mine > 0 ? '(+' + me.mine.toLocaleString() + ')' : '';
   el('mineBtn').disabled = false;   // 채굴 모달 열기 — 항상 가능(누적 없어도 돌 깨기)
 
+  el('sAscend').textContent = me.ascend > 0 ? '★' + me.ascend : '-';
   el('sBest').textContent = '+' + me.best;
   el('sBreaks').textContent = me.breaks + '회';
   el('sRecord').textContent = me.wins + '승 ' + me.losses + '패';
   el('sRank').textContent = me.rank.rank ? me.rank.rank + '/' + me.rank.total + '위' : '-';
   checkTitles();   // 새 칭호 획득 시 알림
 }
+
+/* ---------- 초월 ----------
+ * +99 에서만 노출. 재료(사냥 파편 · 레이드 정수)가 다 차야 버튼이 열린다. */
+function renderAscend() {
+  const wrap = el('ascendWrap');
+  wrap.hidden = !me.atMax;
+  if (!me.atMax) return;
+  const n = me.ascendNext;
+  el('ascendMats').innerHTML = n.mats.map(m =>
+    `<span class="amat ${m.have >= m.need ? 'done' : ''}">${m.emoji} <b>${m.have}</b>/${m.need}<small>${m.from}</small></span>`).join('');
+  const btn = el('ascendBtn');
+  btn.textContent = '🌈 초월 ★' + n.to;
+  btn.disabled = !me.canAscend;
+}
+async function doAscend() {
+  if (!me.canAscend) return toast('재료가 부족해요. 🗡️사냥으로 파편, 🐲레이드로 정수를 모으세요.', 'bad');
+  if (!confirm('🌈 초월 ★' + me.ascendNext.to + '\n\n무기가 +0 으로 돌아가고 재료를 소모합니다.\n골드·아이템·칭호는 그대로예요.\n\n⚠️ 초월하면 🛡️파괴방지권이 영구히 통하지 않습니다.\n\n진행할까요?')) return;
+  const r = await api('ascend', 'POST');
+  if (!r.ok) return toast(r.error, 'bad');
+  applyMe(r.me); render();
+  lastWeaponKey = '';   // 등급·속성이 통째로 바뀌므로 무기 아트를 강제로 다시 그린다
+  setWeaponArt(me);
+  toast(r.msg, 'ok'); weaponResult('success'); vibe([20, 50, 30, 50, 60]); sfx('guaranteed'); sfx('pang');
+  if (['rank', 'log'].includes(currentTab)) loadTab();
+}
+
+/* ---------- 장비 칸 (무기 여러 자루) ----------
+ * 화로 위 한 줄: 가진 무기(장착 중은 놋쇠 테두리) · 빈 칸(➕ 새 무기) · 잠긴 칸(🔒 → 💎 프리즘 상점).
+ * 무기를 바꿔 들면 직업도 그 무기를 따라 바뀐다(무기마다 강화·★·속성·장인의 기운이 따로). */
+let lastArmoryHtml = '';
+let classesCache = null;
+function renderArmory() {
+  const w = me.weapons; if (!w) return;
+  let html = '<span class="arm-label">🗡️ 장비 <small>' + w.list.length + '/' + w.slots + '</small></span>';
+  for (const it of w.list) {
+    html += `<button class="arm-slot${it.equipped ? ' on' : ''}" data-arm="${it.cls}" style="--gc:${it.grade.color}"
+      title="${esc(it.name)}${it.equipped ? ' (장착 중)' : ' — 눌러서 바꿔 들기'}"><span class="arm-ic">${it.classEmoji}</span><span class="arm-lv">${it.ascend ? '★' + it.ascend + ' ' : ''}+${it.level}</span></button>`;
+  }
+  for (let i = w.list.length; i < w.slots; i++) html += '<button class="arm-slot new" data-arm-new title="빈 장비 칸 — 새 무기 만들기"><span class="arm-ic">➕</span><span class="arm-lv">새 무기</span></button>';
+  // 잠긴 칸은 하나로 묶어서(🔒 ×n) — 좁은 화면에서도 장비 줄이 한 줄에 들어가게.
+  // 다음 칸을 지금 살 수 있으면(+99 무기 조건 충족) 놋쇠빛으로 깨워서 상점으로 안내한다.
+  if (w.max > w.slots) {
+    const ns = w.nextSlot, ready = !!(ns && ns.ok);
+    html += `<button class="arm-slot locked${ready ? ' ready' : ''}" data-arm-lock title="${ready ? '💎 프리즘 상점에서 장비 칸 열기' : '🔒 ' + esc(ns ? ns.msg : '')}"><span class="arm-ic">${ready ? '💎' : '🔒'}</span><span class="arm-lv">×${w.max - w.slots}</span></button>`;
+  }
+  if (html !== lastArmoryHtml) { el('armory').innerHTML = html; lastArmoryHtml = html; }
+}
+async function doEquipWeapon(cls) {
+  const r = await api('weapon-equip', 'POST', { class: cls });
+  if (!r.ok) return toast(r.error, 'bad');
+  applyMe(r.me); lastWeaponKey = ''; render();
+  toast(r.msg, 'ok'); sfx('pang');
+  if (['rank', 'raid'].includes(currentTab)) loadTab();
+}
+// 🔒 칸·꽉 찬 ➕ 를 눌렀을 때 — 조건 미달이면 무엇이 필요한지 바로 알려주고, 살 수 있으면 상점으로
+function armLockedClick() {
+  const ns = me.weapons && me.weapons.nextSlot;
+  if (ns && !ns.ok) return toast('🔒 다음 장비 칸은 무기를 +' + me.maxLevel + '까지 키워야 열려요 (' + ns.msg + ')', 'info');
+  goPrismShop();
+}
+async function openWeaponNew() {
+  if (!me.weapons.canNew) return armLockedClick();
+  if (!classesCache) { const r = await withLoad(() => api('classes')); if (!r.ok) return; classesCache = r.classes; }
+  el('wpnGrid').innerHTML = me.weapons.missing.map(k => {
+    const c = classesCache[k];
+    return `<div class="class-card" data-newcls="${c.id}"><div class="cemoji">${c.emoji}</div><div class="cname">${esc(c.name)}</div>
+      <div class="cdesc">${esc(c.desc)}</div><div class="cweapon">무기: ${esc(c.weapon)}</div></div>`;
+  }).join('');
+  el('wpnModal').hidden = false;
+}
+async function doNewWeapon(cls) {
+  const r = await api('weapon-new', 'POST', { class: cls });
+  if (!r.ok) return toast(r.error, 'bad');
+  el('wpnModal').hidden = true;
+  applyMe(r.me); lastWeaponKey = ''; render();
+  toast(r.msg, 'ok'); weaponResult('success');
+  if (['rank', 'raid'].includes(currentTab)) loadTab();
+}
+function goPrismShop() {
+  prismSub = 'shop';
+  if (oneCol.matches) return setView('prism');
+  const t = document.querySelector('.tab[data-tab="prism"]'); if (t) t.click();
+  el('panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* ---------- 💎 프리즘 탭 — 📦 상자 · ⚗️ 연금술 · 🧸 캡슐 · 💎 상점 ----------
+ * 확률표는 서버가 굴리는 표를 그대로 받아서 보여준다(확률 공개). */
+let prismSub = 'box', prismData = null, boxReveal = null, alchLast = null, capLast = null;
+const CHESTS = [
+  { name: '루비 상자',     body: '#6e2620', body2: '#8f3a2c', trim: '#e0aa45', gem: '#ff5d6c' },
+  { name: '사파이어 상자', body: '#1f3a63', body2: '#2c5288', trim: '#d6dee8', gem: '#4facfe' },
+  { name: '에메랄드 상자', body: '#1f4f34', body2: '#2c6b47', trim: '#d4a24c', gem: '#49d17a' },
+];
+function chestSVG(c, open) {
+  return `<svg class="chest-svg${open ? ' open' : ''}" viewBox="0 0 84 76" aria-hidden="true">
+    <ellipse cx="42" cy="70" rx="32" ry="5" fill="#000" opacity=".35"/>
+    <g class="chest-glow"><circle cx="42" cy="30" r="22" fill="${c.gem}" opacity=".45"/></g>
+    <rect x="9" y="32" width="66" height="34" rx="3" fill="${c.body}" stroke="#170f0a" stroke-width="2"/>
+    <rect x="9" y="32" width="66" height="10" fill="${c.body2}"/>
+    <path d="M9 47 H75 M9 57 H75" stroke="#170f0a" stroke-width="1" opacity=".35"/>
+    <rect x="9" y="32" width="66" height="5" fill="${c.trim}"/>
+    <rect x="35" y="32" width="14" height="34" fill="${c.trim}" stroke="#170f0a" stroke-width="1"/>
+    <g class="chest-lid">
+      <path d="M9 32 Q9 9 42 9 Q75 9 75 32 Z" fill="${c.body2}" stroke="#170f0a" stroke-width="2"/>
+      <path d="M12 30 Q13 13 42 12" fill="none" stroke="#fff" stroke-width="2" opacity=".18"/>
+      <path d="M9 32 Q9 9 42 9 Q75 9 75 32" fill="none" stroke="${c.trim}" stroke-width="3"/>
+      <rect x="35" y="10" width="14" height="22" fill="${c.trim}" stroke="#170f0a" stroke-width="1"/>
+    </g>
+    <circle cx="42" cy="45" r="5.5" fill="${c.gem}" stroke="#170f0a" stroke-width="1.5"/>
+    <circle cx="40.5" cy="43.5" r="1.6" fill="#fff" opacity=".8"/>
+  </svg>`;
+}
+function capsuleMachineSVG() {
+  const balls = [['#ff5d6c', 34, 40], ['#4facfe', 50, 36], ['#ffd93d', 42, 50], ['#49d17a', 58, 50], ['#a770ef', 28, 54], ['#ff9f45', 46, 26], ['#7df9ff', 62, 30]];
+  return `<svg class="cap-svg" viewBox="0 0 92 120" aria-hidden="true">
+    <circle cx="46" cy="42" r="34" fill="rgba(200,230,255,.08)" stroke="#d6dee8" stroke-width="2.5"/>
+    ${balls.map(([c, x, y]) => `<g><circle cx="${x}" cy="${y}" r="7.5" fill="${c}" stroke="#170f0a" stroke-width="1.3"/><path d="M${x - 7.5} ${y} H${x + 7.5}" stroke="#fff" stroke-width="1.2" opacity=".7"/></g>`).join('')}
+    <path d="M22 26 Q30 14 44 12" fill="none" stroke="#fff" stroke-width="3" opacity=".3" stroke-linecap="round"/>
+    <path d="M14 74 H78 L72 112 H20 Z" fill="#b8420c" stroke="#170f0a" stroke-width="2"/>
+    <path d="M14 74 H78 V80 H14 Z" fill="#e0aa45" stroke="#170f0a" stroke-width="1.5"/>
+    <circle cx="46" cy="94" r="9" fill="#2b231d" stroke="#e0aa45" stroke-width="2.5"/>
+    <path d="M40 94 H52" stroke="#e0aa45" stroke-width="3" stroke-linecap="round"/>
+    <rect x="58" y="100" width="12" height="8" rx="2" fill="#100d0b"/>
+  </svg>`;
+}
+const pct = p => { const v = p * 100; return (v >= 1 ? (Math.round(v * 10) / 10) : (Math.round(v * 100) / 100)) + '%'; };
+function oddsTable(title, table) {
+  return `<details class="odds-table"><summary>📊 ${title}</summary><table>${table.map(e => `<tr><td>${esc(e.text)}</td><td>${pct(e.p)}</td></tr>`).join('')}</table></details>`;
+}
+function syncPrismFromMe() {
+  if (!prismData || !me) return;
+  const cnt = id => { const it = me.inv.items.find(i => i.id === id); return it ? it.count : 0; };
+  prismData.prism = me.prism || 0; prismData.gold = me.gold; prismData.keys = cnt('boxkey'); prismData.stones = cnt('stone');
+}
+function paintPrism() {
+  const d = prismData; if (!d || currentTab !== 'prism') return;
+  const subs = [['box', '📦', '상자'], ['alch', '⚗️', '연금술'], ['cap', '🧸', '캡슐'], ['shop', '💎', '상점']];
+  let h = `<div class="prism-head"><span class="prism-bal">💎 <b>${d.prism.toLocaleString()}</b></span>
+    <span class="prism-mats"><span title="상자 열쇠">🗝️ ${d.keys}</span><span title="마석">🔮 ${d.stones}</span><span title="골드">💰 ${d.gold.toLocaleString()}</span></span></div>`;
+  h += `<div class="psub-tabs">${subs.map(([k, e, l]) => `<button class="psub${prismSub === k ? ' active' : ''}" data-psub="${k}"><span>${e}</span>${l}</button>`).join('')}</div>`;
+  h += prismSub === 'box' ? boxHTML(d) : prismSub === 'alch' ? alchHTML(d) : prismSub === 'cap' ? capHTML(d) : pshopHTML(d);
+  el('panel').innerHTML = h;
+}
+function boxHTML(d) {
+  const rv = boxReveal;
+  let h = `<p class="hint" style="margin:0 0 10px">🗝️ 열쇠 1개로 상자 3개 중 <b>하나</b>를 골라 열어요. 열고 나면 나머지 둘에 뭐가 들어 있었는지도 보여 줘요.</p>`;
+  h += '<div class="chests">' + CHESTS.map((c, i) => {
+    const mine = rv && rv.pick === i;
+    return `<button class="chest${rv ? (mine ? ' opened' : ' missed') : ''}" ${rv ? 'data-noop' : `data-pick="${i}"`} ${!rv && d.keys < 1 ? 'disabled' : ''}>
+      ${chestSVG(c, !!rv)}<span class="chest-name">${c.name}</span>${rv ? `<span class="chest-reward">${mine ? '' : '놓친 보상 · '}${esc(rv.boxes[i])}</span>` : ''}</button>`;
+  }).join('') + '</div>';
+  if (rv) h += `<div class="prism-result ok">🎉 ${esc(rv.got.text)} 획득!</div>
+    <button class="btn primary big" data-box-again ${d.keys < 1 ? 'disabled' : ''}>🗝️ 다시 열기 <small>(남은 열쇠 ${d.keys})</small></button>`;
+  else if (d.keys < 1) h += '<div class="prism-result">🗝️ 열쇠가 없어요 — 🗡️ 사냥에서 가끔 나와요(무한 사냥에서도 낮은 확률로)</div>';
+  return h + oddsTable('상자 하나에 들어 있을 확률', d.info.box.table);
+}
+function alchHTML(d) {
+  let h = '<p class="hint" style="margin:0 0 10px">🔮 마석과 💰 골드를 도가니에 함께 넣고 돌려요. 불이 셀수록 <b>마석</b> 하나당 기대값은 높고, <b>골드</b> 하나당 기대값은 낮아요.</p>';
+  h += '<div class="alch-list">' + d.info.alchemy.map(a => {
+    const can = d.stones >= a.stone && d.gold >= a.gold;
+    return `<div class="alch-card t-${a.id}"><div class="alch-top"><span class="alch-fire">${a.emoji}</span><b>${a.name}</b>
+        <span class="alch-cost"><span class="${d.stones >= a.stone ? '' : 'short'}">🔮 ${a.stone}</span> + <span class="${d.gold >= a.gold ? '' : 'short'}">💰 ${a.gold.toLocaleString()}G</span></span></div>
+      <div class="alch-odds">${a.table.map(e => `<span>${e.text.replace('💎 프리즘 ', '💎')} <b>${pct(e.p)}</b></span>`).join('')}</div>
+      <button class="btn primary sm" data-alch="${a.id}" ${can ? '' : 'disabled'}>⚗️ 돌리기</button></div>`;
+  }).join('') + '</div>';
+  if (alchLast) h += `<div class="prism-result ${alchLast.prism > 0 ? 'ok' : ''}">${esc(alchLast.msg)}</div>`;
+  return h;
+}
+function capHTML(d) {
+  const price = d.info.capsule.price, n10 = d.info.capsule.batchMax;
+  let h = `<div class="cap-machine">${capsuleMachineSVG()}<div class="cap-side">
+      <div class="cap-price">한 번 <b>${price.toLocaleString()}G</b><br><small>골드만 있으면 몇 번이든</small></div>
+      <button class="btn primary" data-cap="1" ${d.gold < price ? 'disabled' : ''}>🧸 1회</button>
+      <button class="btn primary" data-cap="${n10}" ${d.gold < price ? 'disabled' : ''}>🧸 ${n10}회 <small>${(price * n10).toLocaleString()}G</small></button></div></div>`;
+  if (capLast) {
+    h += '<div class="cap-results">' + capLast.results.map(r => `<span class="cap-ball k-${r.kind}${r.kind === 'prism' && r.n >= 10 ? ' big' : ''}">${esc(r.text)}</span>`).join('') + '</div>';
+    h += `<div class="prism-result ${capLast.prism > 0 ? 'ok' : ''}">${esc(capLast.msg)}</div>`;
+  }
+  return h + oddsTable('캡슐 하나의 확률', d.info.capsule.table);
+}
+function pshopHTML(d) {
+  return '<p class="hint" style="margin:0 0 10px">💎 프리즘으로만 살 수 있는 물건이에요.</p>' + d.shop.map(it =>
+    `<div class="raid-boss"><span class="bemoji">${it.emoji}</span>
+      <div class="binfo"><div class="bname">${it.nickPreview ? `<span class="nick-${it.nickPreview}">${esc(it.name)}</span>` : esc(it.name)} ${it.soldOut ? '<span class="shop-lim off">최대</span>' : `<small class="pprice">💎 ${it.price}</small>`}</div>
+        ${it.locked ? `<div class="plock">🔒 ${esc(it.lockMsg)} 필요</div>` : ''}<div class="bstat">${esc(it.desc)}</div></div>
+      <button class="btn sm primary" data-pbuy="${it.id}" ${it.soldOut || it.locked || d.prism < it.price ? 'disabled' : ''}>구매</button></div>`).join('');
+}
+async function doOpenBox(i) {
+  const r = await api('box-open', 'POST', { pick: i });
+  if (!r.ok) return toast(r.error, 'bad');
+  applyMe(r.me); render(); syncPrismFromMe();
+  boxReveal = { pick: r.pick, boxes: r.boxes, got: r.got };
+  paintPrism();
+  const big = r.got.kind === 'prism' && r.got.n >= 5;
+  sfx(big ? 'guaranteed' : 'pang'); vibe(big ? [20, 40, 60] : 15);
+}
+async function doAlchemy(tier) {
+  const r = await api('alchemy', 'POST', { tier });
+  if (!r.ok) return toast(r.error, 'bad');
+  applyMe(r.me); render(); syncPrismFromMe();
+  alchLast = { prism: r.prism, msg: r.msg };
+  paintPrism();
+  sfx(r.prism > 0 ? 'pang' : 'fail'); vibe(r.prism > 0 ? 20 : [10, 30, 10]);
+}
+async function doCapsule(times) {
+  const r = await api('capsule', 'POST', { times });
+  if (!r.ok) return toast(r.error, 'bad');
+  applyMe(r.me); render(); syncPrismFromMe();
+  capLast = { results: r.results, prism: r.prism, msg: r.msg };
+  paintPrism();
+  sfx(r.prism >= 10 ? 'guaranteed' : 'pang'); vibe(15);
+}
+async function doPrismBuy(item) {
+  const r = await api('prism-buy', 'POST', { item });
+  if (!r.ok) return toast(r.error, 'bad');
+  applyMe(r.me); render();
+  toast(r.msg + (item === 'prismdye' || item === 'hammer' ? ' 🎒가방에서 사용하세요.' : ''), 'ok');
+  const v = await api('prism'); if (v.ok) { prismData = v; paintPrism(); }   // 장비 칸 가격이 바뀌므로 새로 받는다
+}
+
+/* ---------- 인벤토리 ----------
+ * 슬롯 1칸 = 아이템 me.inv.stackMax(999)개(같은 종류는 그만큼마다 한 칸씩 더 먹는다). 꽉 차면 드랍이 버려진다.
+ * 칸수는 서버(me.inv.slots)가 계산해서 내려준다 — 클라는 하드코딩하지 않는다. */
+let invSel = null;
+function openInv() { el('invModal').hidden = false; renderInv(); }
+function closeInv() { el('invModal').hidden = true; invSel = null; }
+function renderInv() {
+  if (!me) return;
+  const inv = me.inv;
+  el('invGold').textContent = me.gold.toLocaleString();
+  el('invSlotInfo').textContent = inv.used + '/' + inv.slots + '칸' + (inv.full ? ' · 꽉 참!' : '');
+  el('invSlotInfo').className = 'inv-slotinfo' + (inv.full ? ' full' : '');
+  const cells = inv.cells.map(c =>
+    `<button class="inv-cell ${invSel === c.id ? 'sel' : ''}" data-item="${c.id}">
+       <span class="ic-emoji">${c.emoji}</span><span class="ic-count">${c.count}</span></button>`);
+  for (let i = inv.cells.length; i < inv.slots; i++) cells.push('<span class="inv-cell empty"></span>');
+  el('invGrid').innerHTML = cells.join('');
+  const sel = inv.items.find(i => i.id === invSel);
+  el('invDetail').innerHTML = sel
+    ? `<div class="ivd-name">${sel.emoji} ${esc(sel.name)} <b>×${sel.count}</b>
+         ${sel.count > inv.stackMax ? `<small>(${Math.ceil(sel.count / inv.stackMax)}칸)</small>` : ''}</div>
+       <div class="ivd-desc">${esc(sel.desc)}</div>
+       ${sel.kind === 'use' ? `<button class="btn primary sm" id="invUseBtn">사용하기</button>`
+         : `<p class="hint" style="margin:6px 0 0">${sel.kind === 'mat' ? '초월 승급 재료예요.' : '조건이 되면 자동으로 쓰여요.'}</p>`}`
+    : '<p class="hint" style="margin:0">아이템을 눌러 자세히 보기 · 한 칸에 ' + inv.stackMax + '개까지 쌓여요</p>';
+  // 칸은 상점 1회 패키지 + 배틀패스 프리미엄 보상으로만 열린다(골드 반복 확장 없음)
+  const hint = el('invSlotHint');
+  hint.innerHTML = inv.atMaxSlots ? '가방이 최대 ' + inv.max + '칸까지 열렸어요.'
+    : [!inv.packBought ? '🛒 상점 <b>가방 확장 패키지</b> +' + inv.packSlots + '칸 (' + inv.packPrice.toLocaleString() + 'G · 1회)' : null,
+       '🎟️ 배틀패스 프리미엄 <b>Lv.' + inv.bpLevel + '</b> 보상 +' + inv.bpSlots + '칸'].filter(Boolean).join('<br>');
+  el('invGrid').querySelectorAll('[data-item]').forEach(b => {
+    b.onclick = () => { invSel = invSel === b.dataset.item ? null : b.dataset.item; renderInv(); };
+  });
+  const ub = el('invUseBtn');
+  if (ub) ub.onclick = () => act(() => doUseItem(sel.id), ub);
+}
+async function doUseItem(itemId) {
+  if (itemId === 'eltkt') {
+    if (me.level < me.rerollMin) return toast('🔁 재련은 🟣에픽(+' + me.rerollMin + ') 이상 무기만 할 수 있어요. (지금 +' + me.level + ')', 'bad');
+    if (!confirm('🔁 속성 재련권을 쓸까요?\n장착한 무기: ' + me.weapon + '\n강화 +' + me.level + ' → +' + (me.level - me.rerollCost) + ' (−' + me.rerollCost + ')\n속성은 무작위로 바뀌어요 (지금 ' + me.elementEmoji + ' ' + me.elementName + ' 제외)')) return;
+  }
+  const r = await api('use-item', 'POST', { item: itemId });
+  if (!r.ok) return toast(r.error, 'bad');
+  applyMe(r.me);
+  if (r.needReselect) { closeInv(); render(); return showClassSelect(); }
+  render(); renderInv();
+  toast(r.msg, 'ok');
+}
+
 
 /* ---------- 토스트 ---------- */
 let toastTimer = null;
@@ -655,6 +960,8 @@ function killMonster() {
   applyMe(r.me); huntSession += r.gold; huntKills++; render();  // 서버 반영분을 이제 화면에 리빌
   let msg = '💰 +' + r.gold.toLocaleString() + 'G' + (r.crit ? ' 💥치명타!' : '');
   if (r.drop) msg += r.drop.type === 'potion' ? '  ' + r.drop.text : '  🎁' + r.drop.text;
+  if (r.mat) msg += '  ' + r.mat.text;
+  if (r.loot) for (const l of r.loot) msg += '  ' + l.text;   // 🗝️ 상자 열쇠 · 🔮 마석
   spawnHuntReward(msg, r.crit);
   updateHuntHud();
   setTimeout(() => { if (huntOpen) spawnHuntMonster(); }, HUNT_SPAWN_DELAY);
@@ -778,6 +1085,7 @@ async function breakRock() {
     renderMinePanel({ text: r.msg, kind: r.jackpot ? 'ok' : r.gem ? 'info' : r.tired ? 'tired' : '' });
     if (r.leveledTo) toast('🎉 채굴 레벨 ' + r.leveledTo + ' 달성! 채굴 수익 증가', 'ok');
     else if (r.gem && r.gem.type === 'protect') toast(r.gem.text, 'info');
+    else if (r.gem && r.gem.type === 'full') toast(r.gem.text, 'bad');
   }, 240);
 }
 // 보상 텍스트·파편은 body 에 fixed 로 띄운다(패널이 곧 리렌더돼도 애니메이션 유지)
@@ -810,14 +1118,12 @@ async function doAttend() {
   applyMe(r.me); render(); toast('📅 ' + r.msg, 'ok');
 }
 async function doBuy(item) {
-  if (item === 'classchange' && !confirm('직업 변경권 30,000G — 직업을 다시 선택합니다(레벨·골드 유지). 구매할까요?')) return;
   const r = await api('shop-buy', 'POST', { item });
   if (!r.ok) return toast(r.error, 'bad');
-  applyMe(r.me);
-  if (item === 'classchange' && r.needReselect) { showClassSelect(); return; }
-  render();
-  if (item === 'dye') toast('🎨 ' + r.dye.name + ' [' + r.dye.rarity + '] 뽑기 완료!', r.dye.rarity === '기본' ? 'ok' : 'info');
-  else toast(r.msg || '구매 완료', 'ok');
+  applyMe(r.me); render();
+  // 염색약·직업변경권은 구매 즉시 발동하지 않는다 — 가방에서 '사용하기'
+  const useHint = item === 'dye' ? ' 🎒가방에서 사용하세요.' : '';
+  toast((r.msg || '구매 완료') + useHint, 'ok');
   if (currentTab === 'shop') loadTab();
 }
 async function doFight(target) {
@@ -830,8 +1136,19 @@ async function doFight(target) {
   loadTab();
 }
 
+/* ---------- 전투 몰입 모드(한 단 레이아웃 = 모바일·태블릿) ----------
+ * 전투 화면은 탭 패널 안에 그려지는데, 한 단 레이아웃에선 화로·탭 아래에 있어서 싸울 때마다 스크롤해야 했다.
+ * 전투(레이드·던전)가 열려 있는 동안 body.in-battle 을 붙이면 CSS 가 패널을 화면 전체로 띄운다.
+ * ✕ 로 접으면 그 전투 동안은 다시 펼치지 않는다(새 전투가 시작되면 다시 펼침). */
+let battleKey = null, battleMin = false;
+function setBattleMode(on, key) {
+  if (on && key !== battleKey) { battleKey = key; battleMin = false; }
+  document.body.classList.toggle('in-battle', !!on && !battleMin);
+}
+function battleXBtn() { return '<button class="battle-x" data-battle-min aria-label="전투 화면 접기" title="접기">✕</button>'; }
+
 /* ---------- 파티 / 레이드 (폴링 기반 실시간 관전) ---------- */
-let raidTimer = null, curRaid = null, cacheParties = [], cachePlayers = [], BOSS_CACHE = [];
+let raidTimer = null, curRaid = null, cacheParties = [], cachePlayers = [], BOSS_CACHE = [], BOSS_HPSCALE = 0.7;
 let lastFetch = 0, dismissedRaidTs = null, lastPartyHtml = '';
 
 async function doPartyCreate() { const r = await api('party-create', 'POST'); if (!r.ok) return toast(r.error, 'bad'); applyMe(r.me); await refreshRaidData(); paintRaid(); }
@@ -858,10 +1175,11 @@ const SKILL_LABEL = { warrior: '⚔️ 강타', archer: '🏹 난사', tanker: '
 function renderBattle(raid) {
   const panel = el('panel');
   const active = raid.status === 'active';
+  setBattleMode(true, 'r' + raid.startTs);
   panel.innerHTML =
     `<div class="raid-battle">
        <div class="raid-timerrow"><span class="raid-boss-name">${raid.boss.emoji} ${esc(raid.boss.name)}</span>
-         <span class="raid-timer">⏱ <b id="rTimer">--</b></span></div>
+         <span class="raid-timer">⏱ <b id="rTimer">--</b></span>${battleXBtn()}</div>
        <div class="raid-stage"><div id="rBoss" class="raid-mon${active ? '' : ' dead'}" role="button" aria-label="보스 공격"><span class="rmon-emoji">${raid.boss.emoji}</span></div></div>
        <div class="rbar-label">보스 HP <span id="rBossTxt"></span></div>
        <div class="rbar"><div id="rBossHp" class="rbar-fill boss"></div></div>
@@ -916,7 +1234,7 @@ function updateBattleUI() {
       res.dataset.done = '1';
       const parts2 = raid.participants.slice().sort((a, b) => b.contrib - a.contrib);
       res.innerHTML = `<div class="raid-result ${raid.win ? 'win' : 'lose'}"><b>${raid.win ? '🏆 레이드 성공!' : '☠️ 레이드 실패...'}</b>` +
-        (raid.win && raid.rewards && raid.rewards.length ? '<br>' + raid.rewards.map(rw => esc(rw.nick) + ' 💰+' + rw.gold.toLocaleString() + (rw.drop ? ' ' + rw.drop : '')).join('<br>') : '') +
+        (raid.win && raid.rewards && raid.rewards.length ? '<br>' + raid.rewards.map(rw => esc(rw.nick) + ' 💰+' + rw.gold.toLocaleString() + (rw.drop ? ' ' + rw.drop : '') + (rw.essence ? ' 🌟+' + rw.essence : rw.invFull ? ' 🎒꽉참' : '')).join('<br>') : '') +
         `<div class="raid-mvp">기여: ${parts2.map(p => esc(p.nick) + ' ' + p.contrib.toLocaleString()).join(' · ')}</div>` +
         `</div><button class="btn ghost sm" id="closeRaidBtn" style="margin-top:8px">닫기</button>`;
       sfx(raid.win ? 'jackpot' : 'destroy'); vibe(raid.win ? [15, 40, 25] : [40, 60, 40]);
@@ -982,7 +1300,7 @@ function spawnRaidSpark() {
 async function refreshRaidData() {
   lastFetch = Date.now();
   try {
-    if (!BOSS_CACHE.length) { const br = await api('bosses'); BOSS_CACHE = br.bosses || []; }
+    if (!BOSS_CACHE.length) { const br = await api('bosses'); BOSS_CACHE = br.bosses || []; BOSS_HPSCALE = br.partyHpScale || 0.7; }
     const [meR, raidR, partiesR, playersR] = await Promise.all([api('me'), api('party-raid'), api('parties'), api('players')]);
     if (meR.ok && applyMe(meR.me)) { render(); seedInvites(); } // ts 가드 + 초대 seen 처리
     curRaid = raidR.raid; cacheParties = partiesR.list || []; cachePlayers = playersR.list || [];
@@ -990,14 +1308,22 @@ async function refreshRaidData() {
 }
 function startRaidLoop() {
   stopRaidLoop();
-  lastPartyHtml = ''; raidBuiltFor = null;
+  lastPartyHtml = ''; raidBuiltFor = null; lastDunHtml = ''; dunBuiltFor = null;
+  if (raidSub === 'dun') loadDungeon().then(paintRaid);
   refreshRaidData().then(paintRaid);
   raidTimer = setInterval(raidLoopTick, 300);
 }
-function stopRaidLoop() { if (raidTimer) { clearInterval(raidTimer); raidTimer = null; } if (raidFlushT) { clearTimeout(raidFlushT); raidFlushT = null; } }
+function stopRaidLoop() {
+  setBattleMode(false);   // 다른 탭으로 가면 몰입 모드 해제
+  if (raidTimer) { clearInterval(raidTimer); raidTimer = null; }
+  if (raidFlushT) { clearTimeout(raidFlushT); raidFlushT = null; }
+  if (dunFlushT) { clearTimeout(dunFlushT); dunFlushT = null; if (dunLocalHits) flushDunHits(); }   // 탭을 떠나도 친 만큼은 보낸다
+}
 async function raidLoopTick() {
   if (currentTab !== 'raid') return;
   const inBattle = curRaid && curRaid.status && curRaid.startTs !== dismissedRaidTs;
+  // 초월 던전 화면 — 파티 레이드가 실제로 진행 중이 아니면 던전 루프가 맡는다
+  if (raidSub === 'dun' && !(inBattle && curRaid.status === 'active')) return dunLoopTick();
   if (inBattle && curRaid.status === 'active') {
     if (raidBuiltFor !== curRaid.startTs) renderBattle(curRaid);
     if (Date.now() - raidLastPoll > 850) await raidPoll();
@@ -1014,11 +1340,13 @@ async function raidLoopTick() {
 function paintRaid() {
   if (currentTab !== 'raid') return;
   const inBattle = curRaid && curRaid.status && curRaid.startTs !== dismissedRaidTs;
-  if (inBattle) renderBattle(curRaid);
+  if (inBattle && (raidSub !== 'dun' || curRaid.status === 'active')) renderBattle(curRaid);
+  else if (raidSub === 'dun') { if (dunF) { if (dunBuiltFor !== dunF.startTs) renderDunBattle(); else updateDunUI(); } else paintDungeon(); }
   else paintParty(el('panel'));
 }
 function paintParty(panel) {
-  let html = '';
+  setBattleMode(false);
+  let html = raidSubBar();
   if (me.invites && me.invites.length) {
     html += `<div style="margin-bottom:6px"><b>📨 받은 파티 초대</b></div>` +
       me.invites.map(iv => `<div class="party-member"><b class="pm-nick">${esc(iv.leaderNick)}</b> <small>파티 ${iv.count}/${iv.max}</small>
@@ -1038,12 +1366,19 @@ function paintParty(panel) {
       const invitable = cachePlayers.filter(n => n !== me.nick && !(pt && pt.members.some(m => m.nick === n)));
       html += `<div style="margin:6px 0"><b>동료 초대</b></div>` +
         (invitable.length ? invitable.map(n => `<div class="party-member"><b class="pm-nick">${esc(n)}</b><button class="btn sm primary" data-invite="${esc(n)}" style="margin-left:auto">초대</button></div>`).join('') : emptyMsg('초대할 유저가 없어요'));
-      html += `<div style="margin:12px 0 6px"><b>보스 선택</b> <small>(남은 레이드 ${me.raidsLeft}/${me.dailyRaids})</small></div>`;
-      html += BOSS_CACHE.map((b, i) =>
-        `<div class="raid-boss"><span class="bemoji">${b.emoji}</span>
-          <div class="binfo"><div class="bname">${esc(b.name)} <small>${['입문', '보통', '어려움', '지옥'][i] || ''}</small></div>
-            <div class="bstat">HP ${b.hp.toLocaleString()} · 공격 ${b.atk} · 보상 💰${b.reward.toLocaleString()}</div></div>
-          <button class="btn sm primary" data-raid="${b.id}">도전</button></div>`).join('');
+      const n = pt ? pt.count : 1;
+      html += `<div style="margin:12px 0 6px"><b>보스 선택</b> <small>(남은 레이드 ${me.raidsLeft}/${me.dailyRaids} · 성공해야 차감)</small></div>`;
+      html += `<p class="hint" style="margin:0 0 8px">실패하면 보상은 없지만 <b>횟수도 깎이지 않아요</b>. 보스 체력·화력은 <b>참여 인원(${n}명)</b>에 맞춰 올라갑니다.</p>`;
+      html += BOSS_CACHE.map(b => {
+        // 입장 조건은 파티 전원이 만족해야 하지만, 목록에서는 내 기준으로 잠금을 보여준다
+        const why = me.level < b.reqLevel ? '무기 +' + b.reqLevel + ' 필요'
+          : me.ascend < b.reqAscend ? '초월 ★' + b.reqAscend + ' 필요' : null;
+        const sc = 1 + (n - 1) * BOSS_HPSCALE;   // 서버 raidScale 과 같은 식(표시용)
+        return `<div class="raid-boss ${why ? 'locked' : ''}"><span class="bemoji">${b.emoji}</span>
+          <div class="binfo"><div class="bname">${esc(b.name)} <small class="btier t-${esc(b.tier)}">${esc(b.tier)}</small>${why ? ` <span class="block">🔒 ${why}</span>` : ''}</div>
+            <div class="bstat">HP ${Math.round(b.hp * sc).toLocaleString()} · 보상 💰${Math.round(b.reward * sc).toLocaleString()} · 🌟${b.essence}</div></div>
+          <button class="btn sm primary" data-raid="${b.id}" ${why ? 'disabled' : ''}>도전</button></div>`;
+      }).join('');
     } else html += `<p class="hint">파티장이 레이드를 시작할 수 있어요. 시작하면 여기서 다같이 보스를 연타해요!</p>`;
   } else {
     html += `<p class="hint" style="margin:0 0 8px">🎯 <b>혼자서도 도전 가능!</b> 파티를 만들면 바로 보스를 고를 수 있어요. 동료를 초대하면 함께(탱커·힐러 조합) 더 강한 보스도 노려봐요.</p>`;
@@ -1057,25 +1392,307 @@ function paintParty(panel) {
   if (html !== lastPartyHtml) { panel.innerHTML = html; lastPartyHtml = html; }
 }
 
+/* ---------- 🌌 초월 던전 (레이드 탭의 두 번째 화면) ----------
+ * 로비: 다음 층(보스 속성·약점·최소 무기 수)·내 무기 상성·상성표·주간 랭킹.
+ * 전투: 혼자 15~30초 연타. 단계마다 보스 속성이 바뀌면 약점 무기로 바꿔 끼고, 무기마다 직업·속성 스킬 1회.
+ * 서버가 보스 공격 시각을 내려주므로 HP 는 폴링 없이 여기서 예측하고, 연타는 700ms 마다 묶어서 보낸다. */
+let raidSub = (() => { try { return localStorage.getItem('raidSub') === 'dun' ? 'dun' : 'party'; } catch (_) { return 'party'; } })();
+let dunData = null, dunF = null, dunBuiltFor = null, dunLocalHits = 0, dunLastTap = 0, dunFlushT = null;
+let dunFinishing = false, dunClockOff = 0, dunLastLoad = 0, dunLastSync = 0, lastDunHtml = '', dunRecvAt = 0;
+// 상성 — 서버 game.js 의 ELEMENT_CYCLE 과 같은 순서(앞이 뒤를 이김) + 빛⇄어둠
+const DUN_CYCLE = ['water', 'fire', 'ice', 'wind', 'poison', 'earth', 'thunder'];
+const DUN_EL = { fire: ['🔥', '불'], water: ['💧', '물'], earth: ['⛰️', '대지'], wind: ['🌪️', '바람'], thunder: ['⚡', '번개'], ice: ['❄️', '얼음'], light: ['✨', '빛'], dark: ['🌑', '어둠'], poison: ['☠️', '독'] };
+function dunBeats(a, b) {
+  if ((a === 'light' && b === 'dark') || (a === 'dark' && b === 'light')) return true;
+  const i = DUN_CYCLE.indexOf(a); return i >= 0 && DUN_CYCLE[(i + 1) % DUN_CYCLE.length] === b;
+}
+function dunMult(a, b) { return dunBeats(a, b) ? 2 : dunBeats(b, a) ? 0.5 : 1; }
+function dunElTag(k) { const e = DUN_EL[k] || ['?', k]; return `<span class="del del-${k}">${e[0]}${e[1]}</span>`; }
+function dunMultTag(m) { return `<b class="dmult ${m > 1 ? 'up' : m < 1 ? 'down' : ''}">×${m}</b>`; }
+function dunNow() { return Date.now() + dunClockOff; }
+function raidSubBar() {
+  return `<div class="psub-tabs rsub-tabs">${[['party', '🐲', '파티 레이드'], ['dun', '🌌', '초월 던전']].map(([k, e, l]) =>
+    `<button class="psub${raidSub === k ? ' active' : ''}" data-rsub="${k}"><span>${e}</span>${l}</button>`).join('')}</div>`;
+}
+function setRaidSub(k) {
+  raidSub = k === 'dun' ? 'dun' : 'party';
+  try { localStorage.setItem('raidSub', raidSub); } catch (_) { /* 저장 불가 환경 무시 */ }
+  lastPartyHtml = ''; lastDunHtml = ''; dunBuiltFor = null;
+  if (raidSub === 'dun') { loadDungeon().then(paintRaid); }
+  else refreshRaidData().then(paintRaid);
+  paintRaid();
+}
+function setDunFight(f) {
+  dunF = f || null; dunRecvAt = Date.now();
+  if (f && f.serverNow) dunClockOff = f.serverNow - Date.now();
+}
+async function loadDungeon() {
+  dunLastLoad = Date.now();
+  try {
+    const r = await api('dungeon');
+    if (r && r.ok) { dunData = r; if (r.fight && (!dunF || dunF.startTs !== r.fight.startTs || r.fight.status === 'done')) setDunFight(r.fight); if (!r.fight) setDunFight(null); }
+  } catch (_) { /* 네트워크 순간 오류 무시 */ }
+}
+function fmtLeft(ms) { const h = Math.floor(ms / 3600000); return h >= 24 ? Math.floor(h / 24) + '일 ' + (h % 24) + '시간' : h + '시간 ' + Math.floor(ms % 3600000 / 60000) + '분'; }
+function dunPhaseChips(phases, cur) {
+  return phases.map((ph, i) => `<span class="dph${cur === i ? ' on' : cur != null && i < cur ? ' past' : ''}">${dunElTag(ph.el)}<small>약점 ${ph.weakTo.map(k => DUN_EL[k][0]).join('')}</small></span>`).join('<span class="dph-arrow">→</span>');
+}
+function paintDungeon() {
+  setBattleMode(false);
+  const d = dunData, panel = el('panel');
+  let h = raidSubBar();
+  if (!d) { h += '<p class="hint">불러오는 중…</p>'; }
+  else {
+    const n = d.next;
+    h += `<div class="dun-head"><div><b class="dun-title">🌌 초월 던전</b><small>매주 월요일 초기화 · ${fmtLeft(d.resetIn)} 남음</small></div>
+      <div class="dun-floors"><span>이번 주 <b>${d.floor}</b>층</span><span>최고 <b>${d.best}</b>층</span></div></div>`;
+    if (!d.unlocked) h += `<div class="dun-lock">🔒 <b>★1 무기가 있어야 들어갈 수 있어요.</b><br>무기를 +99 까지 키우고 🌈 초월하면 열려요. 초월한 무기는 <b>속성 스킬</b>도 함께 얻어요.</div>`;
+    if (d.sweep) h += `<div class="dun-sweep">🧹 지난주 기록으로 <b>1~${d.sweep.to}층 자동 소탕</b>${d.sweep.pending ? ' — 첫 도전 때 확정돼요' : ` · 💠+${d.sweep.shard}${d.sweep.essence ? ' 🌟+' + d.sweep.essence : ''}`}</div>`;
+    if (n) {
+      const lack = d.weaponCount < n.weapons;
+      h += `<div class="dun-next">
+        <div class="dun-next-top"><span class="dun-boss">${n.emoji}</span><div class="dun-next-info">
+          <div class="bname">${n.floor}층 · ${esc(n.name)} <small class="btier">${esc(n.band)}</small></div>
+          <div class="dph-row">${dunPhaseChips(n.phases)}</div></div></div>
+        <div class="dun-stats"><span>HP <b>${n.hp.toLocaleString()}</b></span><span>위험도 <b>${n.danger}%</b></span><span>⏱ <b>${n.duration / 1000}초</b></span>
+          <span class="${lack ? 'bad' : 'good'}">🗡️ 무기 <b>${n.weapons}</b>자루 필요 · 보유 <b>${d.weaponCount}</b></span></div>
+        <div class="dun-shield">🛡️ 보스 보호막 — 스킬 한 번에 최대 체력의 ${Math.round(d.skillCap * 100)}%까지만 깎여요</div>
+        <div class="dun-rw">보상 💠${n.reward.shard}${n.reward.essence ? ' · 🌟' + n.reward.essence : ''}${n.floor > d.best ? ' · <b class="dun-first">💎3 첫 돌파</b>' : ''}</div>
+        <button class="btn primary dun-go" data-dun-start ${!d.unlocked || lack ? 'disabled' : ''}>${lack ? '🔒 무기 ' + n.weapons + '자루부터' : '⚔️ ' + n.floor + '층 도전'}</button>
+      </div>`;
+      // 내 무기 × 이번 층 단계별 상성
+      h += `<div class="dun-sec">내 무기 상성 <small>이 층 기준</small></div><div class="dun-wlist">` + d.weapons.map(w =>
+        `<div class="dun-w${w.equipped ? ' on' : ''}"><span class="dun-w-id">${w.emoji} <b>${w.asc ? '★' + w.asc + ' ' : ''}+${w.lv}</b> ${dunElTag(w.el)}</span>
+          <span class="dun-w-m">${n.phases.map(ph => dunMultTag(dunMult(w.el, ph.el))).join('')}</span>
+          ${w.elemSkill ? `<small class="dun-w-sk">${w.elemSkill.emoji} ${esc(w.elemSkill.name)} — ${esc(w.elemSkill.desc)}</small>` : `<small class="dun-w-sk dim">속성 스킬: ★1 필요</small>`}</div>`).join('') + `</div>`;
+      if (d.upcoming && d.upcoming.length) h += `<div class="dun-sec">다음 층들</div><div class="dun-up">` + d.upcoming.map(u =>
+        `<div class="dun-up-row"><b>${u.floor}층</b> ${u.emoji} <span class="dph-row sm">${u.phases.map(ph => dunElTag(ph.el)).join('→')}</span><small>🗡️${u.weapons}</small></div>`).join('') + `</div>`;
+    } else h += `<div class="dun-lock">🏔️ <b>이번 주 정상(${d.max}층) 정복!</b> 다음 주에 새 속성으로 다시 열려요.</div>`;
+    // 상성표
+    h += `<details class="odds-table dun-chart"><summary>🔁 속성 상성표 — 이기면 ×2 · 지면 ×0.5</summary><div class="dun-cycle">` +
+      DUN_CYCLE.concat(DUN_CYCLE[0]).map(k => DUN_EL[k][0] + '<small>' + DUN_EL[k][1] + '</small>').join('<i>→</i>') +
+      `</div><div class="dun-cycle">✨<small>빛</small><i>⇄</i>🌑<small>어둠</small> <small class="dun-note">서로 ×2</small></div>
+      <p class="hint" style="margin:6px 12px 10px">물이 불을 끄고 · 불이 얼음을 녹이고 · 얼음이 바람을 얼리고 · 바람이 독기를 흩고 · 독이 땅을 더럽히고 · 땅이 번개를 흘려보내고 · 번개가 물을 감전시켜요.
+      속성이 안 맞으면 🛒 상점의 <b>🔁 속성 재련권</b>(에픽 이상 무기 · 강화 10%)으로 다시 뽑아요.</p></details>`;
+    // 구간 안내
+    h += `<details class="odds-table"><summary>🗺️ 층 구간</summary><table>${d.bands.map(b => `<tr><td>${b.from}~${b.to}층 ${esc(b.name)}</td><td>무기 ${b.weapons}자루 · 속성 ${b.phases}단계</td></tr>`).join('')}</table></details>`;
+    // 주간 랭킹
+    h += `<div class="dun-sec">🏆 이번 주 최고층</div>` + (d.rank.length ? `<div class="dun-rank">` + d.rank.map((x, i) =>
+      `<div class="dun-rank-row${me && x.nick === me.nick ? ' me' : ''}"><span class="rk">${i + 1}</span>${nickSpan(x.nick, x.nickColor)}<small>🗡️${x.weaponCount}</small><b>${x.floor}층</b></div>`).join('') + `</div>` : emptyMsg('이번 주 도전자가 아직 없어요'));
+  }
+  if (h !== lastDunHtml) { panel.innerHTML = h; lastDunHtml = h; }
+}
+async function doDunStart() {
+  if (dunF && dunF.status === 'done') { const l = await api('dun-leave', 'POST'); if (!l.ok) return toast(l.error, 'bad'); setDunFight(null); }
+  const r = await api('dun-start', 'POST');
+  if (!r.ok) { toast(r.error, 'bad'); await loadDungeon(); return paintRaid(); }
+  applyMe(r.me); setDunFight(r.fight); dunBuiltFor = null; dunFinishing = false; dunLocalHits = 0; lastDunHtml = '';
+  paintRaid();
+}
+async function doDunLeave() {
+  const r = await api('dun-leave', 'POST');
+  if (!r.ok) return toast(r.error, 'bad');
+  setDunFight(null); dunBuiltFor = null; lastDunHtml = '';
+  await loadDungeon(); paintRaid();
+}
+function renderDunBattle() {
+  const f = dunF, panel = el('panel');
+  setBattleMode(true, 'd' + f.startTs);
+  panel.innerHTML =
+    `<div class="raid-battle dun-battle">
+       <div class="raid-timerrow"><span class="raid-boss-name">🌌 ${f.floor}층 · ${f.emoji} ${esc(f.name)}</span><span class="raid-timer">⏱ <b id="dTimer">--</b></span>${battleXBtn()}</div>
+       <div id="dPhases" class="dph-row dun-bphases"></div>
+       <div class="raid-stage"><div id="dBoss" class="raid-mon" role="button" aria-label="보스 공격"><span class="rmon-emoji">${f.emoji}</span><span id="dBossEl" class="dun-boss-el"></span></div></div>
+       <div class="rbar-label">보스 HP <span id="dBossTxt"></span></div>
+       <div class="rbar"><div id="dBossHp" class="rbar-fill boss"></div></div>
+       <div class="rbar-label">내 HP <span id="dHpTxt"></span> <small id="dBuffs"></small></div>
+       <div class="rbar"><div id="dHp" class="rbar-fill party"></div></div>
+       <div id="dSwap" class="dun-swap"></div>
+       <div class="dun-skills"><button id="dSkC" class="btn primary sm" data-dskill="class"></button><button id="dSkE" class="btn sm dun-elbtn" data-dskill="elem"></button></div>
+       <div id="dEvents" class="raid-events"></div>
+       <div id="dResult" class="raid-resultwrap"></div>
+     </div>`;
+  el('dBoss').addEventListener('pointerdown', tapDunBoss);
+  dunBuiltFor = f.startTs;
+  updateDunUI();
+}
+// 화면 시각 기준 예측 — 서버 값 + (받은 뒤 흐른 시간 동안의 보스 공격·힐러 회복)
+function dunProjected() {
+  const f = dunF, t = Math.min(f.duration, Math.max(0, dunNow() - f.startTs));
+  let hp = f.hp, block = f.block;
+  if (f.status === 'active') {
+    for (const a of f.attacks) { if (a.done || a.t > t) continue; if (block > 0) { block--; continue; } hp -= a.pct * (1 - f.dr / 100); }
+    if (f.healPerSec) hp += f.healPerSec * Math.max(0, Date.now() - dunRecvAt) / 1000;
+  }
+  let ph = 0; f.phases.forEach((p, i) => { if (t >= p.at) ph = i; });
+  return { t, hp: Math.max(0, Math.min(100, hp)), ph };
+}
+function updateDunUI() {
+  const f = dunF; if (!f || dunBuiltFor !== f.startTs) return;
+  const active = f.status === 'active', pr = dunProjected(), cur = f.phases[pr.ph];
+  const tEl = el('dTimer'); if (tEl) tEl.textContent = active ? ((f.duration - pr.t) / 1000).toFixed(1) + 's' : '종료';
+  const nx = f.phases[pr.ph + 1];
+  const phEl = el('dPhases'); if (phEl) phEl.innerHTML = dunPhaseChips(f.phases, pr.ph) + (active && nx ? `<small class="dph-next">다음 단계 ${((nx.at - pr.t) / 1000).toFixed(1)}s</small>` : '');
+  const be = el('dBossEl'); if (be) be.innerHTML = dunElTag(cur.el);
+  const bh = el('dBossHp'), bt = el('dBossTxt');
+  if (bh) bh.style.width = Math.max(0, f.bossHP / f.bossMax * 100) + '%';
+  if (bt) bt.textContent = f.bossHP.toLocaleString() + ' / ' + f.bossMax.toLocaleString();
+  const hpb = el('dHp'), hpt = el('dHpTxt'), bf = el('dBuffs');
+  if (hpb) { hpb.style.width = pr.hp + '%'; hpb.classList.toggle('low', pr.hp <= 30); }
+  if (hpt) hpt.textContent = Math.round(pr.hp) + '%';
+  if (bf) bf.textContent = [f.dr ? '🛡️−' + f.dr + '%' : '', f.block ? '❄️막기 ' + f.block : '', f.haste ? '🌪️연타×1.6' : '', f.healPerSec ? '✨+' + f.healPerSec + '%/s' : ''].filter(Boolean).join(' ');
+  const cool = f.swapIn - (Date.now() - dunRecvAt) > 0;
+  const sw = el('dSwap');
+  if (sw) {
+    const html = f.weapons.map(w => { const m = dunMult(w.el, cur.el);
+      return `<button class="dswap${w.equipped ? ' on' : ''}" data-dswap="${w.cls}" ${!active || w.equipped || cool ? 'disabled' : ''}>
+        <span>${w.emoji}${DUN_EL[w.el][0]}</span>${dunMultTag(m)}<small>${w.asc ? '★' + w.asc + ' ' : ''}+${w.lv}</small></button>`; }).join('');
+    if (sw.dataset.h !== html) { sw.innerHTML = html; sw.dataset.h = html; }
+  }
+  const wq = f.weapons.find(w => w.equipped) || {};
+  const sc = el('dSkC'), se = el('dSkE');
+  if (sc) { sc.textContent = (wq.classSkill || '스킬') + (wq.usedC ? ' ✓' : ''); sc.disabled = !active || wq.usedC; }
+  if (se) {
+    if (wq.elemSkill) { se.textContent = wq.elemSkill.emoji + ' ' + wq.elemSkill.name + (wq.usedE ? ' ✓' : ''); se.disabled = !active || wq.usedE; se.title = wq.elemSkill.desc; }
+    else { se.textContent = '속성 스킬 ★1 필요'; se.disabled = true; se.title = ''; }
+  }
+  const ev = el('dEvents'); if (ev) ev.innerHTML = (f.events || []).slice(-5).map(e => `<div class="raid-ev">${esc(e.text)}</div>`).join('');
+  const boss = el('dBoss'); if (boss && !active) boss.classList.add('dead');
+  if (!active) {
+    const res = el('dResult');
+    if (res && !res.dataset.done) {
+      res.dataset.done = '1';
+      const rw = f.reward;
+      res.innerHTML = `<div class="raid-result ${f.win ? 'win' : 'lose'}"><b>${f.win ? '🏆 ' + f.floor + '층 돌파!' : '☠️ ' + f.floor + '층 패배…'}</b>` +
+        (f.win && rw ? `<br>💠 +${rw.shard}${rw.essence ? ' · 🌟 +' + rw.essence : ''}${rw.prism ? ' · <b class="dun-first">💎 +' + rw.prism + ' 첫 돌파</b>' : ''}` : '') +
+        (!f.win ? `<br><small>약점: ${f.phases.map(ph => DUN_EL[ph.el][0] + '→' + ph.weakTo.map(k => DUN_EL[k][0]).join('')).join(' · ')} — 약점 무기로 바꿔 끼거나 🔁 재련해 보세요</small>` : '') +
+        `</div><div class="dun-after"><button class="btn primary sm" data-dun-start>${f.win ? '다음 층 →' : '다시 도전'}</button><button class="btn ghost sm" data-dun-leave>로비로</button></div>`;
+      sfx(f.win ? 'jackpot' : 'destroy'); vibe(f.win ? [15, 40, 25] : [40, 60, 40]);
+      pollMe();
+    }
+  }
+}
+function tapDunBoss(e) {
+  if (e) e.preventDefault();
+  if (!dunF || dunF.status !== 'active' || dunNow() - dunF.startTs >= dunF.duration) return;
+  const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  if (now - dunLastTap < RAID_TAP_MS) return;
+  dunLastTap = now; dunLocalHits++;
+  vibe(6); sfx('hit');
+  const boss = el('dBoss');
+  if (boss) { boss.classList.remove('hit'); void boss.offsetWidth; boss.classList.add('hit'); }
+  spawnDunSpark();
+  if (!dunFlushT) dunFlushT = setTimeout(flushDunHits, RAID_FLUSH_MS);
+}
+function spawnDunSpark() {
+  const boss = el('dBoss'); if (!boss || !dunF) return;
+  const w = dunF.weapons.find(x => x.equipped), rc = boss.getBoundingClientRect(), s = document.createElement('div');
+  s.className = 'raid-spark'; s.textContent = w ? DUN_EL[w.el][0] : '⚔️';
+  s.style.left = (rc.left + rc.width * (0.3 + Math.random() * 0.4)) + 'px';
+  s.style.top = (rc.top + rc.height * 0.35) + 'px';
+  document.body.appendChild(s); setTimeout(() => s.remove(), 420);
+}
+async function flushDunHits(force) {
+  dunFlushT = null;
+  const hits = dunLocalHits; dunLocalHits = 0;
+  if ((!hits && !force) || !dunF || dunF.status !== 'active') return;
+  dunLastSync = Date.now();
+  const r = await api('dun-hit', 'POST', { hits });
+  if (r && r.ok && r.fight) { setDunFight(r.fight); updateDunUI(); }
+}
+async function doDunSwap(cls) {
+  if (dunLocalHits) { if (dunFlushT) { clearTimeout(dunFlushT); dunFlushT = null; } await flushDunHits(); }   // 바꾸기 전 연타는 원래 무기로
+  const r = await api('dun-swap', 'POST', { class: cls });
+  if (!r.ok) return toast(r.error, 'bad');
+  if (r.fight) { setDunFight(r.fight); updateDunUI(); }
+  sfx('pang'); vibe(12);
+}
+async function doDunSkill(kind) {
+  if (dunLocalHits) { if (dunFlushT) { clearTimeout(dunFlushT); dunFlushT = null; } await flushDunHits(); }
+  const r = await api('dun-skill', 'POST', { kind });
+  if (!r.ok) return toast(r.error, 'bad');
+  if (r.fight) { setDunFight(r.fight); updateDunUI(); }
+  if (r.skillText) { toast(r.skillText, 'info'); sfx('crit'); vibe([15, 30, 20]); }
+}
+async function maybeFinishDun() {
+  if (dunFinishing || !dunF || dunF.status !== 'active') return;
+  const pr = dunProjected();
+  if (pr.t >= dunF.duration || pr.hp <= 0 || dunF.bossHP <= 0) {
+    dunFinishing = true;
+    if (dunFlushT) { clearTimeout(dunFlushT); dunFlushT = null; }
+    if (dunLocalHits) await flushDunHits();
+    const r = await api('dun-finish', 'POST');
+    if (r && r.ok && r.fight) { setDunFight(r.fight); if (r.me) applyMe(r.me); }
+    dunFinishing = false;
+    updateDunUI();
+  } else if (Date.now() - dunLastSync > 1500 && !dunLocalHits) {
+    flushDunHits(true);   // 연타가 없어도 지속 피해·단계 전환을 서버 시계로 맞춘다
+  }
+}
+async function dunLoopTick() {
+  const f = dunF;
+  if (f && f.status === 'active') {
+    if (dunBuiltFor !== f.startTs) renderDunBattle();
+    updateDunUI();
+    maybeFinishDun();
+  } else if (f && f.status === 'done') {
+    if (dunBuiltFor !== f.startTs) renderDunBattle();
+  } else {
+    if (!dunData || Date.now() - dunLastLoad > 20000) await loadDungeon();
+    if (dunF) return;   // 불러온 사이 진행 중 전투가 있으면 다음 틱에 전투 화면으로
+    paintDungeon();
+  }
+}
+
+/* ---------- 세 단(1280px+) 오른쪽: 오늘 미션 · 강화 랭킹 · 실시간 로그 ----------
+ * 넓은 화면에서만 그린다(좁으면 숨겨져 있으니 요청도 하지 않는다). */
+const wideCol = window.matchMedia('(min-width:1280px)');
+let sideAt = 0;
+async function refreshSide() {
+  if (!wideCol.matches || !me) return;
+  sideAt = Date.now();
+  try {
+    const [m, rk, lg] = await Promise.all([api('missions'), api('rank'), api('log')]);
+    if (m && m.ok) el('sideMissions').innerHTML = m.daily.map(x => {
+      const pct = Math.min(100, Math.round(x.progress / x.target * 100));
+      return `<div class="side-row${x.claimed ? ' done' : x.done ? ' ready' : ''}" data-side-mission><div class="side-m"><div class="sn">${esc(x.desc)}</div>
+        <div class="side-bar"><i style="width:${pct}%"></i></div></div><span class="sv">${x.claimed ? '완료 ✓' : x.done ? '받기' : x.progress + '/' + x.target}</span></div>`;
+    }).join('');
+    if (rk && rk.list) el('sideRank').innerHTML = rk.list.slice(0, 5).map((p, i) =>
+      `<div class="side-row" data-nick="${esc(p.nick)}"><span class="rk">${medal(i)}</span><span class="sn">${nickSpan(p.nick, p.nickColor)}</span><span class="sv">${p.ascend ? '★' + p.ascend + ' ' : ''}+${p.level}</span></div>`).join('') || emptyMsg('아직 참가자가 없어요');
+    if (lg && lg.list) el('sideLog').innerHTML = lg.list.slice(0, 8).map(x => `<div class="side-row">${esc(x.text)}</div>`).join('') || emptyMsg('아직 기록이 없어요');
+  } catch (_) { /* 네트워크 순간 오류 무시 */ }
+}
+wideCol.addEventListener('change', () => { if (wideCol.matches) refreshSide(); });
+document.querySelector('.col-side').addEventListener('click', e => {
+  if (e.target.closest('#sideMissionMore') || e.target.closest('[data-side-mission]')) return openMissions();
+  const nm = e.target.closest('[data-nick]'); if (nm) return openProfile(nm.dataset.nick);
+});
+
 /* ---------- 탭 ---------- */
 // 탭 로드 순서 가드: 빠르게 탭을 바꾸면 먼저 시작한 fetch 가 늦게 도착해 나중 탭을
 // 덮어쓰는 레이스가 생긴다. 매 로드에 seq 를 찍고, await 후 최신이 아니면 렌더를 버린다.
 // tabHtmlCache: 한 번 본 탭은 마지막 화면을 즉시 보여주고(로딩 표시 없이) 뒤에서 갱신.
 let tabLoadSeq = 0;
 const tabHtmlCache = {};
-function cacheableTab(t) { return t !== 'raid'; }
+function cacheableTab(t) { return t !== 'raid' && t !== 'prism'; }
 async function loadTab() {
   const panel = el('panel');
   const seq = ++tabLoadSeq;
   const stale = () => seq !== tabLoadSeq;   // 그 사이 새 loadTab 이 시작됐으면 true
   if (currentTab === 'raid') { startRaidLoop(); return; }
   stopRaidLoop();
+  if (currentTab === 'forge') return;
+  if (currentTab === 'prism') {
+    const r = await api('prism'); if (stale() || !r.ok) return;
+    prismData = r; paintPrism(); return;
+  }
   if (currentTab === 'rank') {
     const { list } = await api('rank'); if (stale()) return;
     panel.innerHTML = list.length ? list.map((p, i) =>
       `<div class="row"><span class="rk">${medal(i)}</span>
         <div class="nm" data-nick="${esc(p.nick)}">${nmLine(p.nick, p.nickColor, p.title, p.classEmoji)}
-          <div class="nm-sub">${esc(p.weapon)} · ${p.wins}승 ${p.losses}패</div></div></div>`).join('') : emptyMsg('아직 참가자가 없어요');
+          <div class="nm-sub">${esc(p.weapon)} · ${p.wins}승 ${p.losses}패${p.weaponCount > 1 ? ' · 🗡️×' + p.weaponCount : ''}</div></div></div>`).join('') : emptyMsg('아직 참가자가 없어요');
   } else if (currentTab === 'goldrank') {
     const { list } = await api('goldrank'); if (stale()) return;
     panel.innerHTML = list.length ? list.map((p, i) =>
@@ -1084,18 +1701,28 @@ async function loadTab() {
         <span class="val gold">${p.gold.toLocaleString()}G</span></div>`).join('') : emptyMsg('아직 참가자가 없어요');
   } else if (currentTab === 'shop') {
     const { items } = await api('shop'); if (stale()) return;
-    panel.innerHTML = `<p class="hint" style="margin:0 0 10px">보유 💰${me.gold.toLocaleString()}G${me.enhanceBoost > 0 ? ' · 🍀 강화부스트 ' + me.enhanceBoost + '회' : ''}</p>` +
-      items.map(it =>
-        `<div class="raid-boss"><span class="bemoji">${it.emoji}</span>
-          <div class="binfo"><div class="bname">${esc(it.name)} <small>${it.price.toLocaleString()}G</small></div>
-            <div class="bstat">${esc(it.desc)}</div></div>
-          <button class="btn sm primary" data-buy="${it.id}" ${me.gold < it.price ? 'disabled' : ''}>구매</button></div>`).join('');
+    panel.innerHTML = `<p class="hint" style="margin:0 0 10px">보유 💰${me.gold.toLocaleString()}G · 🎒 ${me.inv.used}/${me.inv.slots}칸</p>` +
+      items.map(it => {
+        // 방지권은 하루 구매 상한이 있고, 초월 ★1+ 는 아예 살 수 없다
+        const capped = it.id === 'protect';
+        const once = !!it.once;
+        const onceDone = once && (me.inv.packBought || me.inv.atMaxSlots);
+        const soldOut = (capped && (!me.protectWorks || me.protectBuyLeft <= 0)) || onceDone;
+        const note = once ? ` <span class="shop-lim${onceDone ? ' off' : ''}">${onceDone ? '구매 완료' : '계정당 1회'}</span>`
+          : !capped ? ''
+          : !me.protectWorks ? ' <span class="shop-lim off">초월 이후 사용 불가</span>'
+          : ` <span class="shop-lim${me.protectBuyLeft <= 0 ? ' off' : ''}">오늘 ${me.protectBuyLeft}/${me.protectDailyBuy}개</span>`;
+        return `<div class="raid-boss"><span class="bemoji">${it.emoji}</span>
+          <div class="binfo"><div class="bname">${esc(it.name)} <small>${it.price.toLocaleString()}G</small>${note}</div>
+            <div class="bstat">${esc(it.desc)}${capped ? ' · 더 필요하면 🗡️사냥에서 얻으세요' : ''}</div></div>
+          <button class="btn sm primary" data-buy="${it.id}" ${me.gold < it.price || soldOut ? 'disabled' : ''}>구매</button></div>`;
+      }).join('');
   } else if (currentTab === 'hogu') {
     const { list } = await api('hogu'); if (stale()) return;
     panel.innerHTML = list.length ? list.map((p, i) =>
       `<div class="row"><span class="rk">${i < 3 ? ['👑', '🥈', '🥉'][i] : (i + 1)}</span>
         <div class="nm" data-nick="${esc(p.nick)}">${nmLine(p.nick)}</div>
-        <span class="val">${p.c}번 파괴 🤡</span></div>`).join('') : emptyMsg('😌 오늘은 아직 아무도 안 깨졌어요');
+        <span class="val">🕯️ ${p.c}번 파괴</span></div>`).join('') : emptyMsg('😌 오늘은 아직 아무도 안 깨졌어요');
   } else if (currentTab === 'log') {
     const { list } = await api('log'); if (stale()) return;
     panel.innerHTML = list.length ? list.map(l => `<div class="logline">${esc(l.text)}</div>`).join('') : emptyMsg('기록 없음');
@@ -1122,6 +1749,7 @@ function nickSpan(nick, nc) {
   if (nc.kind === 'silver') return '<span class="nick-silver">' + e + '</span>';
   if (nc.kind === 'gold') return '<span class="nick-gold">' + e + '</span>';
   if (nc.kind === 'rainbow') return '<span class="nick-rainbow">' + e + '</span>';
+  if (nc.kind === 'prism') return '<span class="nick-prism">' + e + '</span>';   // 프리즘 상점 전용 오로라색
   return e;
 }
 // 목록용 닉네임 줄: 닉네임이 길면 말줄임(…), 칭호는 자리가 모자라면 아랫줄로 내려간다
@@ -1146,15 +1774,19 @@ async function openProfile(nick) {
      ${p.class && p.grade ? `<div class="pf-weapon">${weaponArtHTML(p)}</div>` : ''}
      ${titlesSection(p, isMe, eq)}
      <div class="pf-line"><span>무기</span><b>${esc(p.weapon)}</b></div>
+     ${p.weapons && p.weapons.list.length > 1 ? `<div class="pf-line"><span>보유 무기</span><b class="pf-arm">${p.weapons.list.filter(w => !w.equipped).map(w => w.classEmoji + ' ' + esc(w.name)).join('<br>')}</b></div>` : ''}
+     <div class="pf-line"><span>프리즘</span><b>💎 ${(p.prism || 0).toLocaleString()}</b></div>
      <div class="pf-line"><span>속성</span><b>${p.elementEmoji || ''} ${esc(p.elementName || '-')}</b></div>
      <div class="pf-line"><span>골드</span><b>${p.gold.toLocaleString()}G</b></div>
+     <div class="pf-line"><span>초월</span><b>${p.ascend > 0 ? '★' + p.ascend : '-'}</b></div>
+     ${p.dunBest ? `<div class="pf-line"><span>초월 던전</span><b>🌌 최고 ${p.dunBest}층</b></div>` : ''}
      <div class="pf-line"><span>방지권</span><b>${p.protects}개</b></div>
      <div class="pf-line"><span>전적</span><b>${p.wins}승 ${p.losses}패${p.winRate != null ? ' (' + p.winRate + '%)' : ''}</b></div>
      <div class="pf-line"><span>최고기록</span><b>+${p.best}</b></div>
      <div class="pf-line"><span>파괴</span><b>${p.breaks}회</b></div>
      <div class="pf-line"><span>강화순위</span><b>${p.rank.rank ? p.rank.rank + '/' + p.rank.total + '위' : '-'}</b></div>` +
     (isMe ? `<div style="margin-top:12px;display:flex;gap:6px">
-       <input id="renameInput" maxlength="12" value="${esc(p.nick)}" style="flex:1;min-width:0;padding:9px;border-radius:10px;border:1px solid var(--line);background:#0f131c;color:var(--text)">
+       <input id="renameInput" maxlength="12" value="${esc(p.nick)}" style="flex:1;min-width:0;padding:9px;border-radius:10px;border:1px solid transparent;background:#0f131c;color:var(--text)">
        <button id="renameBtn" class="btn primary sm">닉변경</button></div>` : '');
   el('modal').hidden = false;
   if (isMe) {
@@ -1172,9 +1804,9 @@ function titlesSection(p, isMe, eq) {
     const chips = roster.map(t => {
       if (t.earned) {
         const on = eq && eq.id === t.id;
-        return `<span class="title-chip earn${on ? ' equipped' : ''}" data-title-id="${t.id}" style="color:${t.color};border-color:${t.color}">${esc(t.title)}</span>`;
+        return `<span class="title-chip earn${on ? ' equipped' : ''}" data-title-id="${t.id}" style="color:${t.color}">${esc(t.title)}</span>`;
       }
-      return `<span class="title-chip locked" style="border-color:${t.color}66">🔒</span>`;
+      return `<span class="title-chip locked" style="background:${t.color}1a">🔒</span>`;
     }).join('');
     return `<div class="titles-head">칭호 <small>${p.titleEarned || 0}/${p.titleTotal || roster.length}</small></div>
       <div class="titles-row">
@@ -1182,7 +1814,7 @@ function titlesSection(p, isMe, eq) {
       </div>`;
   }
   return (p.titles && p.titles.length)
-    ? `<div class="titles-row">${p.titles.map(t => `<span class="title-chip${eq && eq.id === t.id ? ' equipped' : ''}" style="color:${t.color};border-color:${t.color}">${esc(t.title)}</span>`).join('')}</div>`
+    ? `<div class="titles-row">${p.titles.map(t => `<span class="title-chip${eq && eq.id === t.id ? ' equipped' : ''}" style="color:${t.color}">${esc(t.title)}</span>`).join('')}</div>`
     : `<div class="titles-empty">아직 획득한 칭호가 없어요</div>`;
 }
 async function doEquipTitle(titleId) {
@@ -1249,14 +1881,38 @@ el('attendBtn').onclick = () => act(doAttend, el('attendBtn'));
 // 상단바 내 닉네임 클릭 → 내 프로필(닉변경 가능)
 el('hNick').onclick = () => { if (me) openProfile(me.nick); };
 
-document.querySelectorAll('.tab').forEach(btn => {
-  btn.onclick = () => {
-    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active'); currentTab = btn.dataset.tab;
-    // 본 적 있는 탭이면 캐시를 즉시 표시(로딩 없이), 처음이면 로딩 표시. 그다음 loadTab 이 갱신.
-    if (cacheableTab(currentTab)) el('panel').innerHTML = tabHtmlCache[currentTab] || '<div class="empty">불러오는 중…</div>';
-    withLoad(loadTab);
-  };
+function selectTab(tab) {
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  currentTab = tab;
+  if (MORE_TABS.includes(tab)) moreTab = tab;
+  // 본 적 있는 탭이면 캐시를 즉시 표시(로딩 없이), 처음이면 로딩 표시. 그다음 loadTab 이 갱신.
+  if (cacheableTab(currentTab)) el('panel').innerHTML = tabHtmlCache[currentTab] || '<div class="empty">불러오는 중…</div>';
+  withLoad(loadTab);
+}
+document.querySelectorAll('.tab').forEach(btn => { btn.onclick = () => selectTab(btn.dataset.tab); });
+
+/* ---------- 한 단 화면(휴대폰·태블릿) — 하단 탭바로 화면을 하나씩 ----------
+ * 대장간은 탭 패널이 필요 없는 화면이라 currentTab 을 'forge' 로 두고(레이드 루프·목록 갱신이 멈춘다),
+ * 나머지는 화면마다 정해진 탭을 연다. 두 단 이상(880px+)에서는 data-view 가 아무 영향이 없다. */
+const MORE_TABS = ['rank', 'goldrank', 'shop', 'hogu', 'log'];
+const VIEW_TAB = { act: 'fight', raid: 'raid', prism: 'prism' };
+let moreTab = 'rank';
+const oneCol = window.matchMedia('(max-width:879px)');
+function setView(v) {
+  el('game').dataset.view = v;
+  document.querySelectorAll('.bb-btn').forEach(b => b.classList.toggle('on', b.dataset.view === v));
+  const tab = v === 'more' ? moreTab : VIEW_TAB[v];
+  if (tab) { if (tab !== currentTab || v === 'more') selectTab(tab); }
+  else { stopRaidLoop(); currentTab = 'forge'; }
+  window.scrollTo(0, 0);
+}
+function viewOfTab(t) { return t === 'raid' ? 'raid' : t === 'prism' ? 'prism' : t === 'fight' ? 'act' : MORE_TABS.includes(t) ? 'more' : 'forge'; }
+document.querySelectorAll('.bb-btn').forEach(b => { b.onclick = () => { vibe(6); setView(b.dataset.view); }; });
+// 화면 폭이 바뀌어 두 단이 되면 대장간 대신 마지막 목록 탭을, 한 단이 되면 지금 탭에 맞는 화면을
+oneCol.addEventListener('change', () => {
+  if (!me || el('game').hidden) return;
+  if (!oneCol.matches && currentTab === 'forge') selectTab(moreTab);
+  else if (oneCol.matches) { el('game').dataset.view = viewOfTab(currentTab); document.querySelectorAll('.bb-btn').forEach(b => b.classList.toggle('on', b.dataset.view === el('game').dataset.view)); }
 });
 
 el('panel').addEventListener('click', e => {
@@ -1267,6 +1923,19 @@ el('panel').addEventListener('click', e => {
   const iv = e.target.closest('[data-invite]'); if (iv) return act(() => doInvite(iv.dataset.invite), iv);
   const ac = e.target.closest('[data-accept]'); if (ac) return act(() => doAccept(ac.dataset.accept), ac);
   const rj = e.target.closest('[data-reject]'); if (rj) return act(() => doReject(rj.dataset.reject), rj);
+  const ps = e.target.closest('[data-psub]'); if (ps) { prismSub = ps.dataset.psub; return paintPrism(); }
+  // 🌌 초월 던전
+  const rs = e.target.closest('[data-rsub]'); if (rs) return setRaidSub(rs.dataset.rsub);
+  if (e.target.closest('[data-battle-min]')) { battleMin = true; document.body.classList.remove('in-battle'); return el('panel').scrollIntoView({ block: 'start' }); }
+  const ds = e.target.closest('[data-dun-start]'); if (ds) return act(doDunStart, ds);
+  const dl = e.target.closest('[data-dun-leave]'); if (dl) return act(doDunLeave, dl);
+  const dw = e.target.closest('[data-dswap]'); if (dw) return act(() => doDunSwap(dw.dataset.dswap), dw);
+  const dk = e.target.closest('[data-dskill]'); if (dk) return act(() => doDunSkill(dk.dataset.dskill), dk);
+  const pk = e.target.closest('[data-pick]'); if (pk) return act(() => doOpenBox(+pk.dataset.pick), pk);
+  if (e.target.closest('[data-box-again]')) { boxReveal = null; return paintPrism(); }
+  const al = e.target.closest('[data-alch]'); if (al) return act(() => doAlchemy(al.dataset.alch), al);
+  const ca = e.target.closest('[data-cap]'); if (ca) return act(() => doCapsule(+ca.dataset.cap), ca);
+  const pb = e.target.closest('[data-pbuy]'); if (pb) return act(() => doPrismBuy(pb.dataset.pbuy), pb);
   const cp = e.target.closest('#createPartyBtn'); if (cp) return act(doPartyCreate, cp);
   const lp = e.target.closest('#leavePartyBtn'); if (lp) return act(doPartyLeave, lp);
   if (e.target.closest('#closeRaidBtn')) return closeRaid();
@@ -1552,6 +2221,17 @@ async function buyPassPremium() {
   if (!r.ok) { toast(r.error, 'bad'); return; }   // 현재는 '준비중' 안내
   applyMe(r.me); await renderPass();
 }
+el('ascendBtn').onclick = () => act(doAscend, el('ascendBtn'));
+el('armory').addEventListener('click', e => {
+  const a = e.target.closest('[data-arm]'); if (a) { if (!a.classList.contains('on')) act(() => doEquipWeapon(a.dataset.arm), a); return; }
+  if (e.target.closest('[data-arm-new]')) return openWeaponNew();
+  if (e.target.closest('[data-arm-lock]')) return armLockedClick();
+});
+el('wpnGrid').addEventListener('click', e => { const c = e.target.closest('[data-newcls]'); if (c) act(() => doNewWeapon(c.dataset.newcls), null); });
+el('wpnClose').onclick = () => { el('wpnModal').hidden = true; };
+el('wpnModal').addEventListener('click', e => { if (e.target === el('wpnModal')) el('wpnModal').hidden = true; });
+el('invBtn').onclick = () => { ensureAudio(); openInv(); };
+el('invClose').onclick = closeInv;
 el('missionBtn').onclick = () => { ensureAudio(); openMissions(); };
 el('missionClose').onclick = closeMissions;
 el('passBtn').onclick = () => { ensureAudio(); openPass(); };
@@ -1577,4 +2257,5 @@ setInterval(async () => {
   try { await pollMe(); } catch (e) { /* 무시 */ }
   // 채굴장 제외(위와 동일 이유): 연타 중 돌 리셋 방지
   if (['rank', 'log', 'hogu', 'goldrank', 'shop'].includes(currentTab)) loadTab();
+  if (Date.now() - sideAt > 10000) refreshSide();
 }, 5000);
