@@ -10,6 +10,8 @@ const PATCH = {
   version: '6',
   title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
+    '📱 <b>모바일 화면 개편</b> — 아래 탭바(⚒️대장간 · 🗡️사냥 · 🐉레이드 · 💎프리즘 · 🏅더보기)로 화면을 바꿔요. 대장간은 스크롤 없이 한 화면, 전투는 화면 전체로 열려요',
+    '🖥️ <b>넓은 화면</b> — 1280px 이상이면 오른쪽에 오늘 미션 · 강화 랭킹 · 실시간 로그가 같이 보여요',
     '🌌 <b>초월 던전</b> — ★1 무기가 있으면 레이드 탭에서 입장! 혼자 연타로 층을 올라요. 매주 월요일 초기화되고 <b>층마다 보스 속성이 매주 바뀌어요</b>(지난주 기록 −5층까지 자동 소탕)',
     '🔁 <b>속성 상성</b> — 💧물→🔥불→❄️얼음→🌪️바람→☠️독→⛰️대지→⚡번개→💧물 순서로 앞이 뒤를 이기고, ✨빛⇄🌑어둠은 서로 강해요. 이기면 피해 <b>×2</b>, 지면 <b>×0.5</b>',
     '🗡️ <b>깊은 층일수록 무기가 더 필요해요</b> — 16층부터 2자루·31층부터 3자루·46층부터 4자루. 전투 중에 보스 속성이 바뀌면 <b>약점 무기로 바꿔 끼며</b> 싸워요',
@@ -226,7 +228,11 @@ function closePatch() {
   el('patchModal').hidden = true;
   updateNoticeBadge();
 }
-function enterGame() { show('game'); seedInvites(); seedTitles(); render(); withLoad(loadTab); const shownGuide = maybeShowGuide(); if (!shownGuide) maybeShowPatch(); openEvents(); initRealtime(); }
+function enterGame() {
+  show('game'); seedInvites(); seedTitles(); render();
+  if (oneCol.matches) { currentTab = 'forge'; el('game').dataset.view = 'forge'; document.querySelectorAll('.bb-btn').forEach(b => b.classList.toggle('on', b.dataset.view === 'forge')); }
+  else withLoad(loadTab);
+  refreshSide(); const shownGuide = maybeShowGuide(); if (!shownGuide) maybeShowPatch(); openEvents(); initRealtime(); }
 
 /* 파티 레이드 초대 알림 — 어느 탭에 있어도 새 초대가 오면 토스트로 띄운다.
  * 폴링(api('me'))으로 me.invites 가 갱신될 때마다 새로 생긴 초대를 감지. */
@@ -390,6 +396,8 @@ function render() {
     : esc(me.weapon);
   const panel = document.querySelector('.weapon-panel');
   panel.style.setProperty('--heat', me.grade.color);
+  panel.classList.toggle('at-max', !!me.atMax);   // 한 단 화면: +99 면 강화 버튼 대신 초월 단
+  const rd = el('bbRaidDot'); if (rd) rd.hidden = !(me.invites && me.invites.length);
   if (FX && FX.grade) {
     const flow = GRADE_FLOW[me.grade.key];
     FX.grade.enable(!!flow, flow ? { colors: flow } : null);
@@ -512,6 +520,7 @@ async function doNewWeapon(cls) {
 }
 function goPrismShop() {
   prismSub = 'shop';
+  if (oneCol.matches) return setView('prism');
   const t = document.querySelector('.tab[data-tab="prism"]'); if (t) t.click();
   el('panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -1635,6 +1644,31 @@ async function dunLoopTick() {
   }
 }
 
+/* ---------- 세 단(1280px+) 오른쪽: 오늘 미션 · 강화 랭킹 · 실시간 로그 ----------
+ * 넓은 화면에서만 그린다(좁으면 숨겨져 있으니 요청도 하지 않는다). */
+const wideCol = window.matchMedia('(min-width:1280px)');
+let sideAt = 0;
+async function refreshSide() {
+  if (!wideCol.matches || !me) return;
+  sideAt = Date.now();
+  try {
+    const [m, rk, lg] = await Promise.all([api('missions'), api('rank'), api('log')]);
+    if (m && m.ok) el('sideMissions').innerHTML = m.daily.map(x => {
+      const pct = Math.min(100, Math.round(x.progress / x.target * 100));
+      return `<div class="side-row${x.claimed ? ' done' : x.done ? ' ready' : ''}" data-side-mission><div class="side-m"><div class="sn">${esc(x.desc)}</div>
+        <div class="side-bar"><i style="width:${pct}%"></i></div></div><span class="sv">${x.claimed ? '완료 ✓' : x.done ? '받기' : x.progress + '/' + x.target}</span></div>`;
+    }).join('');
+    if (rk && rk.list) el('sideRank').innerHTML = rk.list.slice(0, 5).map((p, i) =>
+      `<div class="side-row" data-nick="${esc(p.nick)}"><span class="rk">${medal(i)}</span><span class="sn">${nickSpan(p.nick, p.nickColor)}</span><span class="sv">${p.ascend ? '★' + p.ascend + ' ' : ''}+${p.level}</span></div>`).join('') || emptyMsg('아직 참가자가 없어요');
+    if (lg && lg.list) el('sideLog').innerHTML = lg.list.slice(0, 8).map(x => `<div class="side-row">${esc(x.text)}</div>`).join('') || emptyMsg('아직 기록이 없어요');
+  } catch (_) { /* 네트워크 순간 오류 무시 */ }
+}
+wideCol.addEventListener('change', () => { if (wideCol.matches) refreshSide(); });
+document.querySelector('.col-side').addEventListener('click', e => {
+  if (e.target.closest('#sideMissionMore') || e.target.closest('[data-side-mission]')) return openMissions();
+  const nm = e.target.closest('[data-nick]'); if (nm) return openProfile(nm.dataset.nick);
+});
+
 /* ---------- 탭 ---------- */
 // 탭 로드 순서 가드: 빠르게 탭을 바꾸면 먼저 시작한 fetch 가 늦게 도착해 나중 탭을
 // 덮어쓰는 레이스가 생긴다. 매 로드에 seq 를 찍고, await 후 최신이 아니면 렌더를 버린다.
@@ -1648,6 +1682,7 @@ async function loadTab() {
   const stale = () => seq !== tabLoadSeq;   // 그 사이 새 loadTab 이 시작됐으면 true
   if (currentTab === 'raid') { startRaidLoop(); return; }
   stopRaidLoop();
+  if (currentTab === 'forge') return;
   if (currentTab === 'prism') {
     const r = await api('prism'); if (stale() || !r.ok) return;
     prismData = r; paintPrism(); return;
@@ -1846,14 +1881,38 @@ el('attendBtn').onclick = () => act(doAttend, el('attendBtn'));
 // 상단바 내 닉네임 클릭 → 내 프로필(닉변경 가능)
 el('hNick').onclick = () => { if (me) openProfile(me.nick); };
 
-document.querySelectorAll('.tab').forEach(btn => {
-  btn.onclick = () => {
-    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active'); currentTab = btn.dataset.tab;
-    // 본 적 있는 탭이면 캐시를 즉시 표시(로딩 없이), 처음이면 로딩 표시. 그다음 loadTab 이 갱신.
-    if (cacheableTab(currentTab)) el('panel').innerHTML = tabHtmlCache[currentTab] || '<div class="empty">불러오는 중…</div>';
-    withLoad(loadTab);
-  };
+function selectTab(tab) {
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  currentTab = tab;
+  if (MORE_TABS.includes(tab)) moreTab = tab;
+  // 본 적 있는 탭이면 캐시를 즉시 표시(로딩 없이), 처음이면 로딩 표시. 그다음 loadTab 이 갱신.
+  if (cacheableTab(currentTab)) el('panel').innerHTML = tabHtmlCache[currentTab] || '<div class="empty">불러오는 중…</div>';
+  withLoad(loadTab);
+}
+document.querySelectorAll('.tab').forEach(btn => { btn.onclick = () => selectTab(btn.dataset.tab); });
+
+/* ---------- 한 단 화면(휴대폰·태블릿) — 하단 탭바로 화면을 하나씩 ----------
+ * 대장간은 탭 패널이 필요 없는 화면이라 currentTab 을 'forge' 로 두고(레이드 루프·목록 갱신이 멈춘다),
+ * 나머지는 화면마다 정해진 탭을 연다. 두 단 이상(880px+)에서는 data-view 가 아무 영향이 없다. */
+const MORE_TABS = ['rank', 'goldrank', 'shop', 'hogu', 'log'];
+const VIEW_TAB = { act: 'fight', raid: 'raid', prism: 'prism' };
+let moreTab = 'rank';
+const oneCol = window.matchMedia('(max-width:879px)');
+function setView(v) {
+  el('game').dataset.view = v;
+  document.querySelectorAll('.bb-btn').forEach(b => b.classList.toggle('on', b.dataset.view === v));
+  const tab = v === 'more' ? moreTab : VIEW_TAB[v];
+  if (tab) { if (tab !== currentTab || v === 'more') selectTab(tab); }
+  else { stopRaidLoop(); currentTab = 'forge'; }
+  window.scrollTo(0, 0);
+}
+function viewOfTab(t) { return t === 'raid' ? 'raid' : t === 'prism' ? 'prism' : t === 'fight' ? 'act' : MORE_TABS.includes(t) ? 'more' : 'forge'; }
+document.querySelectorAll('.bb-btn').forEach(b => { b.onclick = () => { vibe(6); setView(b.dataset.view); }; });
+// 화면 폭이 바뀌어 두 단이 되면 대장간 대신 마지막 목록 탭을, 한 단이 되면 지금 탭에 맞는 화면을
+oneCol.addEventListener('change', () => {
+  if (!me || el('game').hidden) return;
+  if (!oneCol.matches && currentTab === 'forge') selectTab(moreTab);
+  else if (oneCol.matches) { el('game').dataset.view = viewOfTab(currentTab); document.querySelectorAll('.bb-btn').forEach(b => b.classList.toggle('on', b.dataset.view === el('game').dataset.view)); }
 });
 
 el('panel').addEventListener('click', e => {
@@ -2198,4 +2257,5 @@ setInterval(async () => {
   try { await pollMe(); } catch (e) { /* 무시 */ }
   // 채굴장 제외(위와 동일 이유): 연타 중 돌 리셋 방지
   if (['rank', 'log', 'hogu', 'goldrank', 'shop'].includes(currentTab)) loadTab();
+  if (Date.now() - sideAt > 10000) refreshSide();
 }, 5000);

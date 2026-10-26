@@ -523,7 +523,7 @@ body.loading-on #globalLoading{opacity:1}
 .hunt-reward.crit{color:var(--molten-hi);text-shadow:0 0 12px #ffb300,0 2px 8px #000}
 
 /* ---------- 모달 ---------- */
-.modal{position:fixed;inset:0;background:rgba(10,7,5,.68);display:flex;align-items:flex-start;justify-content:center;padding:20px;z-index:50;
+.modal{position:fixed;inset:0;background:rgba(10,7,5,.68);display:flex;align-items:flex-start;justify-content:center;padding:20px;z-index:100;
   overflow-y:auto;overscroll-behavior:contain;
   backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
 .modal-card{position:relative;max-width:360px;width:100%;margin:auto 0;border-color:transparent;   /* margin:auto → 짧으면 가운데, 길면 위부터 */
@@ -898,4 +898,84 @@ body.loading-on #globalLoading{opacity:1}
   body.in-battle .raid-stage{height:100px}
   body.in-battle .raid-mon .rmon-emoji{font-size:66px}
   body.in-battle .raid-events{max-height:66px;overflow:hidden}
+}
+
+/* =========================================================================
+ * 화면 배치
+ *  · 한 단(< 880px, 휴대폰·태블릿): 앱처럼 — 상단바 + 빠른 아이콘 줄 + '한 화면' + 하단 탭바.
+ *    #game[data-view] 가 지금 화면(대장간·사냥·레이드·프리즘·더보기)을 정하고, 나머지 블록은 숨긴다.
+ *    두 단(.col-left/.col-right)은 display:contents 로 풀어서 블록 순서를 CSS 로 정한다.
+ *  · 두 단(880~1279px): 왼쪽 대장간(고정) · 오른쪽 탭 화면 — 기존 그대로.
+ *  · 세 단(1280px+): + 오른쪽에 오늘 미션 · 강화 랭킹 · 실시간 로그.
+ * ========================================================================= */
+.bottombar,.col-side{display:none}
+.side-card{padding:12px 14px}
+.side-h{display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:900;font-size:14px;margin-bottom:8px}
+.side-more{border:0;background:rgba(255,240,220,.06);color:var(--muted);font-size:11.5px;font-weight:800;padding:4px 9px;border-radius:999px;cursor:pointer}
+.side-more:hover{color:var(--text)}
+.side-list{display:flex;flex-direction:column;gap:6px;font-size:12.5px}
+.side-row{display:flex;align-items:center;gap:8px;min-width:0;padding:6px 8px;border-radius:10px;background:var(--bg2);cursor:pointer}
+.side-row .rk{width:18px;text-align:center;font-weight:900;color:var(--muted);flex:none}
+.side-row .sn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:800}
+.side-row .sv{flex:none;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.side-row.done .sv{color:var(--success)}
+.side-row.ready{box-shadow:inset 0 0 0 1px var(--primary)}
+.side-bar{height:4px;border-radius:4px;background:rgba(255,240,220,.08);overflow:hidden;margin-top:4px}
+.side-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--primary2),var(--primary))}
+.side-m{flex:1;min-width:0}
+.side-log .side-row{cursor:default;display:block;line-height:1.45;color:#d9cfc2;word-break:keep-all}
+
+/* 두 단(880~1279): 가운데가 좁아서 탭 8개가 두 줄로 밀리지 않게 */
+@media (min-width:880px) and (max-width:1279px){ .tabs{flex-wrap:nowrap} .tab{padding-left:8px;padding-right:8px;font-size:13.5px;white-space:nowrap} .tab .ti{margin-right:3px} }
+@media (min-width:1280px){
+  #game.screen,#game .topbar{max-width:1400px}
+  .wrap{grid-template-columns:360px minmax(0,1fr) 300px}
+  .col-side{display:flex;flex-direction:column;gap:12px;position:sticky;top:16px;max-height:calc(100vh - 32px);overflow-y:auto;scrollbar-width:none}
+  .col-side::-webkit-scrollbar{display:none}
+}
+
+@media (max-width:879px){
+  #game.screen{max-width:600px;padding:calc(env(safe-area-inset-top, 0px) + 8px) 12px calc(env(safe-area-inset-bottom, 0px) + 78px)}
+  #game .topbar{position:sticky;top:0;z-index:50;margin:0 -12px 8px;padding:8px 14px 6px;
+    background:linear-gradient(180deg,var(--bg) 78%,rgba(21,17,14,0))}
+  .wrap{gap:10px}
+  .col-left,.col-right{display:contents}
+  /* 출석·가방·미션·패스 — 어느 화면에서든 상단바 바로 아래 한 줄 */
+  #quickRow{order:-1;gap:6px}
+  #quickRow .btn.action{padding:9px 4px;font-size:13.5px}
+  /* 화면마다 필요한 블록만 */
+  #game .weapon-panel,#game #actRow,#game .stats,#game .tabs,#game #panel{display:none}
+  #game[data-view="forge"] .weapon-panel{display:flex}
+  #game[data-view="act"] #actRow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  #game[data-view="act"] #actRow .btn.action{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:18px 8px;font-size:17px;min-height:84px}
+  #game[data-view="act"] #panel,#game[data-view="raid"] #panel,#game[data-view="prism"] #panel,#game[data-view="more"] #panel{display:block;min-height:0}
+  #game[data-view="more"] .stats{display:grid}
+  #game[data-view="more"] .tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;overflow:visible}
+  #game[data-view="more"] .tab[data-tab="prism"],#game[data-view="more"] .tab[data-tab="raid"],#game[data-view="more"] .tab[data-tab="fight"]{display:none}
+  #game[data-view="more"] .tab{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;padding:7px 0;font-size:12px;border-radius:8px 8px 0 0}
+  #game[data-view="more"] .tab .ti{margin:0;font-size:18px;line-height:1.1}
+  /* 대장간: 무기 그림이 남는 높이에 맞춰 줄어들어서 강화 버튼까지 한 화면에 */
+  #game[data-view="forge"] .weapon-panel{gap:8px;padding:14px 14px 14px}
+  #game[data-view="forge"] .hearth{padding:10px 0 12px}
+  #game[data-view="forge"] .weapon-art,#game[data-view="forge"] .weapon-art svg{height:clamp(96px,calc(100vh - 494px),220px);height:clamp(96px,calc(100dvh - 494px),220px)}
+  #game[data-view="forge"] .weapon-art .weapon-img{max-height:clamp(90px,calc(100dvh - 504px),200px)}
+  /* +99: 강화 버튼(만렙) 대신 초월 단이 주인공 — 재료 칩은 한 줄로 */
+  #game .weapon-panel.at-max #enhanceBtn{display:none}
+  #game .weapon-panel.at-max .ascend-mats{flex-wrap:nowrap}
+  #game[data-view="forge"] .weapon-panel.at-max .weapon-art,#game[data-view="forge"] .weapon-panel.at-max .weapon-art svg{height:clamp(84px,calc(100vh - 544px),210px);height:clamp(84px,calc(100dvh - 544px),210px)}
+  /* 하단 탭바 */
+  .bottombar{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));position:fixed;left:0;right:0;bottom:0;z-index:60;
+    padding:6px 6px calc(env(safe-area-inset-bottom, 0px) + 6px);background:rgba(21,17,14,.88);
+    -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:0 -8px 24px rgba(0,0,0,.45)}
+  .bb-btn{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0 4px;border:0;border-radius:12px;
+    background:none;color:var(--muted);font-size:11.5px;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .bb-btn span{font-size:21px;line-height:1.1;filter:grayscale(.55) opacity(.8);transition:filter .15s,transform .15s}
+  .bb-btn.on{color:var(--text);background:linear-gradient(180deg,rgba(212,162,76,.16),rgba(212,162,76,0))}
+  .bb-btn.on span{filter:none;transform:translateY(-1px)}
+  .bb-btn .dot{position:absolute;top:5px;right:calc(50% - 18px)}
+  body.in-battle .bottombar{display:none}
+}
+@media (max-width:879px) and (max-height:700px){
+  #quickRow .btn.action{padding:7px 4px}
+  #game[data-view="forge"] .weapon-name{font-size:23px}
 }

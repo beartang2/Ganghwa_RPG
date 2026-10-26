@@ -30,7 +30,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@600;800;900&display=swap">
-<link rel="stylesheet" href="/style.css?v=48">
+<link rel="stylesheet" href="/style.css?v=50">
 </head>
 <body>
 <!-- 화로 불씨 배경 (fx.js / React Bits Particles 이식) -->
@@ -68,7 +68,7 @@
 </div>
 
 <!-- 게임 -->
-<div id="game" class="screen" hidden>
+<div id="game" class="screen" data-view="forge" hidden>
   <header class="topbar">
     <span class="me-nick" id="hNick">-</span>
     <span class="chips">
@@ -112,11 +112,11 @@
         </div>
       </section>
 
-      <section class="actions">
+      <section class="actions" id="actRow">
         <button id="huntBtn" class="btn action">🗡️ 사냥 <small id="huntLeft"></small></button>
         <button id="mineBtn" class="btn action">⛏️ 채굴 <small id="mineAmt"></small></button>
       </section>
-      <section class="actions">
+      <section class="actions" id="quickRow">
         <button id="attendBtn" class="btn action">📅 출석</button>
         <button id="invBtn" class="btn action">🎒 가방 <small id="invCount"></small></button>
         <button id="missionBtn" class="btn action">🎯 미션<span id="missionDot" class="dot" hidden></span></button>
@@ -145,7 +145,32 @@
       </nav>
       <section id="panel" class="card panel"></section>
     </div>
+
+    <!-- 넓은 데스크톱(1280px+) 오른쪽 단: 오늘 미션 · 강화 랭킹 · 실시간 로그 -->
+    <aside class="col-side" aria-label="요약">
+      <section class="card side-card">
+        <div class="side-h">🎯 오늘 미션 <button class="side-more" id="sideMissionMore">전체 보기</button></div>
+        <div id="sideMissions" class="side-list"></div>
+      </section>
+      <section class="card side-card">
+        <div class="side-h">🏅 강화 랭킹</div>
+        <div id="sideRank" class="side-list"></div>
+      </section>
+      <section class="card side-card">
+        <div class="side-h">📜 실시간 로그</div>
+        <div id="sideLog" class="side-list side-log"></div>
+      </section>
+    </aside>
   </main>
+
+  <!-- 휴대폰·태블릿(한 단) 하단 탭바 — 화면 하나씩 바꿔 보며 페이지 스크롤을 줄인다 -->
+  <nav id="bottomBar" class="bottombar" aria-label="화면">
+    <button class="bb-btn on" data-view="forge"><span>⚒️</span>대장간</button>
+    <button class="bb-btn" data-view="act"><span>🗡️</span>사냥</button>
+    <button class="bb-btn" data-view="raid"><span>🐉</span>레이드<i id="bbRaidDot" class="dot" hidden></i></button>
+    <button class="bb-btn" data-view="prism"><span>💎</span>프리즘</button>
+    <button class="bb-btn" data-view="more"><span>🏅</span>더보기</button>
+  </nav>
 
   <div id="toast" class="toast" hidden></div>
 </div>
@@ -279,8 +304,8 @@
 
 <!-- Supabase Realtime (선택) — 로드 실패해도 게임은 폴링으로 동작 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/fx.js?v=48"></script>
-<script src="/weapon-art.js?v=48"></script>
-<script src="/app.js?v=48"></script>
+<script src="/fx.js?v=50"></script>
+<script src="/weapon-art.js?v=50"></script>
+<script src="/app.js?v=50"></script>
 </body>
 </html>
