@@ -13,7 +13,7 @@ const PATCH = {
     '🌌 <b>초월 던전</b> — ★1 무기가 있으면 레이드 탭에서 입장! 혼자 연타로 층을 올라요. 매주 월요일 초기화되고 <b>층마다 보스 속성이 매주 바뀌어요</b>(지난주 기록 −5층까지 자동 소탕)',
     '🔁 <b>속성 상성</b> — 💧물→🔥불→❄️얼음→🌪️바람→☠️독→⛰️대지→⚡번개→💧물 순서로 앞이 뒤를 이기고, ✨빛⇄🌑어둠은 서로 강해요. 이기면 피해 <b>×2</b>, 지면 <b>×0.5</b>',
     '🗡️ <b>깊은 층일수록 무기가 더 필요해요</b> — 16층부터 2자루·31층부터 3자루·46층부터 4자루. 전투 중에 보스 속성이 바뀌면 <b>약점 무기로 바꿔 끼며</b> 싸워요',
-    '✨ <b>속성 스킬</b> — ★1 이상 무기는 직업 스킬과 별도로 무기 속성의 스킬을 1회 써요(🔥화염 폭발 · ❄️빙결 · ☠️맹독 등)',
+    '✨ <b>속성 스킬</b> — ★1 이상 무기는 직업 스킬과 별도로 무기 속성의 스킬을 1회 써요(🔥화염 폭발 · ❄️빙결 · ☠️맹독 등). 던전 보스는 🛡️<b>보호막</b>이 있어서 스킬 한 번에 최대 체력의 40%까지만 깎여요',
     '🔁 <b>속성 재련권</b> — 직업 변경권 자리를 대신해요. 🟣에픽(+25) 이상 무기의 속성을 다시 뽑고, 대신 강화 수치의 10%가 깎여요. 갖고 있던 직업 변경권은 자동으로 재련권이 됐어요',
     '🏆 <b>던전 보상</b> — 층 돌파마다 💠파편(5·10층마다 🌟정수), 처음 넘는 층은 💎프리즘 3개. 10·30·50층 칭호와 <b>주간 최고층 랭킹</b>도 있어요',
     '🗡️ <b>장비 칸</b> — 무기를 여러 자루 가질 수 있어요(직업당 한 자루). 무기를 <b>+99</b>까지 키울 때마다 칸을 하나씩 열 수 있고, 화로 위 장비 칸에서 바꿔 들면 직업도 같이 바뀌어요. 새 무기는 <b>+0·★0</b>부터 따로 키워요',
@@ -73,7 +73,7 @@ const FX = (() => {
   // 강화 버튼: 달군 쇠판 테두리를 도는 빛
   tryFx('star', () => F.starBorder(el('enhanceBtn'), {
     color: '#fff1c1', trailColor: '#ff9a3c', duration: 3.2, thickness: 1.5, radius: 14,
-    trailLength: 0.35, glow: 0.9, sparkle: true, borderColor: 'rgba(255,214,150,.35)',
+    trailLength: 0.35, glow: 0.9, sparkle: true, borderColor: 'transparent',   // 고정 테두리 선 없이 흐르는 빛만
   }));
   // 장인의 기운 100%(다음 강화 확정) 일 때만 화로 테두리에 전류가 흐른다
   tryFx('electric', () => F.electricBorder(document.querySelector('.weapon-panel'), {
@@ -1432,6 +1432,7 @@ function paintDungeon() {
           <div class="dph-row">${dunPhaseChips(n.phases)}</div></div></div>
         <div class="dun-stats"><span>HP <b>${n.hp.toLocaleString()}</b></span><span>위험도 <b>${n.danger}%</b></span><span>⏱ <b>${n.duration / 1000}초</b></span>
           <span class="${lack ? 'bad' : 'good'}">🗡️ 무기 <b>${n.weapons}</b>자루 필요 · 보유 <b>${d.weaponCount}</b></span></div>
+        <div class="dun-shield">🛡️ 보스 보호막 — 스킬 한 번에 최대 체력의 ${Math.round(d.skillCap * 100)}%까지만 깎여요</div>
         <div class="dun-rw">보상 💠${n.reward.shard}${n.reward.essence ? ' · 🌟' + n.reward.essence : ''}${n.floor > d.best ? ' · <b class="dun-first">💎3 첫 돌파</b>' : ''}</div>
         <button class="btn primary dun-go" data-dun-start ${!d.unlocked || lack ? 'disabled' : ''}>${lack ? '🔒 무기 ' + n.weapons + '자루부터' : '⚔️ ' + n.floor + '층 도전'}</button>
       </div>`;
@@ -1734,7 +1735,7 @@ async function openProfile(nick) {
      <div class="pf-line"><span>파괴</span><b>${p.breaks}회</b></div>
      <div class="pf-line"><span>강화순위</span><b>${p.rank.rank ? p.rank.rank + '/' + p.rank.total + '위' : '-'}</b></div>` +
     (isMe ? `<div style="margin-top:12px;display:flex;gap:6px">
-       <input id="renameInput" maxlength="12" value="${esc(p.nick)}" style="flex:1;min-width:0;padding:9px;border-radius:10px;border:1px solid var(--line);background:#0f131c;color:var(--text)">
+       <input id="renameInput" maxlength="12" value="${esc(p.nick)}" style="flex:1;min-width:0;padding:9px;border-radius:10px;border:1px solid transparent;background:#0f131c;color:var(--text)">
        <button id="renameBtn" class="btn primary sm">닉변경</button></div>` : '');
   el('modal').hidden = false;
   if (isMe) {
@@ -1752,9 +1753,9 @@ function titlesSection(p, isMe, eq) {
     const chips = roster.map(t => {
       if (t.earned) {
         const on = eq && eq.id === t.id;
-        return `<span class="title-chip earn${on ? ' equipped' : ''}" data-title-id="${t.id}" style="color:${t.color};border-color:${t.color}">${esc(t.title)}</span>`;
+        return `<span class="title-chip earn${on ? ' equipped' : ''}" data-title-id="${t.id}" style="color:${t.color}">${esc(t.title)}</span>`;
       }
-      return `<span class="title-chip locked" style="border-color:${t.color}66">🔒</span>`;
+      return `<span class="title-chip locked" style="background:${t.color}1a">🔒</span>`;
     }).join('');
     return `<div class="titles-head">칭호 <small>${p.titleEarned || 0}/${p.titleTotal || roster.length}</small></div>
       <div class="titles-row">
@@ -1762,7 +1763,7 @@ function titlesSection(p, isMe, eq) {
       </div>`;
   }
   return (p.titles && p.titles.length)
-    ? `<div class="titles-row">${p.titles.map(t => `<span class="title-chip${eq && eq.id === t.id ? ' equipped' : ''}" style="color:${t.color};border-color:${t.color}">${esc(t.title)}</span>`).join('')}</div>`
+    ? `<div class="titles-row">${p.titles.map(t => `<span class="title-chip${eq && eq.id === t.id ? ' equipped' : ''}" style="color:${t.color}">${esc(t.title)}</span>`).join('')}</div>`
     : `<div class="titles-empty">아직 획득한 칭호가 없어요</div>`;
 }
 async function doEquipTitle(titleId) {

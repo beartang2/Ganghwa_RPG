@@ -267,6 +267,8 @@ async function main() {
   ok(!(await req('POST', '/api/enhance', { token: tok3 })).body.ok, '전투 중 강화 거부');
   r = await req('POST', '/api/dun-skill', { token: tok3, body: { kind: 'class' } });
   ok(r.body.ok && /강타/.test(r.body.skillText), '직업 스킬(강타) — 약점 속성이라 효과 굉장');
+  ok(r.body.fight.status === 'active' && r.body.fight.bossHP === Math.round(r.body.fight.bossMax * 0.6) && /보호막/.test(r.body.skillText), '🛡️ 보스 보호막 — 스킬 한 번에 최대 체력의 40%까지만');
+  r = await req('POST', '/api/dun-hit', { token: tok3, body: { hits: 12 } });   // 약점 연타 12번으로 마무리
   const fv = r.body.fight;
   ok(fv.status === 'done' && fv.win === true && fv.reward && fv.reward.prism === 3 && fv.reward.shard === 3 && fv.reward.first === true, '1층 돌파 → 첫 돌파 💎3 · 파편 3');
   let dme = (await req('GET', '/api/me', { token: tok3 })).body.me;

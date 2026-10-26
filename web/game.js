@@ -900,6 +900,9 @@ const DUNGEON = {
   danger1: 40, dangerStep: 2.5,       // 보스가 전투 동안 넣는 총 피해(HP %). 100 을 넘으면 회복·감소가 필요
   attacksBase: 3,                     // 보스 공격 횟수 = 3 + 단계 수
   healPerSec: 2.6,                    // 힐러 무기를 들고 있는 동안 초당 HP 회복(%) — 레이드와 같음
+  /* 🛡️ 보스 보호막 — 스킬 한 번(즉시 피해 + 그 스킬의 지속 피해 합계)으로 깎을 수 있는 건 보스 최대 체력의 40%까지.
+   * 낮은 층에서 약점 스킬 한 방에 끝나지 않게 하고(연타가 필요), 깊은 층은 스킬이 원래 40%보다 약해서 거의 영향이 없다. */
+  skillCap: 0.4,
 };
 const DUN_MONSTERS = {
   fire: ['🔥', '불꽃 거인'], water: ['🐙', '심해의 크라켄'], earth: ['🗿', '대지의 거상'], wind: ['🦅', '폭풍의 그리폰'],
@@ -984,7 +987,11 @@ function dunTick(db, p, f) {
     if (p.class === 'healer' && f.hp > 0) f.hp = Math.min(100, f.hp + DUNGEON.healPerSec * (el - from) / 1000);
     for (const d of f.dots) {
       const a = Math.max(d.from, d.done), b = Math.min(d.to || f.duration, el);
-      if (b > a) { const x = d.per * (b - a) / 1000 * elemMult(d.el, dunPhaseEl(f, (a + b) / 2)); f.bossHP = Math.max(0, f.bossHP - x); f.dmg += x; d.done = b; }
+      if (b > a) {
+        let x = d.per * (b - a) / 1000 * elemMult(d.el, dunPhaseEl(f, (a + b) / 2));
+        if (d.capLeft != null) { x = Math.min(x, d.capLeft); d.capLeft -= x; }   // 보호막: 그 스킬의 남은 한도까지만
+        f.bossHP = Math.max(0, f.bossHP - x); f.dmg += x; d.done = b;
+      }
     }
     for (let k = 1; k < f.phases.length; k++) {
       const ph = f.phases[k];
@@ -1064,7 +1071,7 @@ function dungeonView(db, id) {
     ok: true, unlocked, week: wk, resetIn: weekResetIn(), floor: w.fl, best: w.best, sweep: w.sweep, max: DUNGEON.floors,
     weaponCount: allWeapons(p).length, next: look(next),
     upcoming: [2, 3, 4].map(n => w.fl + n <= DUNGEON.floors ? look(dunFloor(w.fl + n, wk)) : null).filter(Boolean),
-    weapons: dunWeaponsView(p, null, 0), chart: elementChart(), bands: DUNGEON.bands,
+    weapons: dunWeaponsView(p, null, 0), chart: elementChart(), bands: DUNGEON.bands, skillCap: DUNGEON.skillCap,
     fight: dunFightView(p), rank: list,
   };
 }
@@ -1119,8 +1126,13 @@ function dunHit(db, id, hits) {
 // 스킬 효과 적용(직업·속성 공통) — 피해는 지금 단계 속성과의 상성 배율을 곱한다
 function dunApplySkill(p, f, s, t, srcEl) {
   const tap = memberStats(p).atk * CONFIG.raidHitDmgMult, mult = elemMult(srcEl, dunPhaseEl(f, t)), parts = [];
-  if (s.dmg) { const d = s.dmg * tap * mult; f.bossHP = Math.max(0, f.bossHP - d); f.dmg += d; parts.push('보스 -' + Math.round(d).toLocaleString() + (mult > 1 ? ' (효과 굉장!)' : mult < 1 ? ' (효과 별로…)' : '')); }
-  if (s.dot) { f.dots.push({ per: s.dot.per * tap, el: srcEl, from: t, to: s.dot.ms ? t + s.dot.ms : 0, done: t }); parts.push('지속 피해'); }
+  let cap = f.bossMax * DUNGEON.skillCap;   // 🛡️ 보스 보호막 — 이 스킬로 깎을 수 있는 최대치
+  if (s.dmg) {
+    const raw = s.dmg * tap * mult, d = Math.min(raw, cap);
+    cap -= d; f.bossHP = Math.max(0, f.bossHP - d); f.dmg += d;
+    parts.push('보스 -' + Math.round(d).toLocaleString() + (mult > 1 ? ' (효과 굉장!)' : mult < 1 ? ' (효과 별로…)' : '') + (raw > d ? ' 🛡️보호막' : ''));
+  }
+  if (s.dot) { f.dots.push({ per: s.dot.per * tap, el: srcEl, from: t, to: s.dot.ms ? t + s.dot.ms : 0, done: t, capLeft: cap }); parts.push('지속 피해'); }
   if (s.heal) { f.hp = Math.min(100, f.hp + s.heal); parts.push('HP +' + s.heal + '%'); }
   if (s.buff) { f.buffs.push({ k: s.buff.k, v: s.buff.v, from: t, to: s.buff.ms ? t + s.buff.ms : 0 }); parts.push(s.buff.k === 'dr' ? '피해 −' + Math.round(s.buff.v * 100) + '%' : '연타 ×' + s.buff.v); }
   if (s.block) { f.block += s.block; parts.push('다음 공격 무효'); }
