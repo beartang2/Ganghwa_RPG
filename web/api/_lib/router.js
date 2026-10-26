@@ -174,6 +174,22 @@ async function handle(method, pathname, ctx) {
       if (!r.ok) return bad(r);
       return ok({ ok: true, me: game.publicView(db, id) });
     }
+    // 회원 탈퇴 — 파티(해산 시 파티원 행까지)를 잠그고 게임 쪽 정리 후, diff 저장이 모르는 '없어진 플레이어' 행들을 직접 지운다.
+    // 같은 트랜잭션 안이라 중간에 실패하면 전부 되돌아간다.
+    if (pathname === '/api/delete-account') {
+      const b = ctx.body || {};
+      const prow = await q("SELECT data->>'party' AS pid FROM players WHERE id = $1", [id]);
+      const pid = prow.length ? prow[0].pid : null;
+      let memberIds = [];
+      if (pid) {
+        const prt = await q('SELECT data FROM parties WHERE id = $1', [pid]);
+        if (prt.length) { const d = typeof prt[0].data === 'string' ? JSON.parse(prt[0].data) : prt[0].data; memberIds = (d && d.members) || []; }
+      }
+      const { r } = await store.runGame(q, { lockId: id, lockPlayerIds: memberIds, lockPartyIds: [pid] }, (db) => game.deleteAccount(db, id, b.nick));
+      if (!r.ok) return bad(r);
+      await store.deletePlayerRows(q, id);
+      return ok({ ok: true, msg: r.msg, wasLinked: r.wasLinked });
+    }
     if (ctx.rateLimit !== false && !await store.rateAllow(q, 'act:' + id, RL.action.cap, RL.action.refill)) return tooFast();
     if (NOT_YET.has(pathname)) return bad({ ok: false, error: '이 기능은 아직 서버리스 버전으로 이식 중이에요. (곧 지원)' }, 501);
 

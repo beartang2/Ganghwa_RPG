@@ -981,3 +981,17 @@ body.loading-on #globalLoading{opacity:1}
   #quickRow .btn.action{padding:7px 4px}
   #game[data-view="forge"] .weapon-name{font-size:23px}
 }
+
+/* ---------- 회원 탈퇴 ---------- */
+.menu-item.danger{color:#ff8f87}
+.btn.danger{background:linear-gradient(180deg,#e5484d,#b8322f);color:#fff;box-shadow:inset 0 1px 0 rgba(255,220,220,.35),inset 0 -2px 0 rgba(90,0,0,.35)}
+.del-card h3{margin:0 0 10px}
+.del-warn{font-size:14px;line-height:1.6;margin:0 0 8px;word-break:keep-all}
+.del-warn b{color:#ff8f87}
+.del-hint{margin:0 0 10px}
+.del-label{display:block;font-size:13px;color:var(--muted);margin:6px 0 6px;word-break:keep-all}
+.del-label b{color:var(--text)}
+.del-input{width:100%;padding:12px;border-radius:12px;border:1px solid transparent;background:var(--bg2);color:var(--text);font-size:16px;
+  box-shadow:inset 0 2px 6px rgba(0,0,0,.35)}
+.del-input:focus{outline:none;border-color:var(--danger)}
+.del-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}

@@ -1965,6 +1965,24 @@ el('accountItem').onclick = () => {
   openAuth('register');   // 게스트 → 이메일 계정 만들어 캐릭터 저장(연결)
 };
 el('logoutItem').onclick = () => { closeMenu(); doLogout(); };
+// 회원 탈퇴 — 닉네임을 정확히 다시 입력해야 버튼이 열린다(서버도 같은 확인을 한다)
+el('deleteItem').onclick = () => {
+  closeMenu(); if (!me) return;
+  el('delNickShow').textContent = me.nick;
+  el('delLinked').hidden = !me.linked;
+  el('delNick').value = ''; el('delGo').disabled = true;
+  el('delModal').hidden = false; setTimeout(() => el('delNick').focus(), 60);
+};
+el('delNick').oninput = () => { el('delGo').disabled = !me || el('delNick').value.trim() !== me.nick; };
+el('delCancel').onclick = el('delClose').onclick = () => { el('delModal').hidden = true; };
+el('delGo').onclick = () => act(async () => {
+  const r = await api('delete-account', 'POST', { nick: el('delNick').value.trim() });
+  if (!r.ok) return toast(r.error, 'bad');
+  el('delModal').hidden = true;
+  doLogout();                 // 토큰·이메일 로그인 세션 정리 → 로그인 화면
+  el('pin').value = '';       // 지운 계정의 PIN 이 입력칸에 남지 않게
+  toast(r.msg, 'ok');
+}, el('delGo'));
 // 메뉴 바깥 클릭 시 닫기
 document.addEventListener('click', (e) => { if (!el('menuDrop').hidden && !e.target.closest('.menu-wrap')) closeMenu(); });
 updateSoundBtn();
