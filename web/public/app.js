@@ -10,6 +10,7 @@ const PATCH = {
   version: '6',
   title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
+    '⚙️ <b>설정 화면</b> — 오른쪽 위 ⚙️ 에서 내 계정 · 효과음 · 📳 <b>진동</b>(휴대폰) · 공지사항 · 플레이 방법 · 로그아웃 · 회원 탈퇴를 한 곳에서',
     '📱 <b>모바일 화면 개편</b> — 아래 탭바(⚒️대장간 · 🗡️사냥 · 🐉레이드 · 💎프리즘 · 🏅더보기)로 화면을 바꿔요. 대장간은 스크롤 없이 한 화면, 전투는 화면 전체로 열려요',
     '🖥️ <b>넓은 화면</b> — 1280px 이상이면 오른쪽에 오늘 미션 · 강화 랭킹 · 실시간 로그가 같이 보여요',
     '🌌 <b>초월 던전</b> — ★1 무기가 있으면 레이드 탭에서 입장! 혼자 연타로 층을 올라요. 매주 월요일 초기화되고 <b>층마다 보스 속성이 매주 바뀌어요</b>(지난주 기록 −5층까지 자동 소탕)',
@@ -721,7 +722,35 @@ function toast(msg, kind) {
 /* ---------- 햅틱(진동) ----------
  * 안드로이드 등 Vibration API 지원 기기에서만 울림. iOS Safari 는 미지원 → 조용히 무시.
  * (iOS 17.4+ <input switch> 편법도 시도해봤으나 실기기에서 동작 안 해 제거) */
-function vibe(pattern) { try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) { /* noop */ } }
+/* ---------- 📳 진동 ----------
+ * 안드로이드(크롬·삼성 인터넷): 표준 Vibration API(navigator.vibrate) — 패턴 그대로.
+ * 아이폰 사파리: Vibration API 가 없다. 대신 Safari 17.4+ 의 스위치 체크박스(<input type=checkbox switch>)가
+ *   토글될 때 내는 햅틱을 빌린다 — 숨긴 라벨을 잠깐 붙여 click() 하고 바로 뗀다(비공식 기법이라 언제든 막힐 수 있다).
+ *   패턴은 '진동 구간 수' 만큼 톡톡(최대 3번)으로 흉내 내고, 첫 톡은 탭 동작 안에서 바로 낸다.
+ * 설정의 📳 진동 스위치로 끈다(localStorage 'vibeOff'). 데스크톱(마우스)에서는 설정 줄 자체를 숨긴다. */
+let vibeOn = (() => { try { return localStorage.getItem('vibeOff') !== '1'; } catch (_) { return true; } })();
+const canVibrateApi = typeof navigator.vibrate === 'function';
+const canIosHaptic = !canVibrateApi && (() => { try { return 'switch' in document.createElement('input'); } catch (_) { return false; } })();
+const touchDevice = window.matchMedia('(pointer: coarse)').matches;
+function iosHapticTick() {
+  const label = document.createElement('label'), input = document.createElement('input');
+  input.type = 'checkbox'; input.setAttribute('switch', ''); input.tabIndex = -1;
+  label.setAttribute('aria-hidden', 'true'); label.appendChild(input);
+  label.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none;clip-path:inset(50%)';
+  document.body.appendChild(label); label.click(); label.remove();
+}
+function vibe(pattern) {
+  if (!vibeOn) return;
+  try {
+    if (canVibrateApi) { navigator.vibrate(pattern); return; }
+    if (!canIosHaptic) return;
+    const arr = Array.isArray(pattern) ? pattern : [pattern];
+    const n = Math.min(3, Math.ceil(arr.length / 2));
+    iosHapticTick();
+    let t = 0;
+    for (let i = 1; i < n; i++) { t += (arr[i * 2 - 2] || 20) + (arr[i * 2 - 1] || 40); setTimeout(iosHapticTick, t); }
+  } catch (e) { /* noop */ }
+}
 
 /* ---------- 효과음 (Web Audio, 파일 없이 합성) ----------
  * iOS 주의: 무음 스위치가 켜져 있으면 Web Audio 도 막힌다(하드웨어 제약).
@@ -1953,10 +1982,43 @@ el('modal').addEventListener('click', e => { if (e.target === el('modal')) el('m
 el('guideClose').onclick = () => { el('guide').hidden = true; localStorage.setItem('guideSeen', '1'); };
 el('patchClose').onclick = closePatch;
 el('noticeItem').onclick = () => { closeMenu(); openPatch(false); };
-/* ---------- 상단바 메뉴(☰) ---------- */
-function updateSoundBtn() { el('soundItem').textContent = (soundOn ? '🔊' : '🔇') + ' 효과음 ' + (soundOn ? 'ON' : 'OFF'); }
-function closeMenu() { el('menuDrop').hidden = true; }
-el('menuBtn').onclick = (e) => { e.stopPropagation(); updateAccountItem(); el('menuDrop').hidden = !el('menuDrop').hidden; };
+/* ---------- ⚙️ 설정 (상단 오른쪽) ----------
+ * 예전 드롭다운 메뉴를 설정 화면 하나로 모았다: 내 계정 · 효과음 · 공지사항 · 플레이 방법 · 로그아웃 · 회원 탈퇴.
+ * 항목 버튼 id 는 그대로라 각 항목 동작은 아래 기존 핸들러가 맡고, 다른 창을 열 땐 closeMenu() 로 설정을 닫는다.
+ * 아이디는 닉네임을 보여준다(계정 키는 PIN 해시라 화면에 내지 않는다). */
+function updateSoundBtn() {
+  const b = el('soundItem');
+  b.classList.toggle('on', soundOn); b.setAttribute('aria-checked', soundOn ? 'true' : 'false');
+  el('soundLabel').textContent = (soundOn ? '🔊' : '🔇') + ' 효과음';
+}
+function updateVibeBtn() {
+  const b = el('vibeItem'), supported = canVibrateApi || canIosHaptic;
+  b.hidden = !touchDevice;                         // 마우스 기기에는 진동이 없으니 줄을 숨긴다
+  el('vibeNote').hidden = !touchDevice || supported;
+  b.disabled = !supported;
+  const on = supported && vibeOn;
+  b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false');
+  el('vibeLabel').textContent = (on ? '📳' : '📴') + ' 진동';
+}
+function closeMenu() { el('setModal').hidden = true; }
+function openSettings() {
+  if (!me) return;
+  el('setNick').textContent = me.nick;
+  el('setKind').textContent = me.linked ? '✉️ 이메일' + (me.email ? ' · ' + me.email : '') : '게스트 (닉네임 + PIN)';
+  el('setVer').textContent = '강화 RPG · 업데이트 ' + PATCH.version;
+  updateAccountItem(); updateSoundBtn(); updateVibeBtn();
+  el('setModal').hidden = false;
+}
+el('menuBtn').onclick = (e) => { e.stopPropagation(); openSettings(); };
+el('setClose').onclick = closeMenu;
+el('setModal').addEventListener('click', e => { if (e.target === el('setModal')) closeMenu(); });
+el('profileItem').onclick = () => { closeMenu(); if (me) openProfile(me.nick); };
+el('vibeItem').onclick = () => {
+  vibeOn = !vibeOn;
+  try { localStorage.setItem('vibeOff', vibeOn ? '0' : '1'); } catch (_) { /* 저장 불가 환경 무시 */ }
+  updateVibeBtn();
+  if (vibeOn) vibe([18, 40, 18]);   // 켰을 때 바로 한 번 느껴보게(탭 동작 안이라 아이폰도 난다)
+};
 el('soundItem').onclick = () => { soundOn = !soundOn; localStorage.setItem('soundOff', soundOn ? '0' : '1'); updateSoundBtn(); if (soundOn) { ensureAudio(); sfx('click'); } };
 el('helpItem').onclick = () => { closeMenu(); el('guide').hidden = false; };
 el('accountItem').onclick = () => {
@@ -1983,8 +2045,6 @@ el('delGo').onclick = () => act(async () => {
   el('pin').value = '';       // 지운 계정의 PIN 이 입력칸에 남지 않게
   toast(r.msg, 'ok');
 }, el('delGo'));
-// 메뉴 바깥 클릭 시 닫기
-document.addEventListener('click', (e) => { if (!el('menuDrop').hidden && !e.target.closest('.menu-wrap')) closeMenu(); });
 updateSoundBtn();
 
 /* ---------- 이메일 계정 (Supabase Auth) ----------
@@ -2016,7 +2076,7 @@ function updateAccountItem() {
   const it = el('accountItem'); if (!it) return;
   if (!sbAuth) { it.hidden = true; return; }
   it.hidden = false;
-  it.textContent = (me && me.linked) ? ('✉️ ' + (me.email || '연결됨')) : '✉️ 계정 만들기';
+  it.firstElementChild.textContent = (me && me.linked) ? '✉️ 이메일 계정 연결됨' : '✉️ 계정 만들기 (이메일로 캐릭터 저장)';
 }
 
 function authSay(text, kind) { const m = el('authMsg'); m.textContent = text || ''; m.className = 'auth-msg' + (kind ? ' ' + kind : ''); }
