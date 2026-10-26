@@ -1072,7 +1072,8 @@ function dungeonView(db, id) {
     weaponCount: allWeapons(p).length, next: look(next),
     upcoming: [2, 3, 4].map(n => w.fl + n <= DUNGEON.floors ? look(dunFloor(w.fl + n, wk)) : null).filter(Boolean),
     weapons: dunWeaponsView(p, null, 0), chart: elementChart(), bands: DUNGEON.bands, skillCap: DUNGEON.skillCap,
-    fight: dunFightView(p), rank: list,
+    // 끝난 던전 전투도 1분이 지나면 로비로(결과 화면이 계속 남지 않게)
+    fight: (() => { const f = dunFight(p); return f && (f.status === 'active' || Date.now() - (f.endTs || 0) < RESULT_KEEP_MS) ? dunFightView(p) : null; })(), rank: list,
   };
 }
 function dunStart(db, id) {
@@ -1895,10 +1896,14 @@ function partyReject(db, id, pid) {
   return { ok: true };
 }
 // 폴링용(GET, 읽기전용): 저장 상태로부터 '지금 시점' 을 투영해 보여준다. 저장은 하지 않는다.
+// 끝난 전투 결과는 이 시간 동안만 다시 보여준다 — 그 뒤에 탭에 들어오면 지난 보스 화면 대신 로비
+const RESULT_KEEP_MS = 60000;
 function raidState(db, id) {
   const p = norm(db.players[id]);
   if (!p.party || !db.parties[p.party]) return { ok: true, raid: null };
-  return { ok: true, raid: raidProject(db.parties[p.party].raid) };
+  const raid = db.parties[p.party].raid;
+  if (raid && raid.status === 'done' && Date.now() - (raid.endTs || raid.startTs + raid.duration) > RESULT_KEEP_MS) return { ok: true, raid: null };
+  return { ok: true, raid: raidProject(raid) };
 }
 function partyJoin(db, id, pid) {
   const p = norm(db.players[id]);

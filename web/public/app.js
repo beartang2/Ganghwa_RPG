@@ -10,6 +10,7 @@ const PATCH = {
   version: '6',
   title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
+    '🛠️ <b>고침</b> — 레이드 탭에 들어갈 때마다 지난 보스 결과가 다시 뜨던 문제(끝난 결과는 1분 뒤 로비로) · 강화 버튼 빛 꼬리가 하얗게 타던 문제 · 버튼 누를 때 생기던 파란 사각형 · 📳 <b>아이폰 진동</b>(누르는 순간 \'톡\')',
     '⚙️ <b>설정 화면</b> — 오른쪽 위 ⚙️ 에서 내 계정 · 효과음 · 📳 <b>진동</b>(휴대폰) · 공지사항 · 플레이 방법 · 로그아웃 · 회원 탈퇴를 한 곳에서',
     '📱 <b>모바일 화면 개편</b> — 아래 탭바(⚒️대장간 · 🗡️사냥 · 🐉레이드 · 💎프리즘 · 🏅더보기)로 화면을 바꿔요. 대장간은 스크롤 없이 한 화면, 전투는 화면 전체로 열려요',
     '🖥️ <b>넓은 화면</b> — 1280px 이상이면 오른쪽에 오늘 미션 · 강화 랭킹 · 실시간 로그가 같이 보여요',
@@ -75,8 +76,9 @@ const FX = (() => {
     .bind('.btn.action', { sparkCount: 6, sparkRadius: 22, shape: 'line', gravity: 0, duration: 360, glow: 0.4 }));
   // 강화 버튼: 달군 쇠판 테두리를 도는 빛
   tryFx('star', () => F.starBorder(el('enhanceBtn'), {
-    color: '#fff1c1', trailColor: '#ff9a3c', duration: 3.2, thickness: 1.5, radius: 14,
+    color: '#ffd66b', trailColor: '#ffb03a', duration: 3.2, thickness: 1.5, radius: 14,
     trailLength: 0.35, glow: 0.9, sparkle: true, borderColor: 'transparent',   // 고정 테두리 선 없이 흐르는 빛만
+    whiten: 0, whiteCore: false, additive: false,   // 주황 버튼 위에서 빛이 겹쳐 흰 선으로 타던 것 → 금빛 그대로
   }));
   // 장인의 기운 100%(다음 강화 확정) 일 때만 화로 테두리에 전류가 흐른다
   tryFx('electric', () => F.electricBorder(document.querySelector('.weapon-panel'), {
@@ -719,37 +721,53 @@ function toast(msg, kind) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 4000);
 }
 
-/* ---------- 햅틱(진동) ----------
- * 안드로이드 등 Vibration API 지원 기기에서만 울림. iOS Safari 는 미지원 → 조용히 무시.
- * (iOS 17.4+ <input switch> 편법도 시도해봤으나 실기기에서 동작 안 해 제거) */
 /* ---------- 📳 진동 ----------
- * 안드로이드(크롬·삼성 인터넷): 표준 Vibration API(navigator.vibrate) — 패턴 그대로.
- * 아이폰 사파리: Vibration API 가 없다. 대신 Safari 17.4+ 의 스위치 체크박스(<input type=checkbox switch>)가
- *   토글될 때 내는 햅틱을 빌린다 — 숨긴 라벨을 잠깐 붙여 click() 하고 바로 뗀다(비공식 기법이라 언제든 막힐 수 있다).
- *   패턴은 '진동 구간 수' 만큼 톡톡(최대 3번)으로 흉내 내고, 첫 톡은 탭 동작 안에서 바로 낸다.
+ * 안드로이드(크롬·삼성 인터넷): 표준 Vibration API(navigator.vibrate) — 결과별 패턴 그대로.
+ * 아이폰 사파리: Vibration API 가 없다. 대신 스위치 체크박스(<input type=checkbox switch>, Safari 17.4+)가
+ *   '손가락으로' 토글될 때 내는 햅틱을 빌린다.
+ *   예전 방식(숨긴 라벨을 스크립트로 label.click())은 iOS 26.5 부터 막혔다 — 스크립트 클릭이
+ *   isTrusted:false 로 스위치에 전달돼 햅틱이 안 난다(WebKit 버그 309082).
+ *   그래서 진동이 필요한 버튼 위에 투명한 <label class="hx">(안에 숨긴 스위치)을 덮는다:
+ *   손가락 탭이 라벨에 닿음 → 브라우저가 '진짜' 클릭으로 스위치를 토글 → 톡.
+ *   한계: 탭 1번에 톡 1번, 누르는 순간에만 — 결과(성공·파괴)에 따른 다른 진동 패턴은 아이폰에서 불가.
  * 설정의 📳 진동 스위치로 끈다(localStorage 'vibeOff'). 데스크톱(마우스)에서는 설정 줄 자체를 숨긴다. */
 let vibeOn = (() => { try { return localStorage.getItem('vibeOff') !== '1'; } catch (_) { return true; } })();
 const canVibrateApi = typeof navigator.vibrate === 'function';
 const canIosHaptic = !canVibrateApi && (() => { try { return 'switch' in document.createElement('input'); } catch (_) { return false; } })();
 const touchDevice = window.matchMedia('(pointer: coarse)').matches;
-function iosHapticTick() {
-  const label = document.createElement('label'), input = document.createElement('input');
-  input.type = 'checkbox'; input.setAttribute('switch', ''); input.tabIndex = -1;
-  label.setAttribute('aria-hidden', 'true'); label.appendChild(input);
-  label.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none;clip-path:inset(50%)';
-  document.body.appendChild(label); label.click(); label.remove();
+function vibe(pattern) {   // 안드로이드 전용(아이폰은 아래 탭 오버레이가 대신 울린다)
+  if (!vibeOn || !canVibrateApi) return;
+  try { navigator.vibrate(pattern); } catch (e) { /* noop */ }
 }
-function vibe(pattern) {
-  if (!vibeOn) return;
-  try {
-    if (canVibrateApi) { navigator.vibrate(pattern); return; }
-    if (!canIosHaptic) return;
-    const arr = Array.isArray(pattern) ? pattern : [pattern];
-    const n = Math.min(3, Math.ceil(arr.length / 2));
-    iosHapticTick();
-    let t = 0;
-    for (let i = 1; i < n; i++) { t += (arr[i * 2 - 2] || 20) + (arr[i * 2 - 1] || 40); setTimeout(iosHapticTick, t); }
-  } catch (e) { /* noop */ }
+// 아이폰에서 '누르면 톡' 이 날 자리(안드로이드에서 vibe() 를 부르는 탭 대상들)
+const HX_SEL = '#enhanceBtn, #huntMon, #rock, #rBoss, #dBoss, .btn.action, .bb-btn, #vibeItem, '
+  + '[data-fight], [data-raid], [data-dswap], [data-dskill], [data-dun-start], [data-pick], [data-alch], [data-cap], [data-pbuy], [data-buy]';
+function hxAllow(host) {
+  if (host.id === 'vibeItem') return !vibeOn;   // 진동을 '켜는' 탭에서만 한 번 느껴보게(이 시점엔 아직 토글 전)
+  return vibeOn && !host.disabled && !host.classList.contains('acting') && !host.classList.contains('dead');
+}
+function hxAttach(host) {
+  if (host.querySelector(':scope > .hx') || host.closest('label')) return;   // 이미 있음 / 라벨 안 라벨은 금지
+  if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+  const lb = document.createElement('label'), sw = document.createElement('input');
+  lb.className = 'hx'; lb.setAttribute('aria-hidden', 'true');
+  sw.type = 'checkbox'; sw.setAttribute('switch', '');
+  lb.appendChild(sw);
+  // 진짜 탭이고 진동이 켜져 있을 때만 스위치까지 전달(preventDefault 하면 라벨→스위치 전달이 취소돼 무음).
+  // 이 클릭 자체는 그대로 버블돼 버튼의 원래 클릭 동작은 항상 실행된다.
+  lb.addEventListener('click', e => { if (!e.isTrusted || !hxAllow(host)) e.preventDefault(); });
+  // 라벨이 스위치에 다시 쏘는 클릭·change 는 버튼까지 올라가지 않게 막는다(안 막으면 버튼이 두 번 눌림)
+  const stop = e => e.stopPropagation();
+  sw.addEventListener('click', stop); sw.addEventListener('change', stop); sw.addEventListener('input', stop);
+  host.appendChild(lb);
+}
+if (canIosHaptic && touchDevice) {
+  let hxQueued = false;
+  const hxScan = () => { hxQueued = false; document.querySelectorAll(HX_SEL).forEach(hxAttach); };
+  // 화면이 다시 그려지면(innerHTML·textContent) 오버레이가 사라지므로 바뀔 때마다 다음 프레임에 다시 붙인다
+  new MutationObserver(() => { if (!hxQueued) { hxQueued = true; requestAnimationFrame(hxScan); } })
+    .observe(document.body, { childList: true, subtree: true });
+  hxScan();
 }
 
 /* ---------- 효과음 (Web Audio, 파일 없이 합성) ----------
@@ -1178,7 +1196,8 @@ function battleXBtn() { return '<button class="battle-x" data-battle-min aria-la
 
 /* ---------- 파티 / 레이드 (폴링 기반 실시간 관전) ---------- */
 let raidTimer = null, curRaid = null, cacheParties = [], cachePlayers = [], BOSS_CACHE = [], BOSS_HPSCALE = 0.7;
-let lastFetch = 0, dismissedRaidTs = null, lastPartyHtml = '';
+let lastFetch = 0, lastPartyHtml = '';
+let dismissedRaidTs = (() => { try { return +localStorage.getItem('raidDismissed') || null; } catch (_) { return null; } })();
 
 async function doPartyCreate() { const r = await api('party-create', 'POST'); if (!r.ok) return toast(r.error, 'bad'); applyMe(r.me); await refreshRaidData(); paintRaid(); }
 async function doPartyLeave() { const r = await api('party-leave', 'POST'); if (!r.ok) return toast(r.error, 'bad'); applyMe(r.me); if (curRaid) dismissedRaidTs = curRaid.startTs; await refreshRaidData(); paintRaid(); }
@@ -1192,7 +1211,10 @@ async function doRaid(boss) {
   applyMe(r.me); curRaid = r.raid; dismissedRaidTs = null; raidBuiltFor = null; raidFinishing = false; raidLocalHits = 0;
   paintRaid();
 }
-function closeRaid() { if (curRaid) dismissedRaidTs = curRaid.startTs; lastPartyHtml = ''; raidBuiltFor = null; paintRaid(); }
+function closeRaid() {
+  if (curRaid) { dismissedRaidTs = curRaid.startTs; try { localStorage.setItem('raidDismissed', String(dismissedRaidTs)); } catch (_) { /* 무시 */ } }
+  lastPartyHtml = ''; raidBuiltFor = null; paintRaid();
+}
 
 /* ---------- 인터랙티브 레이드 전투(연타) ---------- */
 const RAID_TAP_MS = 70;      // 보스 연타 최소 간격
@@ -1580,10 +1602,12 @@ function updateDunUI() {
   }
   const wq = f.weapons.find(w => w.equipped) || {};
   const sc = el('dSkC'), se = el('dSkE');
-  if (sc) { sc.textContent = (wq.classSkill || '스킬') + (wq.usedC ? ' ✓' : ''); sc.disabled = !active || wq.usedC; }
+  // 글자가 바뀔 때만 다시 쓴다 — 매 프레임 textContent 를 쓰면 아이폰 햅틱 오버레이가 계속 지워져 탭이 버튼에 바로 닿는다
+  const setTxt = (b, t) => { if (b.dataset.t !== t) { b.textContent = t; b.dataset.t = t; } };
+  if (sc) { setTxt(sc, (wq.classSkill || '스킬') + (wq.usedC ? ' ✓' : '')); sc.disabled = !active || wq.usedC; }
   if (se) {
-    if (wq.elemSkill) { se.textContent = wq.elemSkill.emoji + ' ' + wq.elemSkill.name + (wq.usedE ? ' ✓' : ''); se.disabled = !active || wq.usedE; se.title = wq.elemSkill.desc; }
-    else { se.textContent = '속성 스킬 ★1 필요'; se.disabled = true; se.title = ''; }
+    if (wq.elemSkill) { setTxt(se, wq.elemSkill.emoji + ' ' + wq.elemSkill.name + (wq.usedE ? ' ✓' : '')); se.disabled = !active || wq.usedE; se.title = wq.elemSkill.desc; }
+    else { setTxt(se, '속성 스킬 ★1 필요'); se.disabled = true; se.title = ''; }
   }
   const ev = el('dEvents'); if (ev) ev.innerHTML = (f.events || []).slice(-5).map(e => `<div class="raid-ev">${esc(e.text)}</div>`).join('');
   const boss = el('dBoss'); if (boss && !active) boss.classList.add('dead');
@@ -1994,7 +2018,9 @@ function updateSoundBtn() {
 function updateVibeBtn() {
   const b = el('vibeItem'), supported = canVibrateApi || canIosHaptic;
   b.hidden = !touchDevice;                         // 마우스 기기에는 진동이 없으니 줄을 숨긴다
-  el('vibeNote').hidden = !touchDevice || supported;
+  const note = el('vibeNote');
+  note.hidden = !touchDevice || (supported && !canIosHaptic);
+  note.textContent = canIosHaptic ? '아이폰은 누르는 순간 \'톡\' 한 번만 울려요(애플 제한)' : '이 기기·브라우저는 웹 진동을 지원하지 않아요';
   b.disabled = !supported;
   const on = supported && vibeOn;
   b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false');
@@ -2017,7 +2043,7 @@ el('vibeItem').onclick = () => {
   vibeOn = !vibeOn;
   try { localStorage.setItem('vibeOff', vibeOn ? '0' : '1'); } catch (_) { /* 저장 불가 환경 무시 */ }
   updateVibeBtn();
-  if (vibeOn) vibe([18, 40, 18]);   // 켰을 때 바로 한 번 느껴보게(탭 동작 안이라 아이폰도 난다)
+  if (vibeOn) vibe([18, 40, 18]);   // 켰을 때 바로 한 번 느껴보게(아이폰은 이 줄 위의 탭 오버레이가 톡)
 };
 el('soundItem').onclick = () => { soundOn = !soundOn; localStorage.setItem('soundOff', soundOn ? '0' : '1'); updateSoundBtn(); if (soundOn) { ensureAudio(); sfx('click'); } };
 el('helpItem').onclick = () => { closeMenu(); el('guide').hidden = false; };
