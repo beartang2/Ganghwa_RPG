@@ -229,8 +229,11 @@ async function main() {
   ok(rk && rk.level === 99 && rk.weaponCount === 2, '랭킹은 가장 좋은 무기 기준');
   r = await req('POST', '/api/box-open', { token: tok, body: { pick: 2 } });
   ok(r.body.ok && r.body.boxes.length === 3 && r.body.keysLeft === 1, '상자 열기(3개 중 택1, 열쇠 1 소모)');
+  // 상자에서 마석 ×3 이 나올 수 있으므로(확률표) 연금 직전 개수 기준으로 본다
+  const stoneOf = m => m.inv.items.filter(i => i.id === 'stone').reduce((a, i) => a + i.count, 0);
+  const stonePre = stoneOf(r.body.me);
   r = await req('POST', '/api/alchemy', { token: tok, body: { tier: 'mid' } });
-  ok(r.body.ok && r.body.me.inv.items.find(i => i.id === 'stone').count === 15, '연금 중불(마석 15 + 10만G)');
+  ok(r.body.ok && stoneOf(r.body.me) === stonePre - 15, '연금 중불(마석 15 + 10만G)');
   const goldPreCap = Number(r.body.me.gold);
   r = await req('POST', '/api/capsule', { token: tok, body: { times: 10 } });
   ok(r.body.ok && r.body.results.length === 10 && Number(r.body.me.gold) === goldPreCap - 300000 + r.body.gold, '캡슐 10회(30만G) 결과·골드 정산');
