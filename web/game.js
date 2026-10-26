@@ -411,8 +411,8 @@ function gainGold(p, amount, raw) {
 }
 
 /* ---------- 아이템 / 인벤토리 ----------
- * 슬롯 1칸 = 아이템 '종류' 하나. 같은 종류는 한 칸에 무제한으로 쌓인다.
- * 칸이 꽉 찬 상태에서 '갖고 있지 않은 종류' 가 들어오면 그 드랍은 버려진다 —
+ * 슬롯 1칸 = 아이템 한 종류 최대 CONFIG.invStackMax(999)개. 넘치면 같은 종류가 한 칸을 더 쓴다.
+ * 칸이 꽉 차서 더 넣을 자리가 없으면 그 드랍은 버려진다 —
  * addItem 이 0 을 돌려주므로 호출부가 안내 문구를 붙인다. 골드는 화폐라 슬롯 밖.
  * 상태(p.inv)는 players.data JSON 에 실려서 스키마 변경이 필요 없다. */
 const ITEMS = {
@@ -617,14 +617,14 @@ function makePlayer(nick) {
   };
 }
 function norm(p) {
-  // 구버전 필드(protects/enhanceBoost) → 인벤토리로 1회 이관 후 제거
-  if (!p.inv) {
-    p.inv = { bought: 0, items: {} };
-    if (p.protects > 0) p.inv.items.protect = p.protects;
-    if (p.enhanceBoost > 0) p.inv.items.boost = p.enhanceBoost;
-  }
+  // 구버전 필드(protects/enhanceBoost) → 인벤토리로 이관 후 제거.
+  // 남아 있는 값은 '덮어쓰기'가 아니라 가방에 '더해서' 합친다 — 이전 배포(구버전 코드)와
+  // 새 배포가 잠시 같은 DB 를 함께 쓰는 동안 구버전이 protects 를 다시 써 넣어도
+  // 다음 로드 때 가방으로 합쳐져서 아이템이 사라지지 않는다(이미 옮긴 값은 지웠으니 중복 없음).
+  const inv0 = ensureInv(p);
+  if (p.protects > 0) inv0.items.protect = (inv0.items.protect || 0) + p.protects;
+  if (p.enhanceBoost > 0) inv0.items.boost = (inv0.items.boost || 0) + p.enhanceBoost;
   delete p.protects; delete p.enhanceBoost;
-  ensureInv(p);
   if (p.raidDay == null) { p.raidDay = ''; p.raidsUsed = 0; }
   if (p.lastMine == null) p.lastMine = Date.now();
   if (p.party === undefined) p.party = null;

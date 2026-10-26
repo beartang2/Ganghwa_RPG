@@ -269,6 +269,13 @@ body.loading-on #globalLoading{opacity:1}
 /* ---------- 액션 ---------- */
 .actions{display:flex;gap:8px}
 .btn.action small{color:var(--muted);opacity:1;font-variant-numeric:tabular-nums}
+.btn.action{position:relative}
+/* 좁은 휴대폰: 한 줄에 4개(출석·가방·미션·패스)가 들어가도록 여백·글자를 줄인다 */
+@media (max-width:400px){ .actions{gap:6px} .btn.action{padding:11px 4px;font-size:14px} }
+/* 가방 칸수는 버튼 모서리 배지로 — 버튼 4개가 한 줄에 들어가도록 글자를 한 줄로 둔다 */
+#invCount{position:absolute;top:-7px;right:-4px;padding:1px 6px;border-radius:999px;font-size:10.5px;font-weight:800;
+  line-height:1.5;color:var(--text);background:var(--card);border:1px solid var(--line2);box-shadow:0 2px 6px rgba(0,0,0,.45)}
+#invCount.full{color:#fff;background:var(--danger);border-color:var(--danger)}
 
 /* ---------- 직업 선택 ---------- */
 .class-select-title{text-align:center;margin:.2em 0 .1em;font-family:var(--display);font-weight:900;font-size:28px}
@@ -325,11 +332,12 @@ body.loading-on #globalLoading{opacity:1}
 @keyframes raidSpark{0%{opacity:0;transform:translate(-50%,-40%) scale(.6) rotate(-20deg)}30%{opacity:1;transform:translate(-50%,-60%) scale(1.1)}100%{opacity:0;transform:translate(-50%,-90%) scale(1) rotate(20deg)}}
 
 /* ---------- 스탯: 무쇠판 대신 이음매로 나뉜 한 줄 ---------- */
-.stats{display:grid;grid-template-columns:.9fr 1fr 1.45fr 1fr;gap:0;text-align:center;padding:12px 6px;background:rgba(34,27,22,.7)}
-.stats>div{display:flex;flex-direction:column;gap:4px;padding:0 4px}
+.stats{display:grid;grid-template-columns:.8fr .9fr .95fr 1.4fr 1fr;gap:0;text-align:center;padding:12px 4px;background:rgba(34,27,22,.7)}
+.stats>div{display:flex;flex-direction:column;gap:4px;padding:0 3px;min-width:0}
 .stats>div+div{border-left:1px solid var(--line)}
 .stats span{color:var(--muted);font-size:11px}
-.stats b{font-family:var(--display);font-size:clamp(13px,4vw,16px);font-weight:800;font-variant-numeric:tabular-nums}
+.stats b{font-family:var(--display);font-size:clamp(12.5px,3.7vw,16px);font-weight:800;font-variant-numeric:tabular-nums}
+#sAscend{color:#d9a6f5}
 
 /* ---------- 탭: 놋쇠 밑줄 ---------- */
 .tabs{display:flex;gap:2px;overflow-x:auto;padding-bottom:0;border-bottom:1px solid var(--line);scrollbar-width:none}
@@ -609,49 +617,64 @@ body.loading-on #globalLoading{opacity:1}
   border-radius:10px;background:var(--card2);word-break:keep-all}
 .patch-card .btn:disabled{opacity:.45;cursor:default}
 
-/* ---------- 초월 ---------- */
-.ascend-wrap { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
-.ascend-mats { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
-.amat { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 999px;
-        background: #141926; border: 1px solid var(--line); font-size: 13px; color: var(--muted); }
-.amat b { color: var(--text); }
-.amat small { color: #6b7280; font-size: 11px; margin-left: 2px; }
-.amat.done { border-color: #49d17a55; background: #49d17a14; color: #49d17a; }
-.amat.done b { color: #49d17a; }
-.btn.ascend { background: linear-gradient(135deg, #c471ed, #f7971e); color: #fff; border: none; font-weight: 700; }
-.btn.ascend:disabled { background: #232a3a; color: #5b6478; }
+/* ---------- 초월 (+99 에서만 보이는 승급 단) ----------
+ * 화로 아래 한 단: 재료 칩(사냥 파편·레이드 정수) + 초월 버튼. 쇳물 주황이 보랏빛 초월색으로 넘어간다 */
+.ascend-wrap{width:100%;margin-top:4px;padding:12px;border-radius:14px;display:flex;flex-direction:column;gap:9px;
+  background:radial-gradient(80% 120% at 50% 120%,rgba(196,113,237,.18),transparent 70%),var(--bg2);
+  border:1px solid rgba(196,113,237,.35);box-shadow:inset 0 2px 8px rgba(0,0,0,.45)}
+.ascend-mats{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+.amat{display:inline-flex;align-items:baseline;gap:0;padding:5px 10px;border-radius:999px;white-space:nowrap;
+  background:var(--card);border:1px solid var(--line2);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.amat b{color:var(--text);margin-left:5px}
+.amat small{color:var(--muted);font-size:11px;margin-left:6px;opacity:.85}
+.amat.done{border-color:rgba(95,211,154,.55);background:rgba(95,211,154,.1);color:var(--success)}
+.amat.done b{color:var(--success)}
+.btn.ascend{font-family:var(--display);font-weight:900;font-size:18px;letter-spacing:.02em;color:#fff;border:0;
+  background:linear-gradient(135deg,#7c4dd8 0%,#c471ed 45%,#f7971e 100%);text-shadow:0 1px 2px rgba(40,10,60,.6);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),inset 0 -2px 0 rgba(40,10,60,.35),0 6px 20px rgba(196,113,237,.28)}
+.btn.ascend:disabled{background:linear-gradient(180deg,#3a3029,#2e2620);color:var(--muted);text-shadow:none;opacity:1;
+  box-shadow:inset 0 1px 0 rgba(255,240,220,.05)}
 
-/* ---------- 인벤토리 ---------- */
-.inv-card { max-width: 420px; }
-.inv-slotinfo { color: var(--muted); font-weight: 400; font-size: 13px; }
-.inv-slotinfo.full { color: #ff5d6c; }
-.inv-gold { margin: 2px 0 12px; color: var(--text); font-size: 14px; }
-.inv-gold small { color: #6b7280; margin-left: 6px; font-size: 11px; }
-.inv-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.inv-cell { position: relative; aspect-ratio: 1; border-radius: 12px; border: 1px solid var(--line);
-            background: #0f131c; display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; }
-.inv-cell.empty { background: #0b0e15; border-style: dashed; cursor: default; }
-.inv-cell.sel { border-color: #4facfe; background: #4facfe1a; }
-.ic-emoji { font-size: 26px; line-height: 1; }
-.ic-count { position: absolute; right: 4px; bottom: 3px; font-size: 11px; font-weight: 700; color: var(--text); }
-.inv-detail { min-height: 64px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
-.ivd-name { font-weight: 700; margin-bottom: 4px; }
-.ivd-desc { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
-#invExpandBtn { width: 100%; margin-top: 10px; }
+/* ---------- 가방 (인벤토리) — 무쇠판에 파인 칸 ---------- */
+.inv-card{max-width:420px}
+.inv-card h3{padding-right:36px}
+.inv-slotinfo{color:var(--muted);font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",system-ui,sans-serif;
+  font-weight:700;font-size:13px;margin-left:4px}
+.inv-slotinfo.full{color:var(--danger)}
+.inv-gold{margin:2px 0 12px;color:var(--text);font-size:14px}
+.inv-gold b{color:var(--gold);font-variant-numeric:tabular-nums}
+.inv-gold small{color:var(--muted);margin-left:6px;font-size:11px}
+.inv-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.inv-cell{position:relative;aspect-ratio:1;border-radius:12px;border:1px solid var(--line2);padding:0;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:var(--text);
+  background:radial-gradient(70% 70% at 50% 35%,rgba(255,240,220,.05),transparent 70%),var(--bg2);
+  box-shadow:inset 0 3px 8px rgba(0,0,0,.55),inset 0 -1px 0 rgba(255,240,220,.04);transition:border-color .12s,box-shadow .12s}
+.inv-cell:hover{border-color:var(--primary2)}
+.inv-cell.empty{cursor:default;border-style:dashed;border-color:var(--line);background:rgba(16,13,11,.6);box-shadow:inset 0 2px 6px rgba(0,0,0,.4)}
+.inv-cell.sel{border-color:var(--primary);box-shadow:inset 0 3px 8px rgba(0,0,0,.5),0 0 0 1px var(--primary),0 0 14px rgba(212,162,76,.35)}
+.ic-emoji{font-size:26px;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5))}
+.ic-count{position:absolute;right:5px;bottom:3px;font-size:11px;font-weight:800;color:var(--text);
+  font-variant-numeric:tabular-nums;text-shadow:0 1px 2px #000,0 0 4px #000}
+.inv-detail{min-height:64px;margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
+.ivd-name{font-weight:800;margin-bottom:4px}
+.ivd-name b{color:var(--gold)}
+.ivd-name small{color:var(--muted);font-weight:600;font-size:11px}
+.ivd-desc{color:var(--muted);font-size:13px;line-height:1.5;margin-bottom:8px}
+#invExpandBtn{width:100%;margin-top:10px}
+.inv-slothint{margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);line-height:1.7}
+.inv-slothint b{color:var(--text)}
 
-/* 보스 잠금 / 등급 / 상점 일일 제한 */
-.raid-boss.locked { opacity: .55; }
-.btier { padding: 1px 7px; border-radius: 999px; font-size: 11px; background: #1a2030; color: var(--muted); }
-.btier.t-어려움 { background: #f7971e22; color: #f7971e; }
-.btier.t-지옥 { background: #ff5d6c22; color: #ff5d6c; }
-.btier.t-초월 { background: #c471ed22; color: #c471ed; }
-.bname .block { font-size: 11px; color: #ff5d6c; font-weight: 600; }
-.shop-lim { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: #4facfe22; color: #4facfe; font-weight: 600; }
-.shop-lim.off { background: #ff5d6c22; color: #ff5d6c; }
-.ivd-name small { color: var(--muted); font-weight: 400; font-size: 11px; }
-.inv-slothint { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line);
-  font-size: 12px; color: var(--muted); line-height: 1.7; }
-.inv-slothint b { color: var(--text); }
+/* 레이드 보스 등급·잠금 / 상점 구매 제한 표시 */
+.raid-boss.locked{opacity:.55}
+.btier{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11px;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",system-ui,sans-serif;
+  font-weight:700;background:var(--bg2);border:1px solid var(--line);color:var(--muted);white-space:nowrap;vertical-align:1px}
+.btier.t-어려움{background:rgba(255,122,26,.12);border-color:rgba(255,122,26,.45);color:var(--molten)}
+.btier.t-지옥{background:rgba(239,79,69,.12);border-color:rgba(239,79,69,.45);color:var(--danger)}
+.btier.t-초월{background:rgba(196,113,237,.14);border-color:rgba(196,113,237,.5);color:#d9a6f5}
+.bname .block{font-size:11px;color:var(--danger);font-weight:700;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",system-ui,sans-serif;white-space:nowrap}
+.shop-lim{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;font-weight:700;white-space:nowrap;
+  background:rgba(127,180,214,.12);border:1px solid rgba(127,180,214,.4);color:var(--info)}
+.shop-lim.off{background:rgba(239,79,69,.1);border-color:rgba(239,79,69,.4);color:var(--danger)}
 
 /* ---------- 모션 줄이기 ---------- */
 @media (prefers-reduced-motion: reduce){

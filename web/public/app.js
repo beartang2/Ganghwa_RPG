@@ -403,7 +403,8 @@ function render() {
   }
   lastEnhDisabled = enhDisabled;
   renderAscend();
-  el('invCount').textContent = '(' + me.inv.used + '/' + me.inv.slots + ')';
+  el('invCount').textContent = me.inv.used + '/' + me.inv.slots;
+  el('invCount').classList.toggle('full', !!me.inv.full);
 
   el('huntLeft').textContent = me.huntsLeft > 0 ? '(' + me.huntsLeft + '/' + me.dailyHunts + ')' : '♾️';
   el('huntBtn').disabled = false;   // 무한 사냥: 항상 가능(소진 후엔 보상 축소)
@@ -444,7 +445,7 @@ async function doAscend() {
 }
 
 /* ---------- 인벤토리 ----------
- * 슬롯 1칸 = 아이템 99개(같은 종류는 99개마다 한 칸씩 더 먹는다). 꽉 차면 드랍이 버려진다.
+ * 슬롯 1칸 = 아이템 me.inv.stackMax(999)개(같은 종류는 그만큼마다 한 칸씩 더 먹는다). 꽉 차면 드랍이 버려진다.
  * 칸수는 서버(me.inv.slots)가 계산해서 내려준다 — 클라는 하드코딩하지 않는다. */
 let invSel = null;
 function openInv() { el('invModal').hidden = false; renderInv(); }
