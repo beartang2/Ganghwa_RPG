@@ -761,7 +761,9 @@ function openBox(db, id, pick) {
   const rolls = [rollTable(BOX_TABLE), rollTable(BOX_TABLE), rollTable(BOX_TABLE)];
   const got = grantRoll(p, rolls[pick]);
   if (got.kind === 'prism' && got.n >= 5) addLog(db, '📦 ' + p.nick + ' 상자에서 💎 프리즘 ' + got.n + '개!');
-  return { ok: true, pick, boxes: rolls.map(rewardText), got, keysLeft: itemCount(p, 'boxkey'), msg: '📦 ' + got.text + ' 획득!' };
+  // items: 세 상자 내용물의 종류(화면이 보상 아이콘을 그리는 데 쓴다). boxes 는 예전 화면 호환용 글자
+  return { ok: true, pick, boxes: rolls.map(rewardText), items: rolls.map(e => ({ kind: e.kind, n: e.n, item: e.item || null })),
+    got, keysLeft: itemCount(p, 'boxkey'), msg: '📦 ' + got.text + ' 획득!' };
 }
 // ⚗️ 연금술 — 마석 + 골드를 함께 넣고 돌린다. 불이 셀수록 마석당 기대값↑, 골드당 기대값↓.
 function alchemy(db, id, tierId) {

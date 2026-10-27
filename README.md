@@ -91,6 +91,7 @@ npm start        # 또는 npm run dev (nodemon)
 web/                 웹 게임 (프론트 public/ + 서버 server.js + 로직 game.js)
   public/fx.js       시각 효과 — React Bits 컴포넌트 바닐라 JS 이식 (MIT + Commons Clause, 파일 머리말 참고)
   public/weapon-art.js  무기 그림 생성기 — 직업 4 × 속성 9 × 등급 5 = 180종 SVG (이미지 파일 불필요)
+  public/prism-art.js   💎 프리즘 탭 그림 — 상자 3종·연금술 도가니·캡슐 기계·캡슐·보상 아이콘 SVG
   api/               Vercel 서버리스 어댑터 (game.js 재사용)
   db/                로컬 어댑터 테스트 (pglite)
 supabase/            Supabase 마이그레이션 (GitHub 연동 자동 적용)
@@ -121,6 +122,8 @@ legacy/              초기 카카오톡 봇 (보관용)
 | GradientText | 전설·초월 무기 이름 |
 | ShinyText | 로그인 타이틀 |
 | Counter | 상단 골드 숫자 |
+| PrismaticBurst | 💎 프리즘 대박(상자 💎5+·연금 💎10+·캡슐 💎10+) 순간 한 번 터지는 분광 폭발 |
+| GlareHover | 아직 안 연 상자 위를 번갈아 훑는 광택 |
 
 `fx.js` 로드 실패나 WebGL2 미지원이면 해당 효과만 빠지고 게임은 그대로 동작한다. `prefers-reduced-motion` 을 존중한다.
 
