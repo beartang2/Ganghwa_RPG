@@ -74,9 +74,9 @@ const FX = (() => {
     sparkWidth: 2, duration: 460, shape: 'streak', randomness: 0.6, gravity: 0.55, glow: 0.8,
   })
     .bind('#enhanceBtn', { sparkCount: 12, sparkRadius: 52, spread: 200 })
-    .bind('#huntMon', { sparkColor: ['#fff4d6', '#ff9a3c', '#ef4f45'], sparkCount: 7, sparkRadius: 30, duration: 360 }, { immediate: true })
+    .bind('#huntMon', { sparkColor: ['#fff4d6', '#ff9a3c', '#ef4f45'], sparkCount: 7, sparkRadius: 30, duration: 360 })
     .bind('.rock', { sparkColor: ['#ffd27a', '#c9b8a6', '#ffffff'], sparkCount: 8, sparkRadius: 30, gravity: 1.1, duration: 420 }, { immediate: true })
-    .bind('.raid-mon', { sparkColor: ['#fff4d6', '#ff9a3c', '#ffd27a'], sparkCount: 7, sparkRadius: 32, duration: 360 }, { immediate: true })
+    .bind('.raid-mon', { sparkColor: ['#fff4d6', '#ff9a3c', '#ffd27a'], sparkCount: 7, sparkRadius: 32, duration: 360 })
     .bind('.btn.action', { sparkCount: 6, sparkRadius: 22, shape: 'line', gravity: 0, duration: 360, glow: 0.4 }));
   // 강화 버튼: 달군 쇠판 테두리를 도는 빛
   tryFx('star', () => F.starBorder(el('enhanceBtn'), {
@@ -1257,7 +1257,8 @@ function openHunt() {
 }
 // 모달을 닫아도 huntCur 는 유지(다시 열면 같은 몬스터). 죽여야만 새 몬스터가 나온다.
 function closeHunt() {
-  huntOpen = false; el('huntModal').hidden = true; if (gst) { if (GTRAIL) GTRAIL.cancel(); gEnd(); }
+  huntOpen = false; el('huntModal').hidden = true;
+  if (gst && gst.arena === 'hunt') { if (GTRAIL) GTRAIL.cancel(); gEnd(gst); }
   const a = takeHuntAtk(); if (a) api('atk-report', 'POST', { atk: a }).catch(() => {});   // 마지막 몬스터 기록
 }
 function restoreHuntMonster() {
@@ -1310,23 +1311,11 @@ function tapMonster(e) {
   sfx(isCrit ? 'crit' : last ? 'kill' : 'hit');
   const monEl = el('huntMon');
   if (monEl) { monEl.classList.remove('hit'); void monEl.offsetWidth; monEl.classList.add('hit'); }
-  const dmgEl = spawnHuntDmg(Math.round((isCrit ? 2 : 1) * c.dmgPerTap * amt), isCrit);
+  spawnHuntDmg(Math.round((isCrit ? 2 : 1) * c.dmgPerTap * amt), isCrit);
   el('huntHpFill').style.width = Math.max(0, 100 - c.taps / c.need * 100) + '%';
-  // 이 탭이 곧 드래그·홀딩(강공격)으로 이어지면 refundTap() 이 되돌린다 — 일반 공격과 강공격이 같이 나가지 않게
-  pendingTap = last || !e ? null : { ev: e, undo() {
-    if (huntCur !== c || c.dead) return;
-    huntAtk.n = Math.max(0, huntAtk.n - 1); c.taps = Math.max(0, c.taps - amt);
-    if (dmgEl) dmgEl.remove();
-    el('huntHpFill').style.width = Math.max(0, 100 - c.taps / c.need * 100) + '%';
-  } };
   if (last) killMonster();
 }
-// 몬스터·보스를 누른 그 손가락이 커맨드(끌기·꾹 누르기)가 되면 누르는 순간 들어간 일반 공격 1회를 취소한다.
-// (사냥에서 처치한 탭은 되돌리지 않는다 — 그때는 몬스터가 이미 쓰러져 커맨드도 시작되지 않는다)
-// 같은 누름인지는 pointerdown 이벤트 객체가 같은지로 본다(마우스는 pointerId 가 늘 같아서 id 로는 못 가린다).
-// 레이드·던전은 연타를 모아 0.7초마다 보내므로, 아직 안 보낸 1타를 빼는 것으로 취소한다.
-let pendingTap = null;
-function refundTap(p) { if (!p || p.done) return; p.done = true; p.undo(); }
+
 
 /* ---------- ⚡ 강공격 커맨드 (사냥터 · 레이드 · 초월 던전) ----------
  * 지금 장착한 무기(me.class)마다 그리는 커맨드가 다르다 — 인식은 gesture.js.
@@ -1348,11 +1337,11 @@ function huntBuffMult(now) { return huntBuff && now < huntBuff.until ? huntBuff.
 /* 커맨드를 쓰는 전투 무대 — 사냥터·파티 레이드·초월 던전. 무대마다 '지금 칠 수 있나 / 과녁 / 무기 / 강공격' 을 정한다.
  * 이스터에그·코나미는 사냥터 전용. 레이드·던전 강공격은 서버(raid-strong · dun-strong)가 위력·쿨타임을 판정한다. */
 const ARENA = {
-  hunt: { boss: () => el('huntMon'), live: () => !!(huntOpen && huntCur && !huntCur.dead), cls: () => me && me.class, strong: (c, pw) => huntStrong(c, pw) },
+  hunt: { boss: () => el('huntMon'), live: () => !!(huntOpen && huntCur && !huntCur.dead), cls: () => me && me.class, strong: (c, pw) => huntStrong(c, pw), tap: () => tapMonster() },
   raid: { boss: () => el('rBoss'), live: () => !!(curRaid && curRaid.status === 'active' && curRaid.startTs + curRaid.duration > Date.now()),
-    cls: () => me && me.class, strong: (c, pw, t) => raidStrongHit(c, pw, t) },
+    cls: () => me && me.class, strong: (c, pw, t) => raidStrongHit(c, pw, t), tap: () => tapRaidBoss() },
   dun:  { boss: () => el('dBoss'), live: () => !!(dunF && dunF.status === 'active' && dunNow() - dunF.startTs < dunF.duration),
-    cls: () => { const w = dunF && dunF.weapons.find(x => x.equipped); return w ? w.cls : me && me.class; }, strong: (c, pw, t) => dunStrongHit(c, pw, t) },
+    cls: () => { const w = dunF && dunF.weapons.find(x => x.equipped); return w ? w.cls : me && me.class; }, strong: (c, pw, t) => dunStrongHit(c, pw, t), tap: () => tapDunBoss() },
 };
 function arenaOf(stage) { return stage.classList.contains('hunt-stage') ? 'hunt' : stage.querySelector('#dBoss') ? 'dun' : stage.querySelector('#rBoss') ? 'raid' : null; }
 function bossCenter(a) { const b = ARENA[a] && ARENA[a].boss(); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }
@@ -1448,77 +1437,88 @@ function huntStrong(cfg, power) {
 // 그리기 추적: 무대(.hunt-stage)에서 누르기 시작한 손가락 하나만. 몬스터 위에서 누르면 그 탭은 일반 공격으로도 들어간다.
 // 포인터 캡처는 하지 않는다 — 터치는 브라우저가 알아서 누른 요소로 묶어 주고, 캡처하면 아이폰 햅틱 라벨의 클릭이 빗나간다.
 const GTRAIL = window.Gesture ? (() => { try { return window.Gesture.createTrail({ z: 115 }); } catch (e) { console.warn('[gesture]', e); return null; } })() : null;
-let gst = null, gLastEnd = -1e9;
+/* 손가락 추적 — 일반 공격은 손을 '뗄 때' 판정한다(on pointer up).
+ * 누르는 순간엔 보스가 살짝 눌릴 뿐 데미지는 없고, 떼는 순간 '거의 안 움직였으면 탭 = 일반 공격',
+ * 끌었으면 커맨드(강공격), 방패를 0.2초 넘게 눌렀으면 꾹 누르기로 갈린다 → 일반 공격과 강공격이 섞이지 않는다.
+ * 손가락마다 따로 센다(두 손가락 번갈아 연타 OK). 커맨드(그리기·꾹)는 먼저 누른 손가락 하나만. */
+const presses = new Map();   // pointerId → { arena, cfg, pts, onBoss, drawing, moved }
+let gst = null, gLastEnd = -1e9;   // gst = 지금 커맨드를 맡은 손가락
 function gPoint(e) { return { x: e.clientX, y: e.clientY, t: performance.now() }; }
 function gDown(e) {
-  if (gst || !window.Gesture || !(e.target instanceof Element)) return;
+  if (!window.Gesture || !(e.target instanceof Element)) return;
   if (e.pointerType === 'mouse' && e.button !== 0) return;
   const stage = e.target.closest('.hunt-stage, .raid-stage'); if (!stage) return;
   const arena = arenaOf(stage); if (!arena || !ARENA[arena].live()) return;
-  const cfg = strongCfg(arena);
-  gst = { id: e.pointerId, arena, cfg, pts: [gPoint(e)], drawing: false, holdRaf: 0,
-    tap: pendingTap && pendingTap.ev === e ? pendingTap : null };   // 이 누름이 몬스터·보스 위 일반 공격이었나
-  window.addEventListener('pointermove', gMove);
-  window.addEventListener('pointerup', gUp);
-  window.addEventListener('pointercancel', gCancel);
-  if (cfg.cmd === 'hold') gst.holdRaf = requestAnimationFrame(holdTick);
+  // 떼는 신호를 놓친 손가락(창 밖에서 마우스를 뗌 등)이 남아 있으면 정리 — 마우스는 pointerId 가 늘 같다
+  const stale = presses.get(e.pointerId); if (stale) { if (stale === gst && GTRAIL) GTRAIL.cancel(); gEnd(stale); }
+  if (gst && performance.now() - gst.pts[0].t > 8000) { if (GTRAIL) GTRAIL.cancel(); gEnd(gst); }
+  const boss = ARENA[arena].boss();
+  const rec = { id: e.pointerId, arena, cfg: strongCfg(arena), pts: [gPoint(e)], drawing: false, moved: false, holdRaf: 0,
+    onBoss: !!(boss && boss.contains(e.target)) };
+  presses.set(e.pointerId, rec);
+  if (rec.onBoss) { boss.classList.remove('press'); void boss.offsetWidth; boss.classList.add('press'); }   // 눌림만(데미지는 뗄 때)
+  if (!gst) { gst = rec; if (rec.cfg.cmd === 'hold') rec.holdRaf = requestAnimationFrame(holdTick); }
 }
 function holdTick() {
-  if (!gst || gst.cfg.cmd !== 'hold') return;
-  const G = window.Gesture.CFG, held = performance.now() - gst.pts[0].t;
-  const moved = window.Gesture.maxDisplacement(gst.pts) > G.holdSlop;
-  if (moved) { if (GTRAIL) GTRAIL.ring(0, 0, -1); return; }
+  const g = gst; if (!g || g.cfg.cmd !== 'hold') return;
+  const G = window.Gesture.CFG, held = performance.now() - g.pts[0].t;
+  if (window.Gesture.maxDisplacement(g.pts) > G.holdSlop) { if (GTRAIL) GTRAIL.ring(0, 0, -1); return; }
   const p = (held - 150) / (G.holdMs - 150);
-  if (held >= 200) refundTap(gst.tap);   // 연타의 짧은 탭(<0.2초)은 그대로 일반 공격
-  if (p > 0 && GTRAIL) GTRAIL.ring(gst.pts[0].x, gst.pts[0].y, Math.min(1, p));
-  if (p >= 1 && !gst.full) { gst.full = true; vibe(10); sfx('charge'); }
-  gst.holdRaf = requestAnimationFrame(holdTick);
+  if (p > 0 && GTRAIL) GTRAIL.ring(g.pts[0].x, g.pts[0].y, Math.min(1, p));
+  if (p >= 1 && !g.full) { g.full = true; vibe(10); sfx('charge'); }
+  g.holdRaf = requestAnimationFrame(holdTick);
 }
 function gMove(e) {
-  if (!gst || e.pointerId !== gst.id) return;
+  const rec = presses.get(e.pointerId); if (!rec) return;
   const list = (typeof e.getCoalescedEvents === 'function' && e.getCoalescedEvents()) || [];
   // iOS 18.2 사파리는 coalesced 이벤트에 pointerId 가 비어 있다는 보고가 있어 좌표만 쓴다
   const pts = list.length ? list.map(gPoint) : [gPoint(e)];
-  for (const p of pts) gst.pts.push(p);
-  if (!gst.drawing && window.Gesture.maxDisplacement(gst.pts) >= window.Gesture.CFG.tapSlop) {
-    gst.drawing = true;
-    refundTap(gst.tap);
-    if (GTRAIL) GTRAIL.begin(gst.cfg.style || 'plain', gst.pts);   // 방패는 끌면 '커맨드 아님' 회색 선
-  } else if (gst.drawing && GTRAIL) for (const p of pts) GTRAIL.add(p);
+  for (const p of pts) rec.pts.push(p);
+  if (!rec.moved && window.Gesture.maxDisplacement(rec.pts) >= window.Gesture.CFG.tapSlop) rec.moved = true;
+  if (rec !== gst) return;                          // 커맨드는 먼저 누른 손가락만 그린다
+  if (!rec.drawing && rec.moved) {
+    rec.drawing = true;
+    if (GTRAIL) GTRAIL.begin(rec.cfg.style || 'plain', rec.pts);   // 방패는 끌면 '커맨드 아님' 회색 선
+  } else if (rec.drawing && GTRAIL) for (const p of pts) GTRAIL.add(p);
 }
-function gEnd() {
-  window.removeEventListener('pointermove', gMove);
-  window.removeEventListener('pointerup', gUp);
-  window.removeEventListener('pointercancel', gCancel);
-  if (gst && gst.holdRaf) cancelAnimationFrame(gst.holdRaf);
-  if (gst && gst.drawing) gLastEnd = performance.now();
-  pendingTap = null;
+function gEnd(rec) {
+  presses.delete(rec.id);
+  if (rec !== gst) return;
+  if (rec.holdRaf) cancelAnimationFrame(rec.holdRaf);
+  if (rec.drawing) gLastEnd = performance.now();
   if (GTRAIL) GTRAIL.ring(0, 0, -1);
   gst = null;
 }
-function gCancel(e) { if (!gst || e.pointerId !== gst.id) return; if (GTRAIL) GTRAIL.cancel(); gEnd(); }
+function gCancel(e) {
+  const rec = presses.get(e.pointerId); if (!rec) return;
+  if (rec === gst && GTRAIL) GTRAIL.cancel();
+  gEnd(rec);
+}
 function gUp(e) {
-  if (!gst || e.pointerId !== gst.id) return;
-  const g = gst, cfg = g.cfg, last = gPoint(e), A = ARENA[g.arena];
-  g.pts.push(last);
-  const heldMs = last.t - g.pts[0].t;
-  const tgt = bossCenter(g.arena) || last;
-  const r = window.Gesture.judge(cfg.cmd, g.pts, { target: tgt, heldMs });
-  window.__lastGesture = { cmd: cfg.cmd, ms: Math.round(heldMs), n: g.pts.length, ...r };   // 디버그·테스트용(콘솔에서 확인)
-  gEnd();
-  // 🥚 이스터에그 커맨드(무기와 상관없이) — 하트·∞·소용돌이면 평소대로 일반 공격 1회 + 연출 + 1회성 숨은 칭호
-  if (g.arena === 'hunt' && g.drawing && !(cfg.cmd !== 'hold' && r.ok)) {
-    const eg = window.Gesture.egg(g.pts);
+  const rec = presses.get(e.pointerId); if (!rec) return;
+  const last = gPoint(e); rec.pts.push(last);
+  const A = ARENA[rec.arena], cfg = rec.cfg, heldMs = last.t - rec.pts[0].t;
+  const isOwner = rec === gst;
+  gEnd(rec);
+  if (!A.live()) { if (isOwner && GTRAIL) GTRAIL.cancel(); return; }   // 누르는 사이 전투가 끝났다
+  // 일반 공격: 보스 위에서 눌렀고, 거의 안 움직였고, (방패라면) 꾹 누르기가 아니면 — 떼는 지금 한 번
+  const tapLike = rec.onBoss && !rec.moved && !(cfg.cmd === 'hold' && isOwner && heldMs >= 200);
+  if (!isOwner) { if (tapLike) A.tap(); return; }
+  const tgt = bossCenter(rec.arena) || last;
+  const r = window.Gesture.judge(cfg.cmd, rec.pts, { target: tgt, heldMs });
+  window.__lastGesture = { cmd: cfg.cmd, ms: Math.round(heldMs), n: rec.pts.length, ...r };   // 디버그·테스트용(콘솔에서 확인)
+  if (cfg.cmd === 'hold') {
+    if (r.ok) { if (A.strong(cfg, 1, tgt) && GTRAIL) GTRAIL.shock(tgt.x, tgt.y); return; }
+    if (tapLike) { A.tap(); return; }
+  }
+  if (!rec.drawing) { if (tapLike) A.tap(); return; }   // 그냥 탭
+  // 🥚 이스터에그 커맨드(사냥터, 무기와 상관없이) — 하트·∞·소용돌이면 평소대로 일반 공격 1회 + 연출 + 1회성 숨은 칭호
+  if (rec.arena === 'hunt' && !(cfg.cmd !== 'hold' && r.ok)) {
+    const eg = window.Gesture.egg(rec.pts);
     if (eg && !eggDone(eg)) { if (GTRAIL) GTRAIL.end(true); huntEgg(eg); return; }   // 찾은 뒤엔 그냥 '커맨드 아님'
   }
-  const kon = g.arena === 'hunt' && g.drawing ? konamiStep(window.Gesture.swipeDir(g.pts)) : false;   // 코나미 입력 중이면 안내를 숨긴다
-  if (!A.live()) { if (GTRAIL) GTRAIL.cancel(); return; }   // 그리는 사이 전투가 끝났다
-  if (cfg.cmd === 'hold') {
-    if (r.ok) { if (A.strong(cfg, 1, tgt) && GTRAIL) GTRAIL.shock(tgt.x, tgt.y); }
-    else if (g.drawing) { if (GTRAIL) GTRAIL.end(false); if (!kon) gestTip('🛡️ 방패는 움직이지 말고 꾹 눌러요', last.x, last.y - 40); }
-    return;
-  }
-  if (!g.drawing) return;                       // 그냥 탭(일반 공격은 몬스터 pointerdown 에서 이미 처리)
+  const kon = rec.arena === 'hunt' ? konamiStep(window.Gesture.swipeDir(rec.pts)) : false;   // 코나미 입력 중이면 안내를 숨긴다
+  if (cfg.cmd === 'hold') { if (GTRAIL) GTRAIL.end(false); if (!kon) gestTip('🛡️ 방패는 움직이지 말고 꾹 눌러요', last.x, last.y - 40); return; }
   if (r.ok && A.strong(cfg, r.power, tgt)) { if (GTRAIL) GTRAIL.end(true, { target: tgt }); return; }
   if (GTRAIL) GTRAIL.end(false);
   if (kon || r.why === 'short') return;         // 짧게 슥 — 실수일 수 있어 조용히
@@ -1526,8 +1526,11 @@ function gUp(e) {
     : r.why === 'direction' ? '🏹 몬스터 반대쪽으로 당겨요' : '궤적이 흐트러졌어요';
   gestTip(tip, last.x, last.y - 40);
 }
-// 무대는 레이드·던전에서 매번 새로 그려지므로 문서 전체에서 받는다(몬스터·보스의 탭 처리가 먼저 돈 뒤)
+// 무대는 레이드·던전에서 매번 새로 그려지므로 문서 전체에서 받는다
 document.addEventListener('pointerdown', gDown);
+window.addEventListener('pointermove', gMove);
+window.addEventListener('pointerup', gUp);
+window.addEventListener('pointercancel', gCancel);
 
 /* ---------- 🥚 이스터에그 ----------
  * 찾으면 서버에 한 번만 알리고(1회 bool) 🌈 프리즘 등급 숨은 칭호가 열린다. 보상은 칭호·연출뿐(경제 영향 없음).
@@ -1858,7 +1861,7 @@ function renderBattle(raid) {
        <div id="rResult" class="raid-resultwrap"></div>
      </div>`;
   const boss = el('rBoss');
-  if (boss) boss.addEventListener('pointerdown', tapRaidBoss);
+  if (boss && !window.Gesture) boss.addEventListener('pointerdown', tapRaidBoss);   // 평소엔 손을 뗄 때(gUp) 일반 공격
   updateBattleCmd('raid');
   const sk = document.getElementById('rSkillBtn');
   if (sk) sk.onclick = doRaidSkill;
@@ -1917,7 +1920,6 @@ function tapRaidBoss(e) {
   const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
   if (now - raidLastTap < RAID_TAP_MS || now < raidLockUntil) return;
   raidLastTap = now; raidLocalHits++;
-  pendingTap = e ? { ev: e, undo() { if (raidLocalHits > 0) raidLocalHits--; } } : null;
   vibe(6); sfx('hit');
   const boss = document.getElementById('rBoss');
   if (boss) { boss.classList.remove('hit'); void boss.offsetWidth; boss.classList.add('hit'); }
@@ -2182,7 +2184,7 @@ function renderDunBattle() {
        <div id="dEvents" class="raid-events"></div>
        <div id="dResult" class="raid-resultwrap"></div>
      </div>`;
-  el('dBoss').addEventListener('pointerdown', tapDunBoss);
+  if (!window.Gesture) el('dBoss').addEventListener('pointerdown', tapDunBoss);   // 평소엔 손을 뗄 때(gUp) 일반 공격
   updateBattleCmd('dun');
   dunBuiltFor = f.startTs;
   updateDunUI();
@@ -2252,7 +2254,6 @@ function tapDunBoss(e) {
   const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
   if (now - dunLastTap < RAID_TAP_MS || now < dunLockUntil) return;
   dunLastTap = now; dunLocalHits++;
-  pendingTap = e ? { ev: e, undo() { if (dunLocalHits > 0) dunLocalHits--; } } : null;
   vibe(6); sfx('hit');
   const boss = el('dBoss');
   if (boss) { boss.classList.remove('hit'); void boss.offsetWidth; boss.classList.add('hit'); }
@@ -2681,7 +2682,7 @@ el('panel').addEventListener('click', e => {
 });
 el('modalClose').onclick = () => { el('modal').hidden = true; };
 // 사냥터 모달: 몬스터 연타(pointerdown), 닫기
-el('huntMon').addEventListener('pointerdown', tapMonster);
+if (!window.Gesture) el('huntMon').addEventListener('pointerdown', tapMonster);   // 평소엔 손을 뗄 때(gUp) 일반 공격
 el('huntClose').onclick = closeHunt;
 // 마우스로 그리다 카드 밖(어두운 배경)에서 떼면 click 이 배경으로 가서 사냥창이 닫히던 것 방지
 el('huntModal').addEventListener('click', e => { if (e.target === el('huntModal') && performance.now() - gLastEnd > 350) closeHunt(); });
@@ -2734,7 +2735,7 @@ function updateVibeBtn() {
   b.hidden = !touchDevice;                         // 마우스 기기에는 진동이 없으니 줄을 숨긴다
   const note = el('vibeNote');
   note.hidden = !touchDevice || (supported && !canIosHaptic);
-  note.textContent = canIosHaptic ? '아이폰은 누르는 순간 \'톡\' 한 번만 울려요(애플 제한)' : '이 기기·브라우저는 웹 진동을 지원하지 않아요';
+  note.textContent = canIosHaptic ? '아이폰은 탭할 때 \'톡\' 한 번만 울려요(애플 제한)' : '이 기기·브라우저는 웹 진동을 지원하지 않아요';
   b.disabled = !supported;
   const on = supported && vibeOn;
   b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false');

@@ -1337,3 +1337,7 @@ a.set-row{text-decoration:none;color:inherit}
 body.halloween{background:
   radial-gradient(130% 55% at 50% 118%, rgba(167,90,255,.22), rgba(167,90,255,0) 62%) fixed,
   radial-gradient(90% 40% at 50% -12%, rgba(255,138,42,.08), rgba(255,138,42,0) 70%) fixed, var(--bg)}
+
+/* 누르는 순간 보스·몬스터가 살짝 눌림(데미지는 손을 뗄 때) */
+.hunt-mon.press .hunt-emoji,.raid-mon.press .rmon-emoji{animation:bossPress .12s ease-out}
+@keyframes bossPress{50%{transform:scale(.95)}}
