@@ -954,6 +954,22 @@ const ELEMENT_SKILLS = {
   dark:    { name: '흡혈', desc: '연타 40회분 + HP +15%', dmg: 40, heal: 15 },
   poison:  { name: '맹독', desc: '전투가 끝날 때까지 초당 연타 6회분 지속 피해', dot: { per: 6, ms: 0 } },   // ms 0 = 끝까지
 };
+/* ---------- ⚡ 강공격 커맨드(레이드·던전 서버 판정) ----------
+ * 화면(gesture.js)이 무기별 커맨드를 인식하면 *-strong 을 보낸다. 서버는 모양을 볼 수 없으니
+ * 위력·쿨타임을 여기서 정하고 막는다 — 같은 사람의 강공격은 gapMs 안에 다시 못 쓴다(그리는 데 드는 최소 시간).
+ * 위력은 '연타 n회분'(사냥터 STRONG 표와 같은 값). 활은 당긴 길이(power 0.4~1)만큼, 지팡이는 '마력 공명'(5초 연타 ×1.5). */
+const STRONG_ATTACKS = {
+  warrior: { name: '베어 가르기', emoji: '⚔️', taps: 6,  gapMs: 350 },
+  archer:  { name: '관통 사격',   emoji: '🏹', taps: 8,  gapMs: 350 },
+  tanker:  { name: '방패 강타',   emoji: '🛡️', taps: 5,  gapMs: 750 },
+  healer:  { name: '별빛 폭발',   emoji: '✨', taps: 22, gapMs: 900, buff: { mult: 1.5, ms: 5000 } },
+};
+function strongUnits(cls, power) {
+  const c = STRONG_ATTACKS[cls] || STRONG_ATTACKS.warrior;
+  const pw = cls === 'archer' ? Math.max(0.4, Math.min(1, Number(power) || 1)) : 1;
+  return Math.max(1, Math.round(c.taps * pw));
+}
+function countStrong(p) { const st = atkStat(p); st.s++; if (p.class) st.w[p.class] = (st.w[p.class] || 0) + 1; }
 const CLASS_SKILLS = {
   warrior: { name: '강타', emoji: '⚔️', desc: '연타 45회분', dmg: 45 },
   archer:  { name: '난사', emoji: '🏹', desc: '연타 60회분', dmg: 60 },
@@ -1230,6 +1246,23 @@ function dunApplySkill(p, f, s, t, srcEl) {
   if (s.buff) { f.buffs.push({ k: s.buff.k, v: s.buff.v, from: t, to: s.buff.ms ? t + s.buff.ms : 0 }); parts.push(s.buff.k === 'dr' ? '피해 −' + Math.round(s.buff.v * 100) + '%' : '연타 ×' + s.buff.v); }
   if (s.block) { f.block += s.block; parts.push('다음 공격 무효'); }
   return parts.join(' · ');
+}
+// ⚡ 던전 강공격 — 연타 n회분 × 지금 단계 상성 배율. 지팡이는 5초 연타 ×1.5(던전의 haste 버프로)
+function dunStrong(db, id, power) {
+  const { p, f, err } = dunActive(db, id); if (err) return err;
+  if (f.status !== 'active') return { ok: true, silent: true, ended: true, fight: dunFightView(p) };
+  const c = STRONG_ATTACKS[p.class] || STRONG_ATTACKS.warrior, now = Date.now(), t = now - f.startTs;
+  if (now - (f.strongAt || 0) < c.gapMs) return { ok: false, silent: true, error: '강공격 준비 중…' };
+  f.strongAt = now;
+  const units = strongUnits(p.class, power), mult = elemMult(p.element, dunPhaseEl(f, t));
+  const dmg = units * memberStats(p).atk * CONFIG.raidHitDmgMult * mult;
+  f.bossHP = Math.max(0, f.bossHP - dmg); f.dmg += dmg;
+  let text = c.emoji + ' ' + c.name + '! 보스 -' + Math.round(dmg).toLocaleString() + (mult > 1 ? ' (효과 굉장!)' : mult < 1 ? ' (효과 별로…)' : '');
+  if (c.buff) { f.buffs.push({ k: 'haste', v: c.buff.mult, from: t, to: t + c.buff.ms }); text += ' · ✨ 마력 공명'; }
+  dunEvent(f, t, text);
+  countStrong(p);
+  dunTick(db, p, f);
+  return { ok: true, silent: true, dmg: Math.round(dmg), mult, strongText: text, fight: dunFightView(p) };
 }
 function dunSkill(db, id, kind) {
   const { p, f, err } = dunActive(db, id); if (err) return err;
@@ -2174,13 +2207,36 @@ function raidHit(db, id, hits) {
   // 누적 타수 상한: 경과시간으로 물리적 최대치 초과분은 버림(오토클리커 방지)
   const maxTotal = Math.floor((Date.now() - raid.startTs) / CONFIG.raidHitMsPerTap) + 12;
   if ((raid.hits[p.nick] || 0) + hits > maxTotal) hits = Math.max(0, maxTotal - (raid.hits[p.nick] || 0));
-  const dmg = Math.round(hits * memberStats(p).atk * CONFIG.raidHitDmgMult);
+  const res = raid.res && raid.res[p.nick] > Date.now() ? STRONG_ATTACKS.healer.buff.mult : 1;   // ✨ 마력 공명
+  const dmg = Math.round(hits * memberStats(p).atk * CONFIG.raidHitDmgMult * res);
   raid.bossHP = Math.max(0, raid.bossHP - dmg);
   raid.contrib[p.nick] = (raid.contrib[p.nick] || 0) + dmg;
   raid.hits[p.nick] = (raid.hits[p.nick] || 0) + hits;
   addTaps(p, hits);   // 칭호용 일반 공격(서버가 검증한 타수)
   if (raid.bossHP <= 0) raidTick(db, pt);
   return { ok: true, dmg, raid: raidView(raid) };
+}
+// ⚡ 레이드 강공격 — 그린 커맨드 1번 = 연타 n회분(쿨타임은 서버가 막는다)
+function raidStrong(db, id, power) {
+  const { p, pt, raid } = raidMember(db, id);
+  if (!raid) return { ok: false, error: '진행 중인 레이드가 없어요.' };
+  raidTick(db, pt);
+  if (raid.status !== 'active') return { ok: true, ended: true, raid: raidView(raid) };
+  if (!(p.nick in raid.contrib)) return { ok: false, error: '이 레이드 참가자가 아니에요.' };
+  const c = STRONG_ATTACKS[p.class] || STRONG_ATTACKS.warrior, now = Date.now();
+  if (!raid.strongAt) raid.strongAt = {};
+  if (now - (raid.strongAt[p.nick] || 0) < c.gapMs) return { ok: false, silent: true, error: '강공격 준비 중…' };
+  raid.strongAt[p.nick] = now;
+  const units = strongUnits(p.class, power);
+  const dmg = Math.round(units * memberStats(p).atk * CONFIG.raidHitDmgMult);
+  raid.bossHP = Math.max(0, raid.bossHP - dmg);
+  raid.contrib[p.nick] = (raid.contrib[p.nick] || 0) + dmg;
+  let text = c.emoji + ' ' + p.nick + ' ' + c.name + '! 보스 -' + dmg.toLocaleString();
+  if (c.buff) { if (!raid.res) raid.res = {}; raid.res[p.nick] = now + c.buff.ms; text += ' · ✨ 마력 공명(연타 ×' + c.buff.mult + ')'; }
+  raid.events.push({ t: now - raid.startTs, text });
+  countStrong(p);
+  if (raid.bossHP <= 0) raidTick(db, pt);
+  return { ok: true, silent: true, dmg, units, strongText: text, raid: raidView(raid) };
 }
 function raidSkill(db, id) {
   const { p, pt, raid } = raidMember(db, id);
@@ -2450,7 +2506,7 @@ function bpBuyPremium(db, id) {
 }
 
 module.exports = {
-  eggFound, atkReport, reportAtk, ACHIEVEMENTS,
+  raidStrong, dunStrong, STRONG_ATTACKS, eggFound, atkReport, reportAtk, ACHIEVEMENTS,
   CONFIG, GRADES, RARITIES, CLASSES, BOSSES, odds, enhanceCost, weaponName, grade,
   missionView, missionClaim, bpView, bpClaim, bpBuyPremium,
   login, setClass, rename, publicView, enhance, ascend, attend, mine, mineSwing, hunt, buyProtect, fight,
