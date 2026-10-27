@@ -243,7 +243,12 @@ const gStat = (p, k) => (p.gs && p.gs[k]) || 0;
 const eggOf = (p, k) => !!(p.eggs && p.eggs[k]);
 function setEgg(p, k) { if (!p.eggs || typeof p.eggs !== 'object') p.eggs = {}; if (p.eggs[k]) return false; p.eggs[k] = 1; return true; }
 // 클라에서 찾는 이스터에그(그리기·화면) — 사냥 것은 최근 5분 안에 사냥을 했어야 인정(아무 데서나 호출 방지)
-const CLIENT_EGGS = { heart: 'hunt', spiral: 'hunt', inf: 'hunt', konami: 'hunt', forge: 'any' };
+const CLIENT_EGGS = { heart: 'hunt', spiral: 'hunt', inf: 'hunt', konami: 'hunt', forge: 'any', console: 'any', sudo: 'any' };
+// 🔨 개발자 이스터에그 중 서버 주소로만 열리는 것(헤더 탐정 /api/anvil · 찻주전자 /api/coffee) — /api/egg 로는 못 연다
+function devEgg(db, id, eggId) {
+  if (!['header', 'teapot'].includes(eggId)) return { ok: false, error: '…?' };
+  return { ok: true, silent: true, found: setEgg(norm(db.players[id]), eggId) ? eggId : null };
+}
 function eggFound(db, id, eggId) {
   const p = norm(db.players[id]);
   const where = CLIENT_EGGS[eggId];
@@ -355,6 +360,11 @@ const ACHIEVEMENTS = [
   { id: 'egg_77',      title: '럭키 세븐',      grade: 'prism', hidden: true, desc: '딱 +77에 도착했다',                      check: p => eggOf(p, 'l77') },
   { id: 'egg_pity99',  title: '한 끗 차이',     grade: 'prism', hidden: true, desc: '장인의 기운 99% 이상에서 파괴됐다',       check: p => eggOf(p, 'pity99') },
   { id: 'egg_air',     title: '공기 수집가',    grade: 'prism', hidden: true, desc: '캡슐에서 빈 캡슐 3연속',                 check: p => eggOf(p, 'air') },
+  // 🔨 개발자만 찾을 수 있는 것 — 콘솔 · 응답 헤더 · HTTP 418 · 키보드(정답은 해시로만)
+  { id: 'egg_console', title: '콘솔 강화',  grade: 'prism', hidden: true, desc: '개발자 콘솔에서 강화했다',                check: p => eggOf(p, 'console') },
+  { id: 'egg_header',  title: '헤더 탐정',  grade: 'prism', hidden: true, desc: '응답 헤더의 단서를 따라 모루를 두드렸다', check: p => eggOf(p, 'header') },
+  { id: 'egg_teapot',  title: '찻주전자',   grade: 'prism', hidden: true, desc: '서버에게 커피를 주문했다 (418)',         check: p => eggOf(p, 'teapot') },
+  { id: 'egg_sudo',    title: 'sudo 초월', grade: 'prism', hidden: true, desc: '관리자 권한으로 초월을 부탁했다',         check: p => eggOf(p, 'sudo') },
   { id: 'egg_halloween', title: '할로윈의 사냥꾼', grade: 'prism', hidden: true, desc: '할로윈(10/31)에 몬스터를 사냥했다',     check: p => eggOf(p, 'halloween') },
   // 염색
   { id: 'colormage', title: '색채 마술사',  grade: 'epic',     desc: '염색약 40회 사용',       check: p => (p.dyeCount || 0) >= 40 },
@@ -2506,7 +2516,7 @@ function bpBuyPremium(db, id) {
 }
 
 module.exports = {
-  raidStrong, dunStrong, STRONG_ATTACKS, eggFound, atkReport, reportAtk, ACHIEVEMENTS,
+  devEgg, raidStrong, dunStrong, STRONG_ATTACKS, eggFound, atkReport, reportAtk, ACHIEVEMENTS,
   CONFIG, GRADES, RARITIES, CLASSES, BOSSES, odds, enhanceCost, weaponName, grade,
   missionView, missionClaim, bpView, bpClaim, bpBuyPremium,
   login, setClass, rename, publicView, enhance, ascend, attend, mine, mineSwing, hunt, buyProtect, fight,

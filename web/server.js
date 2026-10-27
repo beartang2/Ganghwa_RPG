@@ -363,9 +363,10 @@ setInterval(() => {
 }, 600000).unref();
 
 /* ---------- HTTP 헬퍼 ---------- */
+const BLACKSMITH = 'Knock on the anvil: POST /api/anvil (while logged in)';   // 🔨 개발자 이스터에그 단서(ASCII)
 function sendJson(res, code, obj) {
   const body = JSON.stringify(obj);
-  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'X-Blacksmith': BLACKSMITH });
   res.end(body);
 }
 function readBody(req) {
@@ -524,6 +525,19 @@ const server = http.createServer(async (req, res) => {
 
   // 인증 필요
   const id = authId(req);
+  // 🔨 개발자 이스터에그 — 모루(헤더 탐정) · 커피(찻주전자, 418)
+  if (p === '/api/anvil') {
+    if (req.method !== 'POST') return sendJson(res, 405, { ok: false, error: '모루는 두드리는(POST) 거예요. 🔨' });
+    if (!id) return sendJson(res, 401, { ok: false, error: '로그인한 채로 두드려 보세요. (x-token)' });
+    const r = game.devEgg(db, id, 'header'); if (r.found) save();
+    return sendJson(res, 200, Object.assign(r, { msg: '🔨 쾅! 모루가 울렸다…', next: '모루는 커피를 끓이지 않아요. ☕ 커피는 /api/coffee 에 부탁해 보세요.', me: game.publicView(db, id) }));
+  }
+  if (p === '/api/coffee') {
+    let found = null;
+    if (id) { found = game.devEgg(db, id, 'teapot').found; if (found) save(); }
+    return sendJson(res, 418, { ok: false, teapot: true, found, rfc: 'https://www.rfc-editor.org/rfc/rfc2324',
+      error: "418 I'm a teapot 🫖 — 저는 찻주전자라서 커피는 못 끓여요." + (id ? '' : ' (로그인한 채로 다시 부탁해 보세요)') });
+  }
   if (p.startsWith('/api/')) {
     if (!id) return sendJson(res, 401, { ok: false, error: '로그인이 필요합니다.' });
 

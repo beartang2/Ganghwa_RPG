@@ -1341,3 +1341,8 @@ body.halloween{background:
 /* 누르는 순간 보스·몬스터가 살짝 눌림(데미지는 손을 뗄 때) */
 .hunt-mon.press .hunt-emoji,.raid-mon.press .rmon-emoji{animation:bossPress .12s ease-out}
 @keyframes bossPress{50%{transform:scale(.95)}}
+
+/* 🔨 sudo 이스터에그 — 터미널처럼 초록빛이 한 번 번쩍 */
+body.sudo-flash::after{content:'';position:fixed;inset:0;z-index:200;pointer-events:none;
+  background:radial-gradient(circle at 50% 40%,rgba(126,240,197,.28),rgba(126,240,197,0) 60%);animation:sudoFlash .9s ease-out forwards}
+@keyframes sudoFlash{from{opacity:1}to{opacity:0}}
