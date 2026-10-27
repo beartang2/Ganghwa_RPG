@@ -227,6 +227,7 @@ const TITLE_GRADES = {
   epic:      { rank: 2, color: '#a770ef' },
   legend:    { rank: 3, color: '#ffd93d' },
   transcend: { rank: 4, color: '#ff5d6c' },
+  prism:     { rank: 5, color: '#c9b8ff' },   // 🌈 이스터에그 전용 — 화면에선 무지갯빛으로 흐른다. 얻기 전엔 등급·이름 모두 숨김(❓)
 };
 /* ---------- 칭호용 누적 기록 ----------
  * p.atk = { n: 일반 공격, s: 강공격, w: { 직업: 그 무기 강공격 }, ts: 마지막 사냥 보고 시각 }
@@ -238,6 +239,18 @@ const atkS = p => (p.atk && p.atk.s) || 0;
 const atkSW = (p, cls) => (p.atk && p.atk.w && p.atk.w[cls]) || 0;
 const dStat = (p, k) => (p.ds && p.ds[k]) || 0;
 const gStat = (p, k) => (p.gs && p.gs[k]) || 0;
+// 🥚 이스터에그 — 한 번 찾으면 끝(1회 bool). p.eggs = { heart: 1, ... }
+const eggOf = (p, k) => !!(p.eggs && p.eggs[k]);
+function setEgg(p, k) { if (!p.eggs || typeof p.eggs !== 'object') p.eggs = {}; if (p.eggs[k]) return false; p.eggs[k] = 1; return true; }
+// 클라에서 찾는 이스터에그(그리기·화면) — 사냥 것은 최근 5분 안에 사냥을 했어야 인정(아무 데서나 호출 방지)
+const CLIENT_EGGS = { heart: 'hunt', spiral: 'hunt', inf: 'hunt', konami: 'hunt', forge: 'any' };
+function eggFound(db, id, eggId) {
+  const p = norm(db.players[id]);
+  const where = CLIENT_EGGS[eggId];
+  if (!where) return { ok: false, error: '…?' };
+  if (where === 'hunt' && Date.now() - (p.huntTs || 0) > 5 * 60000) return { ok: false, error: '사냥터에서만 찾을 수 있어요.' };
+  return { ok: true, silent: true, found: setEgg(p, eggId) ? eggId : null };
+}
 function atkStat(p) { if (!p.atk || typeof p.atk !== 'object') p.atk = { n: 0, s: 0, w: {} }; if (!p.atk.w) p.atk.w = {}; return p.atk; }
 function bumpD(p, k, n) { if (!p.ds || typeof p.ds !== 'object') p.ds = {}; p.ds[k] = (p.ds[k] || 0) + (n == null ? 1 : n); }
 function bumpG(p, k, n) { if (!p.gs || typeof p.gs !== 'object') p.gs = {}; p.gs[k] = (p.gs[k] || 0) + (n == null ? 1 : n); }
@@ -332,6 +345,17 @@ const ACHIEVEMENTS = [
   { id: 'cap500',    title: '캡슐 중독',       grade: 'epic',      desc: '🧸 캡슐 500회',                   check: p => gStat(p, 'cap') >= 500 },
   { id: 'capempty50', title: '허탕의 달인',    grade: 'rare',      desc: '🧸 빈 캡슐 50회',                 check: p => gStat(p, 'capE') >= 50 },
   { id: 'capjack',   title: '천운',            grade: 'transcend', desc: '🧸 캡슐에서 💎 프리즘 50개 당첨',  check: p => gStat(p, 'capJ') >= 1 },
+  // 🌈 프리즘 등급 — 이스터에그(조건은 얻기 전까지 비공개)
+  { id: 'egg_heart',   title: '사랑의 사냥꾼',  grade: 'prism', hidden: true, desc: '사냥터에서 ❤️ 하트를 그렸다',            check: p => eggOf(p, 'heart') },
+  { id: 'egg_spiral',  title: '빙글빙글',       grade: 'prism', hidden: true, desc: '사냥터에서 🌀 소용돌이를 그렸다',        check: p => eggOf(p, 'spiral') },
+  { id: 'egg_inf',     title: '무한의 사냥꾼',  grade: 'prism', hidden: true, desc: '사냥터에서 ♾️ 무한을 그렸다',            check: p => eggOf(p, 'inf') },
+  { id: 'egg_konami',  title: '고전 게이머',    grade: 'prism', hidden: true, desc: '사냥터에서 ↑↑↓↓←→←→ 후 두 번 톡톡',     check: p => eggOf(p, 'konami') },
+  { id: 'egg_forge',   title: '화로 두드리는 자', grade: 'prism', hidden: true, desc: '대장간 무기를 쉬지 않고 10번 두드렸다', check: p => eggOf(p, 'forge') },
+  { id: 'egg_44',      title: '불길한 숫자',    grade: 'prism', hidden: true, desc: '+44에서 무기가 파괴됐다',                check: p => eggOf(p, 'd44') },
+  { id: 'egg_77',      title: '럭키 세븐',      grade: 'prism', hidden: true, desc: '딱 +77에 도착했다',                      check: p => eggOf(p, 'l77') },
+  { id: 'egg_pity99',  title: '한 끗 차이',     grade: 'prism', hidden: true, desc: '장인의 기운 99% 이상에서 파괴됐다',       check: p => eggOf(p, 'pity99') },
+  { id: 'egg_air',     title: '공기 수집가',    grade: 'prism', hidden: true, desc: '캡슐에서 빈 캡슐 3연속',                 check: p => eggOf(p, 'air') },
+  { id: 'egg_halloween', title: '할로윈의 사냥꾼', grade: 'prism', hidden: true, desc: '할로윈(10/31)에 몬스터를 사냥했다',     check: p => eggOf(p, 'halloween') },
   // 염색
   { id: 'colormage', title: '색채 마술사',  grade: 'epic',     desc: '염색약 40회 사용',       check: p => (p.dyeCount || 0) >= 40 },
   { id: 'fashion',  title: '패션의 완성',   grade: 'transcend', desc: '염색에서 무지개 획득',   check: p => !!p.gotRainbow },
@@ -844,12 +868,13 @@ function capsule(db, id, times) {
   const price = CONFIG.capsulePrice;
   if (p.gold < price) return { ok: false, error: '골드 부족! (캡슐 1회 ' + price.toLocaleString() + 'G)' };
   const results = [];
-  let prism = 0, gold = 0;
+  let prism = 0, gold = 0, airRun = 0;
   for (let i = 0; i < times && p.gold >= price; i++) {
     p.gold -= price; p.goldSpent = (p.goldSpent || 0) + price;
     const e = rollTable(CAPSULE_TABLE), g = grantRoll(p, e);
     results.push(g);
     bumpG(p, 'cap'); if (e.kind === 'none') bumpG(p, 'capE'); if (e === CAPSULE_TABLE[3]) bumpG(p, 'capJ');   // 칭호용(💎50 = 최고 칸)
+    airRun = e.kind === 'none' ? airRun + 1 : 0; if (airRun >= 3) setEgg(p, 'air');   // 🥚 빈 캡슐 3연속
     if (g.kind === 'prism') prism += g.n;
     if (g.kind === 'gold') gold += g.n;
   }
@@ -1459,8 +1484,9 @@ function publicView(db, id) {
     titleRoster: ACHIEVEMENTS.map(a => {
       const got = a.check(p);
       return got
-        ? { id: a.id, title: a.title, grade: a.grade, color: TITLE_GRADES[a.grade].color, earned: true }
-        : { grade: a.grade, color: TITLE_GRADES[a.grade].color, earned: false };
+        ? { id: a.id, title: a.title, grade: a.grade, color: TITLE_GRADES[a.grade].color, earned: true, desc: a.desc }
+        : a.hidden ? { grade: 'prism', hidden: true, earned: false }
+          : { grade: a.grade, color: TITLE_GRADES[a.grade].color, earned: false };
     }).sort((x, y) => TITLE_GRADES[y.grade].rank - TITLE_GRADES[x.grade].rank || (y.earned === x.earned ? 0 : y.earned ? 1 : -1)),
     titleTotal: ACHIEVEMENTS.length, titleEarned: earnedTitles(p).length,
     maxLevel: CONFIG.maxLevel,
@@ -1602,7 +1628,7 @@ function enhance(db, id) {
   p.gold -= cost;
   p.goldSpent = (p.goldSpent || 0) + cost;   // 도전과제: 누적 소모 골드
   bumpMstat(p, 'enh');                        // 미션: 강화 시도
-  const before = p.level;
+  const before = p.level, pityBefore = p.pity || 0;
   const base = odds(before, p.ascend);
 
   // 장인의 기운 100% → 확정 성공 (부스트·확률 무시, 소모 없음)
@@ -1615,7 +1641,8 @@ function enhance(db, id) {
     p.pity = 0;
     bumpRank(db);
     addLog(db, '🔨 ' + p.nick + ' 장인의 기운 확정성공 +' + before + '→+' + p.level);
-    return { ok: true, result: 'success', guaranteed: true, cost, boosted: false, boostLeft: itemCount(p, 'boost'), pity: 0, msg: '🔨 장인의 기운 100%! 확정 성공!  +' + before + ' → +' + p.level };
+    const lucky = p.level === 77 && setEgg(p, 'l77');
+    return { ok: true, result: 'success', guaranteed: true, egg: lucky ? 'l77' : null, cost, boosted: false, boostLeft: itemCount(p, 'boost'), pity: 0, msg: '🔨 장인의 기운 100%! 확정 성공!  +' + before + ' → +' + p.level };
   }
 
   // 강화 부스트권(성공률 +)
@@ -1630,7 +1657,7 @@ function enhance(db, id) {
   // 장인의 기운 상승폭 — 부스트권 사용 시 더 크게 오른다(성공률↑ + 실패해도 pity 빨리 참)
   const pg = pityGain(o.success, p.ascend) * (boosted ? CONFIG.boostPityMult : 1);
   const r = Math.random();
-  let result, msg;
+  let result, msg, egg = null;
   if (r < o.success) {
     const gain = successGain(before);
     p.level = Math.min(CONFIG.maxLevel, before + gain);
@@ -1641,6 +1668,7 @@ function enhance(db, id) {
     bumpRank(db);
     result = 'success';
     msg = (gain > 1 ? '💫 대성공! +' + gain + '  ' : '강화 성공! ') + '+' + before + ' → +' + p.level;
+    if (p.level === 77) { msg = '🎰 럭키 세븐! ' + msg; if (setEgg(p, 'l77')) egg = 'l77'; }
     addLog(db, '✅ ' + p.nick + ' +' + before + '→+' + p.level + (gain > 1 ? ' (+' + gain + ')' : ''));
   } else if (r < o.success + o.destroy) {
     if (protectWorks(p) && takeItem(p, 'protect', 1)) {
@@ -1655,6 +1683,8 @@ function enhance(db, id) {
       if (p.destroyDay !== today()) { p.destroyDay = today(); p.destroysToday = 0; }
       p.destroysToday++;
       result = 'destroy';
+      if (before === 44 && setEgg(p, 'd44')) egg = 'd44';
+      if (pityBefore >= 0.99 && setEgg(p, 'pity99')) egg = 'pity99';
       if (floor === 0) {
         // +0으로 떨어지는 진짜 파괴 → 속성 재부여
         const newElem = randomElementKey(); p.element = newElem;
@@ -1674,7 +1704,8 @@ function enhance(db, id) {
     result = 'fail';
     msg = '❌ 실패... +' + before + ' 유지 · 🔨 장인의 기운 ' + Math.round(p.pity * 100) + '%';
   }
-  return { ok: true, result, msg, cost, boosted, boostLeft: itemCount(p, 'boost'), pity: p.pity };
+  if (result === 'destroy' && before === 44) msg += '\n…사(死)의 숫자였다.';
+  return { ok: true, result, msg, cost, boosted, boostLeft: itemCount(p, 'boost'), pity: p.pity, egg };
 }
 /* 초월 실행 — +99 에서만. 무기를 +0 으로 되돌리고 ★을 하나 얻는다.
  * 골드·방지권·부스트·칭호·최고기록(best)·채굴 레벨은 전부 유지된다. */
@@ -1775,6 +1806,8 @@ function mineSwing(db, id) {
 function hunt(db, id, atk) {
   const p = norm(db.players[id]);
   reportAtk(p, atk);   // 직전 몬스터를 잡을 때의 일반·강공격 횟수(칭호용)
+  p.huntTs = Date.now();   // 사냥터 이스터에그 인정 창
+  if (today().slice(5) === '10-31') setEgg(p, 'halloween');   // 🎃 KST 기준 할로윈
   if (p.huntDay !== today()) { p.huntDay = today(); p.huntsUsed = 0; }
   // 일일 사냥(20회)은 풀보상 + 희귀 드랍. 소진 후엔 '무한 사냥'(보상↓·가끔 채광 물약)으로 계속 가능
   const overtime = p.huntsUsed >= limitOf(p, 'dailyHunts');
@@ -2403,7 +2436,7 @@ function bpBuyPremium(db, id) {
 }
 
 module.exports = {
-  atkReport, reportAtk, ACHIEVEMENTS,
+  eggFound, atkReport, reportAtk, ACHIEVEMENTS,
   CONFIG, GRADES, RARITIES, CLASSES, BOSSES, odds, enhanceCost, weaponName, grade,
   missionView, missionClaim, bpView, bpClaim, bpBuyPremium,
   login, setClass, rename, publicView, enhance, ascend, attend, mine, mineSwing, hunt, buyProtect, fight,

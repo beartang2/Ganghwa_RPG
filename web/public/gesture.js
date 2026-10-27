@@ -107,6 +107,11 @@
   const starPath = [0, 2, 4, 1, 3].map(i => STAR_V[i]);   // 오각별: 꼭짓점을 하나씩 건너뛰며 한 붓
   const circle = n => { const o = []; for (let k = 0; k <= n; k++) o.push({ x: Math.cos(k / n * 2 * Math.PI), y: Math.sin(k / n * 2 * Math.PI) }); return o; };
   const rev = a => a.slice().reverse();
+  // 누운 8(∞) — 가운데 교차점에서 시작
+  const INF = Array.from({ length: 65 }, (_, k) => { const t = k / 64 * 2 * Math.PI; return { x: Math.sin(t), y: Math.sin(t) * Math.cos(t) }; });
+  // 하트 곡선 x=16sin³t, y=-(13cos t-5cos2t-2cos3t-cos4t) — t0=0 위 오목점, π 아래 꼭짓점에서 시작
+  const HEART = t0 => Array.from({ length: 65 }, (_, k) => { const t = t0 + k / 64 * 2 * Math.PI;
+    return { x: 16 * Math.sin(t) ** 3 / 17, y: -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) / 17 }; });
   const RAW_TEMPLATES = [
     ['star', poly(starPath, true)], ['star', rev(poly(starPath, true))],
     // 헷갈리는 모양들 — 이것들이 더 가까우면 별이 아니다
@@ -118,7 +123,9 @@
     ['caret', poly([{ x: 0, y: 1 }, { x: 0.5, y: 0 }, { x: 1, y: 1 }], false)],
     ['check', poly([{ x: 0, y: 0.55 }, { x: 0.35, y: 1 }, { x: 1, y: 0 }], false)],
     ['semicircle', circle(48).slice(0, 25)], ['semicircle', rev(circle(48).slice(0, 25))],
-    ['infinity', Array.from({ length: 65 }, (_, k) => { const t = k / 64 * 2 * Math.PI; return { x: Math.sin(t), y: Math.sin(t) * Math.cos(t) }; })],
+    ['infinity', INF], ['infinity', rev(INF)],
+    // 이스터에그 — 하트(위 오목한 곳에서 시작 · 아래 꼭짓점에서 시작, 양방향)
+    ['heart', HEART(0)], ['heart', rev(HEART(0))], ['heart', HEART(Math.PI)], ['heart', rev(HEART(Math.PI))],
   ];
   const TEMPLATES = RAW_TEMPLATES.map(([name, pts]) => ({ name, pts: normalize(pts.map(p => ({ x: p.x * 100, y: p.y * 100 }))) }));
   function recognize(points) {
@@ -136,13 +143,14 @@
     lineMinLen: 55, lineStraight: 0.9, lineMaxDev: 0.2, lineAway: 0.55, lineFullLen: 180,
     starMinLen: 220, starMinScore: 0.78, starMaxDur: 8000, starTrimHead: [0, 0.07, 0.14, 0.2], starTrimTail: [0, 0.1],
     holdMs: 800, holdGuardMs: 400, holdSlop: 14,
+    eggMinScore: 0.8,
   };
   // 휘는 정도: 매끄럽게 다듬어 21점으로 다시 찍은 경로에서 이웃한 마디끼리의 방향 변화(부호 있음)를 더한다
   function smooth(p, r) {   // 이동 평균 — 손떨림 지그재그를 걷어 내서 '전체적으로 휘는 정도' 만 남긴다
     return p.map((_, i) => { let x = 0, y = 0, n = 0; for (let j = Math.max(0, i - r); j <= Math.min(p.length - 1, i + r); j++) { x += p[j].x; y += p[j].y; n++; } return { x: x / n, y: y / n }; });
   }
-  function turning(pts) {
-    const p = resample(smooth(resample(pts, 41), 3), 21);
+  function turning(pts, n, r) {
+    const p = resample(smooth(resample(pts, (n || 21) * 2), r == null ? 3 : r), n || 21);
     let sum = 0, abs = 0, maxStep = 0, prev = null;
     const steps = [];
     for (let i = 1; i < p.length; i++) {
@@ -213,6 +221,44 @@
     return { ok, power: 1, why: ok ? null : (!still ? 'moved' : 'short'), guard: still && held >= CFG.holdGuardMs };
   }
   const JUDGES = { arc: judgeArc, line: judgeLine, star: judgeStar, hold: judgeHold };
+
+  /* ---------- 🥚 이스터에그 커맨드 (무기와 상관없이) ----------
+   * heart ❤️ 하트 · inf ♾️ 누운 8 · spiral 🌀 소용돌이(1바퀴 반 이상, 점점 커지거나 작아지는 원) */
+  function bestTrimmed(s) {   // 별처럼 들어가는 선·삐침을 잘라 본 것 중 가장 잘 맞는 모양
+    let best = { name: null, score: 0 };
+    for (const a of CFG.starTrimHead) for (const b of CFG.starTrimTail) {
+      const sub = a || b ? trimPath(s, a, b) : s;
+      if (sub.length < 8) continue;
+      const r = recognize(sub); if (r.score > best.score) best = r;
+    }
+    return best;
+  }
+  function isSpiral(s) {
+    if (pathLength(s) < 300) return false;
+    // 소용돌이는 안쪽이 촘촘히 감겨서 21점으로는 회전을 놓친다 — 64점, 약한 다듬기로 잰다
+    const tn = turning(s, 64, 1), turn = Math.abs(tn.sum);
+    if (turn < 540 || tn.abs <= 0 || turn / tn.abs < 0.8 || tn.peak > 0.5) return false;
+    const c = centroid(s), k = Math.max(3, Math.floor(s.length * 0.15));
+    const rad = arr => arr.reduce((m, p) => m + dist(p, c), 0) / arr.length;
+    const r0 = rad(s.slice(0, k)), r1 = rad(s.slice(-k));
+    return Math.max(r0, r1) / Math.max(1, Math.min(r0, r1)) >= 1.8;
+  }
+  function egg(s) {
+    if (isTap(s) || pathLength(s) < 150) return null;
+    if (isSpiral(s)) return 'spiral';
+    const r = bestTrimmed(s);
+    if (r.name === 'heart' && r.score >= CFG.eggMinScore) return 'heart';
+    if (r.name === 'infinity' && r.score >= CFG.eggMinScore) return 'inf';
+    return null;
+  }
+  // 곧게 휙 그은 선의 방향(코나미 커맨드용) — U·D·L·R 또는 null
+  function swipeDir(s) {
+    const a = s[0], b = s[s.length - 1], dx = b.x - a.x, dy = b.y - a.y, chord = Math.hypot(dx, dy);
+    if (chord < 40 || chord / (pathLength(s) || 1) < 0.85) return null;
+    if (Math.abs(dx) > Math.abs(dy) * 1.4) return dx > 0 ? 'R' : 'L';
+    if (Math.abs(dy) > Math.abs(dx) * 1.4) return dy > 0 ? 'D' : 'U';
+    return null;
+  }
   // 지금 무기의 커맨드로 판정. 실패하면 '다른 무기 커맨드처럼 보였는지(looks)' 도 알려 줘서 안내에 쓴다.
   function judge(cmd, s, ctx) {
     const r = (JUDGES[cmd] || judgeArc)(s, ctx);
@@ -380,5 +426,5 @@
     };
   }
 
-  return { judge, recognize, isTap, resample, pathLength, maxDisplacement, CFG, createTrail, _templates: TEMPLATES.map(t => t.name) };
+  return { judge, recognize, isTap, egg, swipeDir, resample, pathLength, maxDisplacement, CFG, createTrail, _templates: TEMPLATES.map(t => t.name) };
 });

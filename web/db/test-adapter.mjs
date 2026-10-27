@@ -352,6 +352,42 @@ async function main() {
   ok(['tap1k', 'str30', 'str_healer', 'dflawless', 'boxjack', 'capjack'].every(id => tl.includes(id)), '칭호: 연타 입문 · 한 방의 맛 · 별을 그리는 자 · 무결의 정복자 · 황금 열쇠 · 천운');
   ok(!tl.includes('tap10k') && !tl.includes('alch100'), '조건 미달 칭호는 없음');
 
+  // 🥚 이스터에그 — 1회 bool, 🌈 프리즘 등급 숨은 칭호
+  console.log('\n[이스터에그]');
+  r = await req('POST', '/api/login', { body: { nick: '이스터', pin: '31313131' } });
+  const tokX = r.body.token;
+  await req('POST', '/api/setclass', { token: tokX, body: { class: 'healer' } });
+  let mx = (await req('GET', '/api/me', { token: tokX })).body.me;
+  const hid = mx.titleRoster.filter(t => t.hidden);
+  ok(hid.length === 10 && hid.every(t => !t.title && !t.color && t.grade === 'prism'), '숨은 칭호 10개 — 이름·색 비공개(❓)');
+  ok(!(await req('POST', '/api/egg', { token: tokX, body: { id: 'heart' } })).body.ok, '사냥 안 하고 사냥터 이스터에그 → 거부');
+  await req('POST', '/api/hunt', { token: tokX });
+  r = await req('POST', '/api/egg', { token: tokX, body: { id: 'heart' } });
+  ok(r.body.ok && r.body.found === 'heart' && r.body.me.titles.some(t => t.id === 'egg_heart' && t.grade === 'prism'), '사냥 직후 ❤️ 하트 → 「사랑의 사냥꾼」(프리즘 등급)');
+  r = await req('POST', '/api/egg', { token: tokX, body: { id: 'heart' } });
+  ok(r.body.ok && r.body.found === null, '두 번째는 이미 찾음(1회)');
+  ok(!(await req('POST', '/api/egg', { token: tokX, body: { id: 'gold9999' } })).body.ok, '없는 이스터에그 거부');
+  ok((await req('POST', '/api/egg', { token: tokX, body: { id: 'forge' } })).body.found === 'forge', '대장간 두드리기는 어디서나');
+  // 서버 판정 — 확률을 고정해서 확인
+  const realRandom = Math.random;
+  try {
+    await q("UPDATE players SET level = 76, gold = 100000000, data = jsonb_set(jsonb_set(data, '{pity}', '1'), '{inv,items}', '{}'::jsonb) WHERE nick='이스터'");
+    r = await req('POST', '/api/enhance', { token: tokX });
+    ok(r.body.result === 'success' && r.body.me.level === 77 && r.body.egg === 'l77' && r.body.me.titles.some(t => t.id === 'egg_77'), '딱 +77 도착 → 「럭키 세븐」');
+    await q("UPDATE players SET level = 44, data = jsonb_set(data, '{pity}', '0.995') WHERE nick='이스터'");
+    Math.random = () => 0.149;   // +44 에서 성공 14.6% 다음 파괴 0.5% 구간
+    r = await req('POST', '/api/enhance', { token: tokX });
+    Math.random = realRandom;
+    const t44 = r.body.me.titles.map(t => t.id);
+    ok(r.body.result === 'destroy' && /사\(死\)/.test(r.body.msg) && t44.includes('egg_44') && t44.includes('egg_pity99'), '+44 · 기운 99.5% 에서 파괴 → 「불길한 숫자」「한 끗 차이」');
+    Math.random = () => 0.9999;  // 캡슐 표의 마지막 칸 = 빈 캡슐
+    r = await req('POST', '/api/capsule', { token: tokX, body: { times: 3 } });
+    Math.random = realRandom;
+    ok(r.body.me.titles.some(t => t.id === 'egg_air'), '빈 캡슐 3연속 → 「공기 수집가」');
+  } finally { Math.random = realRandom; }
+  mx = (await req('GET', '/api/me', { token: tokX })).body.me;
+  ok(mx.titleRoster.filter(t => t.hidden).length === 4 && mx.titleRoster.find(t => t.id === 'egg_heart').desc.includes('하트'), '찾은 건 이름·설명 공개, 나머지 4개는 여전히 ❓');
+
   // 🗑️ 회원 탈퇴 — 파티장 탈퇴 시 해산, 모든 세션 무효, 소유 행 삭제, 닉네임 재사용 가능
   console.log('\n[회원 탈퇴]');
   r = await req('POST', '/api/login', { body: { nick: '탈퇴러', pin: '13579135' } });

@@ -1098,3 +1098,35 @@ a.set-row{text-decoration:none;color:inherit}
   .set-modal .set-card{max-width:none;width:100%;min-height:100%;margin:0;border-radius:0;
     padding:calc(env(safe-area-inset-top, 0px) + 14px) 16px calc(env(safe-area-inset-bottom, 0px) + 20px)}
 }
+
+/* ---------- 🌈 프리즘 등급 칭호(이스터에그) — 무지갯빛이 흐르는 글자 ---------- */
+.prism-txt{background:linear-gradient(90deg,#ff8ad8,#ffd36b,#7ef0c5,#7fb8ff,#c58bff,#ff8ad8);background-size:220% 100%;
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;
+  animation:prismFlow 3.2s linear infinite;filter:drop-shadow(0 0 5px rgba(201,184,255,.45))}
+@keyframes prismFlow{to{background-position:220% 0}}
+.title-chip.prism,.title-tag.prism{text-shadow:none}
+.title-chip.prism{background:linear-gradient(90deg,rgba(255,138,216,.13),rgba(126,240,197,.11),rgba(197,139,255,.15))}
+.title-chip.prism.equipped{background:linear-gradient(90deg,#ff8ad8,#ffd36b,#7ef0c5,#7fb8ff,#c58bff);background-size:220% 100%;
+  animation:prismFlow 3.2s linear infinite;box-shadow:0 0 10px rgba(201,184,255,.7)}
+.title-chip.prism.equipped .prism-txt{background:none;-webkit-text-fill-color:#1a120c;color:#1a120c;filter:none}
+.tacc-eq.prism{color:inherit}
+.title-chip.q-prism{background:linear-gradient(90deg,rgba(255,138,216,.12),rgba(127,184,255,.12));color:#c9b8ff;
+  box-shadow:inset 0 0 0 1px rgba(201,184,255,.25)}
+/* 🥚 사냥터 이스터에그 연출 */
+.egg-float{position:fixed;z-index:122;pointer-events:none;font-size:26px;transform:translate(-50%,-50%);opacity:0;
+  animation:eggFloat 1.3s ease-out forwards}
+@keyframes eggFloat{0%{opacity:0;transform:translate(-50%,-30%) scale(.6)}20%{opacity:1}100%{opacity:0;transform:translate(-50%,-160%) scale(1.15)}}
+.hunt-mon.egg-heart .hunt-emoji{animation:eggHeart .7s ease-in-out}
+@keyframes eggHeart{30%{transform:scale(1.18)}60%{transform:scale(.95)}100%{transform:none}}
+.hunt-mon.egg-spin .hunt-emoji{animation:eggSpin .9s ease-in-out}
+@keyframes eggSpin{to{transform:rotate(720deg)}}
+.hunt-mon.egg-inf .hunt-emoji{animation:eggInf 1s ease-in-out}
+@keyframes eggInf{25%{transform:translateX(-14px) rotate(-8deg)}75%{transform:translateX(14px) rotate(8deg)}}
+.retro-badge{margin-left:6px;font:900 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.08em;color:#1a120c;
+  background:#7ef0c5;padding:3px 5px;border-radius:4px;vertical-align:2px}
+#weaponArt.knock{animation:forgeKnock .16s ease-out}
+@keyframes forgeKnock{40%{transform:rotate(-3deg) translateY(1px)}}
+/* 🎃 할로윈(10/31) — 화로 열기가 보랏빛으로 */
+body.halloween{background:
+  radial-gradient(130% 55% at 50% 118%, rgba(167,90,255,.22), rgba(167,90,255,0) 62%) fixed,
+  radial-gradient(90% 40% at 50% -12%, rgba(255,138,42,.08), rgba(255,138,42,0) 70%) fixed, var(--bg)}

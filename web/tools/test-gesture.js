@@ -61,6 +61,26 @@ expect('사각형 → 별 오인', rate(() => polygon(4), isStar), '<=', 0.02);
 expect('오각형 → 별 오인', rate(() => polygon(5), isStar), '<=', 0.05);
 expect('지그재그 → 별 오인', rate(zigzag, isStar), '<=', 0.02);
 expect('아무렇게나 → 별 오인', rate(scribble, isStar), '<=', 0.05);
+console.log('[🥚 이스터에그]');
+function heart() {
+  const c = { x: 200, y: 300 }, sc = R(4, 8), rot = R(-15, 15) * DEG, t0 = rnd() < 0.5 ? 0 : Math.PI, dir = rnd() < 0.5 ? 1 : -1, v = [];
+  for (let k = 0; k <= 40; k++) { const t = t0 + dir * k / 40 * 2 * Math.PI; const x = 16 * Math.sin(t) ** 3 * R(0.93, 1.07), y = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
+    v.push({ x: c.x + sc * (x * Math.cos(rot) - y * Math.sin(rot)), y: c.y + sc * (x * Math.sin(rot) + y * Math.cos(rot)) }); }
+  return stroke(v, { noise: R(1, 3) });
+}
+function inf() { const sc = R(50, 110), v = []; const dir = rnd() < 0.5 ? 1 : -1; for (let k = 0; k <= 40; k++) { const t = dir * k / 40 * 2 * Math.PI; v.push({ x: 200 + sc * Math.sin(t), y: 300 + sc * R(0.8, 1.1) * Math.sin(t) * Math.cos(t) }); } return stroke(v, { noise: 2 }); }
+function spiral() { const v = [], turns = R(1.8, 3), dir = rnd() < 0.5 ? 1 : -1, grow = rnd() < 0.5; for (let k = 0; k <= 60; k++) { const u = k / 60, r = grow ? 15 + 95 * u : 110 - 95 * u; v.push(at(200, 300, r, dir * u * turns * 2 * Math.PI)); } return stroke(v, { noise: 1.5 }); }
+const isEgg = k => s => G.egg(s) === k;
+expect('하트 인식', rate(heart, isEgg('heart')), '>=', 0.85);
+expect('무한(∞) 인식', rate(inf, isEgg('inf')), '>=', 0.85);
+expect('소용돌이 인식', rate(spiral, isEgg('spiral')), '>=', 0.9);
+expect('별 → 이스터에그 오인', rate(star, s => !!G.egg(s)), '<=', 0.02);
+expect('호 → 이스터에그 오인', rate(() => arc(), s => !!G.egg(s)), '<=', 0.02);
+expect('원 → 이스터에그 오인', rate(() => polygon(40), s => !!G.egg(s)), '<=', 0.03);
+expect('아무렇게나 → 이스터에그 오인', rate(scribble, s => !!G.egg(s)), '<=', 0.03);
+expect('하트 → 별 오인', rate(heart, isStar), '<=', 0.02);
+const sw = [G.swipeDir(stroke([{ x: 200, y: 300 }, { x: 200, y: 200 }])), G.swipeDir(stroke([{ x: 200, y: 300 }, { x: 320, y: 305 }]))];
+console.log(`  ${sw[0] === 'U' && sw[1] === 'R' ? '✓' : '✗'} 스와이프 방향 (${sw.join(',')})`); if (sw[0] !== 'U' || sw[1] !== 'R') fail++;
 console.log('[⚔️ 호]');
 expect('호(70~300°) 인식', rate(() => arc(), isArc), '>=', 0.95);
 expect('직선 → 호 오인', rate(() => line(), isArc), '<=', 0.02);
