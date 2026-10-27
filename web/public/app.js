@@ -1285,6 +1285,7 @@ async function spawnHuntMonster() {
   const r = await withLoad(() => api('hunt', 'POST', { atk: takeHuntAtk() }));   // 서버가 몬스터·보상·치명타 결정(보상은 서버에 즉시 반영)
   huntSpawning = false;
   if (!huntOpen) return;                  // 그새 닫힘
+  if (!r.ok && r.tooFast) { huntCur = null; setTimeout(() => { if (huntOpen && !huntCur) spawnHuntMonster(); }, 300); return; }   // 사람은 안 걸리는 하한 — 조용히 다시
   if (!r.ok) { el('huntFb').textContent = r.error + ' — 잠시 후 다시'; huntCur = null;
     setTimeout(() => { if (huntOpen && !huntCur) spawnHuntMonster(); }, 1200); return; }
   const m = r.monster;
