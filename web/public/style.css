@@ -322,12 +322,14 @@ body.loading-on #globalLoading{opacity:1}
 .raid-timerrow{display:flex;justify-content:space-between;align-items:center;font-weight:800;margin-bottom:4px}
 .raid-boss-name{font-family:var(--display);font-size:15px}
 .raid-timer b{color:var(--molten-hi);font-variant-numeric:tabular-nums}
-.raid-stage{position:relative;display:flex;align-items:center;justify-content:center;height:130px;overflow:visible;
-  touch-action:none;border-radius:14px}   /* 강공격 커맨드를 그리기 시작하는 판 — 끄는 동안 화면이 스크롤되지 않게 */
+.raid-stage{position:relative;display:flex;align-items:center;justify-content:center;height:190px;overflow:visible;
+  touch-action:none;border-radius:16px;   /* 강공격 커맨드를 그리기 시작하는 판 — 끄는 동안 화면이 스크롤되지 않게 */
+  background:radial-gradient(70% 60% at 50% 62%,rgba(255,140,60,.08),transparent 72%);
+  box-shadow:inset 0 0 0 1px rgba(255,240,220,.05)}   /* 여기서부터 그리면 된다는 걸 은근히 보여 주는 판 */
 .raid-stage.buffed{box-shadow:inset 0 0 0 1px rgba(201,166,255,.35),inset 0 0 38px rgba(167,112,239,.22)}
 .battle-cmd{margin:2px 0 6px;text-align:center}
 .raid-mon{position:relative;cursor:pointer;touch-action:none;-webkit-tap-highlight-color:transparent;will-change:transform}
-.raid-mon .rmon-emoji{display:block;font-size:88px;filter:drop-shadow(0 6px 12px rgba(0,0,0,.5))}
+.raid-mon .rmon-emoji{display:block;font-size:100px;line-height:1.1;filter:drop-shadow(0 6px 12px rgba(0,0,0,.5))}
 .raid-mon.hit{animation:monHit .12s ease-out}
 .raid-mon.dead{filter:grayscale(.7);opacity:.55;cursor:default;pointer-events:none;transform:rotate(8deg)}
 .rbar-label{font-size:12px;color:var(--muted);margin:6px 0 3px;display:flex;gap:8px;align-items:center}
@@ -1153,17 +1155,35 @@ body.loading-on #globalLoading{opacity:1}
   border:0;border-radius:999px;background:rgba(255,240,220,.08);color:var(--muted);font-size:14px;font-weight:900;cursor:pointer}
 @media (max-width:879px){
   body.in-battle{overflow:hidden}
-  body.in-battle #panel{position:fixed;inset:0;z-index:110;margin:0;max-width:none;min-height:0;border-radius:0;
+  /* #game 까지 적는 건 아래 한 단 레이아웃의 #game[data-view="raid"] #panel{display:block} 보다 우선하려고 */
+  body.in-battle #game #panel{position:fixed;inset:0;z-index:110;margin:0;max-width:none;min-height:0;border-radius:0;
     display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain;
     padding:calc(env(safe-area-inset-top, 0px) + 14px) 14px calc(env(safe-area-inset-bottom, 0px) + 16px);
     background:radial-gradient(90% 45% at 50% 0%,rgba(255,110,26,.12),transparent 70%),var(--bg)}
-  body.in-battle #panel > .raid-battle{width:100%;max-width:520px;margin:auto}
+  /* 휴대폰 전투 = 게임 화면처럼: 위 타이머 · 가운데 보스 판(남는 높이를 전부) · 아래 HP·스킬·기록(엄지 닿는 곳).
+   * 보스 판이 커야 별·호·당기기를 넉넉하게 그릴 수 있다. 기록 줄은 높이를 고정해서 새 줄이 생겨도 보스가 움직이지 않게. */
+  body.in-battle #panel > .raid-battle{width:100%;max-width:520px;margin:0 auto;flex:1 0 auto;display:flex;flex-direction:column}
+  body.in-battle .raid-stage{flex:1 1 auto;height:auto;min-height:220px;margin:4px 0 2px}
+  body.in-battle .raid-mon .rmon-emoji{font-size:clamp(104px,34vw,156px)}
+  body.in-battle .raid-events{flex:none;height:68px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
+  body.in-battle .raid-stage:has(.raid-mon.dead){flex:0 0 auto;min-height:130px}   /* 끝나면 결과가 보이게 판을 줄인다 */
+  body.in-battle .raid-stage:has(.raid-mon.dead) .rmon-emoji{font-size:88px}
   body.in-battle .battle-x{display:inline-flex}
 }
 @media (max-width:879px) and (max-height:700px){
-  body.in-battle .raid-stage{height:100px}
-  body.in-battle .raid-mon .rmon-emoji{font-size:66px}
-  body.in-battle .raid-events{max-height:66px;overflow:hidden}
+  body.in-battle .raid-stage{min-height:180px}
+  body.in-battle .raid-mon .rmon-emoji{font-size:clamp(92px,28vw,124px)}
+  body.in-battle .raid-events{height:46px}
+  body.in-battle .raid-parts{margin:6px 0 4px}
+  body.in-battle .raid-skillbtn{margin:2px 0 6px}
+}
+/* 넓은 화면(PC): 보스 판 높이를 화면 높이에 비례(768 높이 ≈ 260px · 1080 ≈ 360px) — 마우스로 별·호를 넉넉히 그리게.
+ * 끝나면 판을 줄여 결과가 바로 아래 보이게 한다. */
+@media (min-width:880px){
+  .raid-stage{height:clamp(220px,34vh,360px)}
+  .raid-mon .rmon-emoji{font-size:clamp(100px,14vh,150px)}
+  .raid-stage:has(.raid-mon.dead){height:150px}
+  .raid-stage:has(.raid-mon.dead) .rmon-emoji{font-size:88px}
 }
 
 /* =========================================================================

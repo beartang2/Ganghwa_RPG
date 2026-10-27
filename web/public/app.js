@@ -10,6 +10,8 @@ const PATCH = {
   version: '6',
   title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
+    '📱 <b>휴대폰 전투 화면 넓게</b> — 레이드·초월 던전에서 보스 판이 화면 가운데를 크게 차지해요. 별·호·당기기 커맨드를 넉넉하게 그리고, 보스도 더 크게 눌러요',
+    '⏱ <b>혼자 레이드 +5초</b> — 혼자 도전하면 전투 시간이 <b>20초</b>로 늘어나요 · ✨ 힐러의 <b>파티 공격력 업</b>(최대 +15%, 힐러 자신 포함)이 이제 레이드에서 제대로 들어가요 · 🛡️ <b>방패 강타</b>가 연타 5회분 → <b>8회분</b>으로 세졌어요',
     '⚔️ <b>보스에게도 강공격!</b> — 파티 레이드·초월 던전에서도 무기별 커맨드(검 호 · 활 당기기 · 지팡이 별 · 방패 꾹)를 그릴 수 있어요',
     '🌈 <b>숨겨진 칭호</b> — 새 등급 <b>프리즘</b>! 어딘가에 숨어 있는 걸 찾으면 열려요. 무엇을 하면 열리는지는… 비밀 🤫',
     '🏷️ <b>새 칭호 23종</b> — ⚡ 일반 공격·강공격 횟수(무기별 강공격 칭호도!) · 🌌 초월 던전(약점 저격·무기 교체·무피격 돌파 등) · 💎 프리즘 도박(상자·연금술·캡슐 대박과 꽝). 프로필의 칭호는 이제 <b>접었다 펼 수 있어요</b>',
@@ -1328,7 +1330,7 @@ function tapMonster(e) {
 const STRONG = {
   warrior: { cmd: 'arc',  style: 'blade',  wpn: '⚔️ 검은',     name: '베어 가르기', taps: 6,  how: '원의 <b>호</b>를 그어요' },
   archer:  { cmd: 'line', style: 'string', wpn: '🏹 활은',     name: '관통 사격',   taps: 8,  how: '몬스터 반대쪽으로 <b>당겼다 놓아요</b>' },
-  tanker:  { cmd: 'hold', style: null,     wpn: '🛡️ 방패는',   name: '방패 강타',   taps: 5,  how: '<b>꾹</b> 눌렀다 떼요' },
+  tanker:  { cmd: 'hold', style: null,     wpn: '🛡️ 방패는',   name: '방패 강타',   taps: 8,  how: '<b>꾹</b> 눌렀다 떼요' },
   healer:  { cmd: 'star', style: 'magic',  wpn: '✨ 지팡이는', name: '별빛 폭발',   taps: 22, how: '<b>별</b>을 한 붓에 그려요', buff: { mult: 1.5, ms: 5000, name: '마력 공명' } },
 };
 const CMD_NAME = { arc: '⚔️ 검 커맨드', line: '🏹 활 커맨드', star: '✨ 지팡이 커맨드', hold: '🛡️ 방패 커맨드' };
@@ -1857,7 +1859,7 @@ function setBattleMode(on, key) {
 function battleXBtn() { return '<button class="battle-x" data-battle-min aria-label="전투 화면 접기" title="접기">✕</button>'; }
 
 /* ---------- 파티 / 레이드 (폴링 기반 실시간 관전) ---------- */
-let raidTimer = null, curRaid = null, cacheParties = [], cachePlayers = [], BOSS_CACHE = [], BOSS_HPSCALE = 0.7;
+let raidTimer = null, curRaid = null, cacheParties = [], cachePlayers = [], BOSS_CACHE = [], BOSS_HPSCALE = 0.7, RAID_SEC = { party: 15, solo: 20 };
 let lastFetch = 0, lastPartyHtml = '';
 let dismissedRaidTs = (() => { try { return +localStorage.getItem('raidDismissed') || null; } catch (_) { return null; } })();
 
@@ -1924,7 +1926,7 @@ function updateBattleUI() {
   const ph = document.getElementById('rPartyHp'), pt = document.getElementById('rPartyTxt'), dr = document.getElementById('rDr');
   if (ph) { ph.style.width = raid.partyHP + '%'; ph.classList.toggle('low', raid.partyHP <= 30); }
   if (pt) pt.textContent = raid.partyHP + '%';
-  if (dr) dr.textContent = raid.dr ? '🛡️피해감소 ' + raid.dr + '%' : '';
+  if (dr) dr.textContent = [raid.dr ? '🛡️피해감소 ' + raid.dr + '%' : '', raid.atkBuff ? '✨공격력 +' + raid.atkBuff + '%' : ''].filter(Boolean).join(' · ');
   const parts = document.getElementById('rParts');
   if (parts) parts.innerHTML = raid.participants.map(p =>
     `<span class="raid-part${p.nick === (me && me.nick) ? ' me' : ''}">${p.classEmoji}${esc(p.nick)} <b>${p.contrib.toLocaleString()}</b>${p.skillUsed ? ' ✨' : ''}</span>`).join('');
@@ -2015,7 +2017,8 @@ function spawnRaidSpark() {
 async function refreshRaidData() {
   lastFetch = Date.now();
   try {
-    if (!BOSS_CACHE.length) { const br = await api('bosses'); BOSS_CACHE = br.bosses || []; BOSS_HPSCALE = br.partyHpScale || 0.7; }
+    if (!BOSS_CACHE.length) { const br = await api('bosses'); BOSS_CACHE = br.bosses || []; BOSS_HPSCALE = br.partyHpScale || 0.7;
+      if (br.duration) RAID_SEC = { party: br.duration / 1000, solo: (br.soloDuration || br.duration) / 1000 }; }
     const [meR, raidR, partiesR, playersR] = await Promise.all([api('me'), api('party-raid'), api('parties'), api('players')]);
     if (meR.ok && applyMe(meR.me)) { render(); seedInvites(); } // ts 가드 + 초대 seen 처리
     curRaid = raidR.raid; cacheParties = partiesR.list || []; cachePlayers = playersR.list || [];
@@ -2083,7 +2086,7 @@ function paintParty(panel) {
         (invitable.length ? invitable.map(n => `<div class="party-member"><b class="pm-nick">${esc(n)}</b><button class="btn sm primary" data-invite="${esc(n)}" style="margin-left:auto">초대</button></div>`).join('') : emptyMsg('초대할 유저가 없어요'));
       const n = pt ? pt.count : 1;
       html += `<div style="margin:12px 0 6px"><b>보스 선택</b> <small>(남은 레이드 ${me.raidsLeft}/${me.dailyRaids} · 성공해야 차감)</small></div>`;
-      html += `<p class="hint" style="margin:0 0 8px">실패하면 보상은 없지만 <b>횟수도 깎이지 않아요</b>. 보스 체력·화력은 <b>참여 인원(${n}명)</b>에 맞춰 올라갑니다.</p>`;
+      html += `<p class="hint" style="margin:0 0 8px">실패하면 보상은 없지만 <b>횟수도 깎이지 않아요</b>. 보스 체력·화력은 <b>참여 인원(${n}명)</b>에 맞춰 올라갑니다. 전투 시간 ⏱ <b>${n <= 1 ? RAID_SEC.solo + '초 (혼자 도전 +' + (RAID_SEC.solo - RAID_SEC.party) + '초)' : RAID_SEC.party + '초'}</b></p>`;
       html += BOSS_CACHE.map(b => {
         // 입장 조건은 파티 전원이 만족해야 하지만, 목록에서는 내 기준으로 잠금을 보여준다
         const why = me.level < b.reqLevel ? '무기 +' + b.reqLevel + ' 필요'

@@ -80,7 +80,7 @@ async function handle(method, pathname, ctx) {
     });
     if (pathname === '/api/classes') return ok({ ok: true, classes: game.CLASSES });
     if (pathname === '/api/shop') return ok({ ok: true, items: game.shopItems() });
-    if (pathname === '/api/bosses') return ok({ ok: true, bosses: game.BOSSES, partyHpScale: game.CONFIG.raidPartyHpScale });
+    if (pathname === '/api/bosses') return ok({ ok: true, bosses: game.BOSSES, partyHpScale: game.CONFIG.raidPartyHpScale, duration: game.CONFIG.raidDuration, soloDuration: game.CONFIG.raidSoloDuration });
     if (pathname === '/api/rank') { const db = await store.readDb(q); return ok({ ok: true, list: game.ranking(db) }); }
     if (pathname === '/api/goldrank') { const db = await store.readDb(q); return ok({ ok: true, list: game.goldRanking(db) }); }
     if (pathname === '/api/hogu') { const db = await store.readDb(q); return ok({ ok: true, list: game.hogu(db) }); }

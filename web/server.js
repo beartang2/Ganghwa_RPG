@@ -442,7 +442,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === 'GET' && p === '/api/classes') return sendJson(res, 200, { ok: true, classes: game.CLASSES });
   if (req.method === 'GET' && p === '/api/shop') return sendJson(res, 200, { ok: true, items: game.shopItems() });
-  if (req.method === 'GET' && p === '/api/bosses') return sendJson(res, 200, { ok: true, bosses: game.BOSSES, partyHpScale: game.CONFIG.raidPartyHpScale });
+  if (req.method === 'GET' && p === '/api/bosses') return sendJson(res, 200, { ok: true, bosses: game.BOSSES, partyHpScale: game.CONFIG.raidPartyHpScale, duration: game.CONFIG.raidDuration, soloDuration: game.CONFIG.raidSoloDuration });
   if (req.method === 'GET' && p === '/api/parties') return sendJson(res, 200, { ok: true, list: cachedRead('parties', () => game.partyList(db)) });
 
   /* ---------- 관리자 API (ADMIN_TOKEN 설정 시에만 활성) ----------
