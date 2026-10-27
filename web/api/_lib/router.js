@@ -127,6 +127,20 @@ async function handle(method, pathname, ctx) {
   // ---- 인증 필요 ----
   const id = await store.getSession(q, ctx.token);
 
+  // 🔨 개발자 이스터에그 — X-Blacksmith 헤더의 모루 / 모루가 알려 주는 커피(HTTP 418)
+  if (pathname === '/api/anvil') {
+    if (method !== 'POST') return bad({ ok: false, error: '모루는 두드리는(POST) 거예요. 🔨' }, 405);
+    if (!id) return bad({ ok: false, error: '로그인한 채로 두드려 보세요. (x-token)' }, 401);
+    const { r, db } = await store.runGame(q, { lockId: id }, (d) => game.devEgg(d, id, 'header'));
+    return ok(Object.assign(r, { msg: '🔨 쾅! 모루가 울렸다…', next: '모루는 커피를 끓이지 않아요. ☕ 커피는 /api/coffee 에 부탁해 보세요.', me: game.publicView(db, id) }));
+  }
+  if (pathname === '/api/coffee') {
+    let found = null;
+    if (id) found = (await store.runGame(q, { lockId: id }, (d) => game.devEgg(d, id, 'teapot'))).r.found;
+    return bad({ ok: false, teapot: true, found, rfc: 'https://www.rfc-editor.org/rfc/rfc2324',
+      error: "418 I'm a teapot 🫖 — 저는 찻주전자라서 커피는 못 끓여요." + (id ? '' : ' (로그인한 채로 다시 부탁해 보세요)') }, 418);
+  }
+
   if (method === 'GET' && pathname === '/api/me') {
     if (!id) return bad({ ok: false, error: '로그인이 필요합니다.' }, 401);
     const db = await store.readDb(q);

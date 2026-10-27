@@ -31,9 +31,12 @@ function readRawJson(req) {
   });
 }
 
+// 🔨 개발자 이스터에그 단서 — 네트워크 탭에서 응답 헤더를 본 사람만 안다(헤더 값은 ASCII 만 가능)
+const BLACKSMITH = 'Knock on the anvil: POST /api/anvil (while logged in)';
 function send(res, status, obj) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('X-Blacksmith', BLACKSMITH);
   res.end(JSON.stringify(obj));
 }
 

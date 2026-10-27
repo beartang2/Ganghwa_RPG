@@ -261,13 +261,13 @@ let seenTitles = new Set();
 function seedTitles() { seenTitles = new Set(((me && me.titles) || []).map(t => t.id)); }
 function checkTitles() {
   if (!me || !me.titles) return;
-  me.titles.forEach(t => {
-    if (!seenTitles.has(t.id)) {
-      seenTitles.add(t.id);
-      if (t.grade === 'prism') { toast('🌈 숨겨진 칭호 발견!  「' + t.title + '」', 'ok'); vibe([12, 30, 12, 30, 40]); sfx('jackpot'); }
-      else { toast('🏆 새 칭호 획득!  「' + t.title + '」', 'ok'); vibe([15, 45, 25]); sfx('guaranteed'); }
-    }
-  });
+  // 한꺼번에 여러 개가 열리면(예: 폴링 한 번에 둘) 알림 하나로 묶는다 — 따로 띄우면 마지막 것만 보인다
+  const fresh = me.titles.filter(t => !seenTitles.has(t.id));
+  if (!fresh.length) return;
+  fresh.forEach(t => seenTitles.add(t.id));
+  const names = fresh.map(t => '「' + t.title + '」').join(' ');
+  if (fresh.some(t => t.grade === 'prism')) { toast('🌈 숨겨진 칭호 발견!  ' + names, 'ok'); vibe([12, 30, 12, 30, 40]); sfx('jackpot'); }
+  else { toast('🏆 새 칭호 획득!  ' + names, 'ok'); vibe([15, 45, 25]); sfx('guaranteed'); }
 }
 
 /* ---------- Supabase Realtime (선택) — logs INSERT 구독 → 즉시 갱신 ----------
@@ -1610,11 +1610,46 @@ function huntEmoji(m) {
   return HW_MONS[h % HW_MONS.length];
 }
 document.body.classList.toggle('halloween', isHalloween());
-// 개발자 도구를 연 사람에게만 보이는 인사
+/* ---------- 🔨 개발자 이스터에그 ----------
+ * ① 콘솔 강화: 콘솔 인사말의 forge.enhance() → ② 헤더 탐정: 응답 헤더 X-Blacksmith 의 모루(서버)
+ * → ③ 찻주전자: 모루가 알려 주는 /api/coffee(서버, HTTP 418) · ④ sudo 초월: HTML 소스 주석의 단서로 키보드 입력.
+ * ④의 정답 문구는 코드에 그대로 두지 않고 SHA-256 해시로만 비교한다(공개 저장소라 검색으로 안 나오게). */
 try {
   console.log('%c⚒️ 강화 RPG', 'font:900 22px sans-serif;color:#ffd27a;text-shadow:0 0 8px #ff8a2a');
-  console.log('%c개발자세요? 🔨 이 게임 어딘가에 🌈 숨겨진 칭호들이 있어요. 코드를 뒤지는 것보다 직접 찾는 게 더 재밌을걸요?', 'color:#c9b8ff;font-size:12px');
+  console.log('%c개발자세요? 🔨 여기서도 강화할 수 있어요 →  forge.enhance()', 'color:#c9b8ff;font-size:12px');
 } catch (_) { /* 무시 */ }
+window.forge = {
+  enhance() {
+    if (!me) { console.log('🔨 먼저 로그인해 주세요.'); return '로그인 필요'; }
+    if (eggDone('console')) { console.log('%c🔨 이미 콘솔 강화를 마스터했어요. 다음 단서는… 응답 헤더?', 'color:#9ba5af'); return '🌈'; }
+    const say = (t, d, css) => setTimeout(() => console.log('%c' + t, css || 'color:#ffd27a;font:700 13px monospace'), d);
+    say('  ▄▄▄▄▄▄▄\n ▐███████▌   ⚒️  쾅!', 0);
+    say('  ▀▀███▀▀    ⚒️⚒️  쾅!!', 420);
+    say('    ███      ⚒️⚒️⚒️ 쾅!!!', 840);
+    say('✨ 콘솔 강화 성공! +0 → +1  (화면 속 무기는 그대로예요 😉)', 1300, 'color:#7ef0c5;font:800 14px sans-serif');
+    say('🔎 다음 단서: 서버가 돌려주는 응답 헤더를 들여다보세요 (Network 탭)', 1700, 'color:#c9b8ff;font-size:12px');
+    setTimeout(() => unlockEgg('console'), 1300);
+    return '⚒️ 두드리는 중…';
+  },
+};
+// ④ sudo — 데스크톱 키보드로 입력(입력칸 밖에서). 마지막 글자를 칠 때마다 최근 11글자의 해시를 비교한다.
+const SUDO_HASH = '86a73f76391a8c2d48778aec3cef92e9d2993ef862f34fa19eed38869cb4036b';
+let keyBuf = '';
+document.addEventListener('keydown', async e => {
+  if (!me || e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+  if (e.target instanceof Element && e.target.closest('input,textarea,[contenteditable="true"]')) return;
+  keyBuf = (keyBuf + e.key.toLowerCase()).slice(-16);
+  if (keyBuf.length < 11 || eggDone('sudo') || !(window.crypto && crypto.subtle)) return;
+  try {
+    const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(keyBuf.slice(-11)));
+    const hex = [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, '0')).join('');
+    if (hex !== SUDO_HASH) return;
+    keyBuf = '';
+    document.body.classList.remove('sudo-flash'); void document.body.offsetWidth; document.body.classList.add('sudo-flash');
+    toast('[sudo] 대장장이의 암호: ••••••  ✓  …초월 권한 획득! 은 농담이고, 칭호는 드릴게요 🌈', 'info');
+    sfx('guaranteed'); unlockEgg('sudo');
+  } catch (_) { /* 무시 */ }
+});
 function killMonster() {
   const c = huntCur; if (!c || c.dead) return;
   c.dead = true;

@@ -372,7 +372,7 @@ async function main() {
   await req('POST', '/api/setclass', { token: tokX, body: { class: 'healer' } });
   let mx = (await req('GET', '/api/me', { token: tokX })).body.me;
   const hid = mx.titleRoster.filter(t => t.hidden);
-  ok(hid.length === 10 && hid.every(t => !t.title && !t.color && t.grade === 'prism'), '숨은 칭호 10개 — 이름·색 비공개(❓)');
+  ok(hid.length === 14 && hid.every(t => !t.title && !t.color && t.grade === 'prism'), '숨은 칭호 14개 — 이름·색 비공개(❓)');
   ok(!(await req('POST', '/api/egg', { token: tokX, body: { id: 'heart' } })).body.ok, '사냥 안 하고 사냥터 이스터에그 → 거부');
   await req('POST', '/api/hunt', { token: tokX });
   r = await req('POST', '/api/egg', { token: tokX, body: { id: 'heart' } });
@@ -405,7 +405,21 @@ async function main() {
     ok(r.body.me.titles.some(t => t.id === 'egg_air'), '빈 캡슐 3연속 → 「공기 수집가」');
   } finally { Math.random = realRandom; }
   mx = (await req('GET', '/api/me', { token: tokX })).body.me;
-  ok(mx.titleRoster.filter(t => t.hidden).length === 4 && mx.titleRoster.find(t => t.id === 'egg_heart').desc.includes('하트'), '찾은 건 이름·설명 공개, 나머지 4개는 여전히 ❓');
+  ok(mx.titleRoster.filter(t => t.hidden).length === 8 && mx.titleRoster.find(t => t.id === 'egg_heart').desc.includes('하트'), '찾은 건 이름·설명 공개, 나머지 8개는 여전히 ❓');
+  // 🔨 개발자 이스터에그 — 콘솔·sudo 는 /api/egg, 헤더 탐정·찻주전자는 서버 주소로만
+  ok((await req('POST', '/api/egg', { token: tokX, body: { id: 'console' } })).body.found === 'console', '콘솔 강화(forge.enhance) → 「콘솔 강화」');
+  ok((await req('POST', '/api/egg', { token: tokX, body: { id: 'sudo' } })).body.found === 'sudo', '키보드 sudo → 「sudo 초월」');
+  ok(!(await req('POST', '/api/egg', { token: tokX, body: { id: 'header' } })).body.ok && !(await req('POST', '/api/egg', { token: tokX, body: { id: 'teapot' } })).body.ok, '헤더 탐정·찻주전자는 /api/egg 로 못 연다');
+  ok((await req('GET', '/api/anvil', { token: tokX })).status === 405, '모루는 GET 이 아니라 POST(405)');
+  ok((await req('POST', '/api/anvil')).status === 401, '로그인 없이 모루 → 401');
+  r = await req('POST', '/api/anvil', { token: tokX });
+  ok(r.status === 200 && r.body.found === 'header' && /coffee/.test(r.body.next) && r.body.me.titles.some(t => t.id === 'egg_header'), '모루를 두드림 → 「헤더 탐정」 + 다음 단서(커피)');
+  r = await req('GET', '/api/coffee');
+  ok(r.status === 418 && r.body.teapot && r.body.found === null, '로그인 없이 커피 → 418 찻주전자(칭호 없음)');
+  r = await req('POST', '/api/coffee', { token: tokX });
+  const tc = (await req('GET', '/api/me', { token: tokX })).body.me.titles.map(t => t.id);
+  ok(r.status === 418 && r.body.found === 'teapot' && tc.includes('egg_teapot'), '로그인한 채 커피 → 418 + 「찻주전자」');
+  ok((await req('POST', '/api/coffee', { token: tokX })).body.found === null, '두 번째 커피는 칭호 없음(1회)');
 
   // 🔒 남의 프로필(로그인 없이) — 화면에 필요한 것만, 이메일·가방·칭호 얻는 법은 안 나간다
   console.log('\n[공개 프로필]');
