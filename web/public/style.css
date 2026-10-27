@@ -1177,6 +1177,14 @@ body.loading-on #globalLoading{opacity:1}
   body.in-battle .raid-parts{margin:6px 0 4px}
   body.in-battle .raid-skillbtn{margin:2px 0 6px}
 }
+/* 넓은 화면(PC): 보스 판 높이를 화면 높이에 비례(768 높이 ≈ 260px · 1080 ≈ 360px) — 마우스로 별·호를 넉넉히 그리게.
+ * 끝나면 판을 줄여 결과가 바로 아래 보이게 한다. */
+@media (min-width:880px){
+  .raid-stage{height:clamp(220px,34vh,360px)}
+  .raid-mon .rmon-emoji{font-size:clamp(100px,14vh,150px)}
+  .raid-stage:has(.raid-mon.dead){height:150px}
+  .raid-stage:has(.raid-mon.dead) .rmon-emoji{font-size:88px}
+}
 
 /* =========================================================================
  * 화면 배치
