@@ -10,6 +10,7 @@ const PATCH = {
   version: '6',
   title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
+    '⚡ <b>강공격 커맨드 (시험판 · 사냥터)</b> — 몬스터 근처에 무기별 커맨드를 그리면 강공격! ⚔️ 검은 원의 호 · 🏹 활은 몬스터 반대쪽으로 당겼다 놓기 · ✨ 지팡이는 별 한 붓(가장 강하고 5초간 연타 ×1.5) · 🛡️ 방패는 꾹 눌렀다 떼기',
     '🛠️ <b>고침</b> — 레이드 탭에 들어갈 때마다 지난 보스 결과가 다시 뜨던 문제(끝난 결과는 1분 뒤 로비로) · 강화 버튼 빛 꼬리가 하얗게 타던 문제 · 버튼 누를 때 생기던 파란 사각형 · 📳 <b>아이폰 진동</b>(누르는 순간 \'톡\')',
     '⚙️ <b>설정 화면</b> — 오른쪽 위 ⚙️ 에서 내 계정 · 효과음 · 📳 <b>진동</b>(휴대폰) · 공지사항 · 플레이 방법 · 로그아웃 · 회원 탈퇴를 한 곳에서',
     '📱 <b>모바일 화면 개편</b> — 아래 탭바(⚒️대장간 · 🗡️사냥 · 🐉레이드 · 💎프리즘 · 🏅더보기)로 화면을 바꿔요. 대장간은 스크롤 없이 한 화면, 전투는 화면 전체로 열려요',
@@ -761,6 +762,10 @@ function hxAttach(host) {
   sw.addEventListener('click', stop); sw.addEventListener('change', stop); sw.addEventListener('input', stop);
   host.appendChild(lb);
 }
+/* 끌어서 선택·이미지 끌기·꾹 누르기 메뉴 막기(CSS 의 user-select:none 과 짝) — 입력칸과 링크는 예외 */
+document.addEventListener('dragstart', e => { if (!(e.target instanceof Element) || !e.target.closest('input,textarea')) e.preventDefault(); });
+document.addEventListener('selectstart', e => { if (!(e.target instanceof Element) || !e.target.closest('input,textarea,[contenteditable="true"]')) e.preventDefault(); });
+if (touchDevice) document.addEventListener('contextmenu', e => { if (!(e.target instanceof Element) || !e.target.closest('input,textarea,a[href]')) e.preventDefault(); });
 if (canIosHaptic && touchDevice) {
   let hxQueued = false;
   const hxScan = () => { hxQueued = false; document.querySelectorAll(HX_SEL).forEach(hxAttach); };
@@ -935,7 +940,7 @@ function openHunt() {
   if (!me) return;
   huntOpen = true;
   el('huntModal').hidden = false;
-  updateHuntHud();
+  updateHuntHud(); updateHuntCmd();
   if (huntCur && !huntCur.dead) {
     restoreHuntMonster();   // 진행 중이던 몬스터 복원 — 껐다 켜도 리롤 불가(죽여야 다음 몬스터)
   } else {
@@ -945,7 +950,7 @@ function openHunt() {
   }
 }
 // 모달을 닫아도 huntCur 는 유지(다시 열면 같은 몬스터). 죽여야만 새 몬스터가 나온다.
-function closeHunt() { huntOpen = false; el('huntModal').hidden = true; }
+function closeHunt() { huntOpen = false; el('huntModal').hidden = true; if (gst) { if (GTRAIL) GTRAIL.cancel(); gEnd(); } }
 function restoreHuntMonster() {
   const c = huntCur; if (!c) return;
   const m = c.r.monster;
@@ -986,19 +991,146 @@ function tapMonster(e) {
   if (e) e.preventDefault();
   if (!huntOpen || !huntCur || huntCur.dead) return;
   const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-  if (now - huntLastTap < HUNT_TAP_MS) return;
+  if (now - huntLastTap < HUNT_TAP_MS || now < huntLockUntil) return;
   huntLastTap = now;
-  const c = huntCur; c.taps++;
+  const c = huntCur; c.taps += huntBuffMult(now);
   const last = c.taps >= c.need;
   const isCrit = last && c.r.crit;                 // 실제 치명타는 마지막 타격에 표시
   vibe(isCrit ? [12, 28, 22] : last ? 18 : 7);     // 타격 햅틱(처치·치명타는 강하게)
   sfx(isCrit ? 'crit' : last ? 'kill' : 'hit');
   const monEl = el('huntMon');
   if (monEl) { monEl.classList.remove('hit'); void monEl.offsetWidth; monEl.classList.add('hit'); }
-  spawnHuntDmg(isCrit ? c.dmgPerTap * 2 : c.dmgPerTap, isCrit);
+  spawnHuntDmg(Math.round((isCrit ? 2 : 1) * c.dmgPerTap * huntBuffMult(now)), isCrit);
   el('huntHpFill').style.width = Math.max(0, 100 - c.taps / c.need * 100) + '%';
   if (last) killMonster();
 }
+
+/* ---------- ⚡ 강공격 커맨드 (시험판: 사냥) ----------
+ * 지금 장착한 무기(me.class)마다 그리는 커맨드가 다르다 — 인식은 gesture.js.
+ *   ⚔️ 검 = 원의 호 긋기 · 🏹 활 = 몬스터 반대쪽으로 당겼다 놓기(당긴 길이 = 위력)
+ *   ✨ 지팡이 = 별 한 붓(가장 셈 + 미니버프) · 🛡️ 방패 = 꾹 눌렀다 떼기
+ * 위력은 '연타 n회분'. 사냥 몬스터는 결과를 서버가 미리 정하고 연타 4~7회로 쓰러지므로
+ * 여기서는 클라이언트만 바뀐다. 레이드·던전에 붙일 땐 같은 표를 서버로 옮겨 쿨타임·횟수를 서버가 막는다.
+ * 강공격 뒤에는 일반 공격 간격의 2배 동안 다음 공격이 안 나간다(STRONG_DELAY). */
+const STRONG = {
+  warrior: { cmd: 'arc',  style: 'blade',  wpn: '⚔️ 검은',     name: '베어 가르기', taps: 6,  how: '원의 <b>호</b>를 그어요' },
+  archer:  { cmd: 'line', style: 'string', wpn: '🏹 활은',     name: '관통 사격',   taps: 8,  how: '몬스터 반대쪽으로 <b>당겼다 놓아요</b>' },
+  tanker:  { cmd: 'hold', style: null,     wpn: '🛡️ 방패는',   name: '방패 강타',   taps: 5,  how: '<b>꾹</b> 눌렀다 떼요' },
+  healer:  { cmd: 'star', style: 'magic',  wpn: '✨ 지팡이는', name: '별빛 폭발',   taps: 22, how: '<b>별</b>을 한 붓에 그려요', buff: { mult: 1.5, ms: 5000, name: '마력 공명' } },
+};
+const CMD_NAME = { arc: '⚔️ 검 커맨드', line: '🏹 활 커맨드', star: '✨ 지팡이 커맨드', hold: '🛡️ 방패 커맨드' };
+const STRONG_DELAY = HUNT_TAP_MS * 2;
+let huntLockUntil = 0, huntBuff = null, huntBuffT = null;
+function huntBuffMult(now) { return huntBuff && now < huntBuff.until ? huntBuff.mult : 1; }
+function strongCfg() { return STRONG[(me && me.class) || 'warrior'] || STRONG.warrior; }
+function updateHuntCmd() {
+  const box = el('huntCmd'); if (!box) return;
+  if (!window.Gesture) { box.textContent = ''; return; }
+  const c = strongCfg(), now = performance.now();
+  const bf = huntBuff && now < huntBuff.until ? ` · <span class="bf">✨ ${huntBuff.name} 연타 ×${huntBuff.mult}</span>` : '';
+  box.innerHTML = `⚡ 강공격 <b>${c.name}</b> — ${c.how}${bf}`;
+  document.querySelector('.hunt-stage').classList.toggle('buffed', !!bf);
+}
+function gestTip(text, x, y, ok) {
+  const t = document.createElement('div');
+  t.className = 'gest-tip' + (ok ? ' ok' : ''); t.textContent = text;
+  t.style.left = Math.max(70, Math.min(window.innerWidth - 70, x)) + 'px'; t.style.top = y + 'px';
+  document.body.appendChild(t); setTimeout(() => t.remove(), 900);
+}
+function monCenter() { const r = el('huntMon').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }
+function huntStrong(cfg, power) {
+  const c = huntCur; if (!huntOpen || !c || c.dead) return false;
+  const now = performance.now();
+  if (now < huntLockUntil) return false;
+  huntLockUntil = now + STRONG_DELAY; huntLastTap = now;
+  const units = Math.max(1, Math.round(cfg.taps * (power || 1)));
+  c.taps += units;
+  const last = c.taps >= c.need, isCrit = last && c.r.crit;
+  vibe(isCrit ? [16, 30, 34] : [14, 26, 24]); sfx(isCrit ? 'crit' : 'kill');
+  const monEl = el('huntMon');
+  if (monEl) { monEl.classList.remove('hit'); void monEl.offsetWidth; monEl.classList.add('hit'); }
+  spawnHuntDmg(units * c.dmgPerTap * (isCrit ? 2 : 1), true);
+  const m = monCenter();
+  if (FX && FX.sparks) FX.sparks.burst(m.x, m.y, { sparkCount: 16, sparkRadius: 70, duration: 520, sparkSize: 12 });
+  gestTip('⚡ ' + cfg.name + (power && power < 1 ? ' ' + Math.round(power * 100) + '%' : ''), m.x, m.y - 70, true);
+  if (cfg.buff) {
+    huntBuff = { mult: cfg.buff.mult, until: now + cfg.buff.ms, name: cfg.buff.name };
+    clearTimeout(huntBuffT); huntBuffT = setTimeout(updateHuntCmd, cfg.buff.ms + 30);
+    updateHuntCmd();
+  }
+  el('huntHpFill').style.width = Math.max(0, 100 - c.taps / c.need * 100) + '%';
+  if (last) killMonster();
+  return true;
+}
+// 그리기 추적: 무대(.hunt-stage)에서 누르기 시작한 손가락 하나만. 몬스터 위에서 누르면 그 탭은 일반 공격으로도 들어간다.
+// 포인터 캡처는 하지 않는다 — 터치는 브라우저가 알아서 누른 요소로 묶어 주고, 캡처하면 아이폰 햅틱 라벨의 클릭이 빗나간다.
+const GTRAIL = window.Gesture ? (() => { try { return window.Gesture.createTrail({ z: 115 }); } catch (e) { console.warn('[gesture]', e); return null; } })() : null;
+let gst = null, gLastEnd = -1e9;
+function gPoint(e) { return { x: e.clientX, y: e.clientY, t: performance.now() }; }
+function gDown(e) {
+  if (gst || !window.Gesture || !huntOpen || !huntCur || huntCur.dead) return;
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  const cfg = strongCfg();
+  gst = { id: e.pointerId, cfg, pts: [gPoint(e)], drawing: false, holdRaf: 0 };
+  window.addEventListener('pointermove', gMove);
+  window.addEventListener('pointerup', gUp);
+  window.addEventListener('pointercancel', gCancel);
+  if (cfg.cmd === 'hold') gst.holdRaf = requestAnimationFrame(holdTick);
+}
+function holdTick() {
+  if (!gst || gst.cfg.cmd !== 'hold') return;
+  const G = window.Gesture.CFG, held = performance.now() - gst.pts[0].t;
+  const moved = window.Gesture.maxDisplacement(gst.pts) > G.holdSlop;
+  if (moved) { if (GTRAIL) GTRAIL.ring(0, 0, -1); return; }
+  const p = (held - 150) / (G.holdMs - 150);
+  if (p > 0 && GTRAIL) GTRAIL.ring(gst.pts[0].x, gst.pts[0].y, Math.min(1, p));
+  if (p >= 1 && !gst.full) { gst.full = true; vibe(10); sfx('charge'); }
+  gst.holdRaf = requestAnimationFrame(holdTick);
+}
+function gMove(e) {
+  if (!gst || e.pointerId !== gst.id) return;
+  const list = (typeof e.getCoalescedEvents === 'function' && e.getCoalescedEvents()) || [];
+  // iOS 18.2 사파리는 coalesced 이벤트에 pointerId 가 비어 있다는 보고가 있어 좌표만 쓴다
+  const pts = list.length ? list.map(gPoint) : [gPoint(e)];
+  for (const p of pts) gst.pts.push(p);
+  if (!gst.drawing && window.Gesture.maxDisplacement(gst.pts) >= window.Gesture.CFG.tapSlop) {
+    gst.drawing = true;
+    if (GTRAIL) GTRAIL.begin(gst.cfg.style || 'plain', gst.pts);   // 방패는 끌면 '커맨드 아님' 회색 선
+  } else if (gst.drawing && GTRAIL) for (const p of pts) GTRAIL.add(p);
+}
+function gEnd() {
+  window.removeEventListener('pointermove', gMove);
+  window.removeEventListener('pointerup', gUp);
+  window.removeEventListener('pointercancel', gCancel);
+  if (gst && gst.holdRaf) cancelAnimationFrame(gst.holdRaf);
+  if (gst && gst.drawing) gLastEnd = performance.now();
+  if (GTRAIL) GTRAIL.ring(0, 0, -1);
+  gst = null;
+}
+function gCancel(e) { if (!gst || e.pointerId !== gst.id) return; if (GTRAIL) GTRAIL.cancel(); gEnd(); }
+function gUp(e) {
+  if (!gst || e.pointerId !== gst.id) return;
+  const g = gst, cfg = g.cfg, last = gPoint(e);
+  g.pts.push(last);
+  const heldMs = last.t - g.pts[0].t;
+  const tgt = monCenter();
+  const r = window.Gesture.judge(cfg.cmd, g.pts, { target: tgt, heldMs });
+  window.__lastGesture = { cmd: cfg.cmd, ms: Math.round(heldMs), n: g.pts.length, ...r };   // 디버그·테스트용(콘솔에서 확인)
+  gEnd();
+  if (cfg.cmd === 'hold') {
+    if (r.ok) { if (GTRAIL) GTRAIL.shock(tgt.x, tgt.y); huntStrong(cfg, 1); }
+    else if (g.drawing) { if (GTRAIL) GTRAIL.end(false); gestTip('🛡️ 방패는 움직이지 말고 꾹 눌러요', last.x, last.y - 40); }
+    return;
+  }
+  if (!g.drawing) return;                       // 그냥 탭(일반 공격은 몬스터 pointerdown 에서 이미 처리)
+  if (r.ok && huntStrong(cfg, r.power)) { if (GTRAIL) GTRAIL.end(true, { target: tgt }); return; }
+  if (GTRAIL) GTRAIL.end(false);
+  if (r.why === 'short') return;                // 짧게 슥 — 실수일 수 있어 조용히
+  const tip = r.looks ? `그건 ${CMD_NAME[r.looks]}예요 · ${cfg.wpn} ${cfg.how.replace(/<[^>]+>/g, '')}`
+    : r.why === 'direction' ? '🏹 몬스터 반대쪽으로 당겨요' : '궤적이 흐트러졌어요';
+  gestTip(tip, last.x, last.y - 40);
+}
+document.querySelector('.hunt-stage').addEventListener('pointerdown', gDown);
 function killMonster() {
   const c = huntCur; if (!c || c.dead) return;
   c.dead = true;
@@ -2040,7 +2172,8 @@ el('modalClose').onclick = () => { el('modal').hidden = true; };
 // 사냥터 모달: 몬스터 연타(pointerdown), 닫기
 el('huntMon').addEventListener('pointerdown', tapMonster);
 el('huntClose').onclick = closeHunt;
-el('huntModal').addEventListener('click', e => { if (e.target === el('huntModal')) closeHunt(); });
+// 마우스로 그리다 카드 밖(어두운 배경)에서 떼면 click 이 배경으로 가서 사냥창이 닫히던 것 방지
+el('huntModal').addEventListener('click', e => { if (e.target === el('huntModal') && performance.now() - gLastEnd > 350) closeHunt(); });
 // 채굴장 모달: 닫기
 el('mineClose').onclick = closeMine;
 el('mineModal').addEventListener('click', e => { if (e.target === el('mineModal')) closeMine(); });

@@ -38,6 +38,11 @@ body{
 :focus-visible{outline:2px solid var(--primary);outline-offset:2px}
 /* 모바일 브라우저 기본 '탭 하이라이트'(청록·회색 사각형)를 끈다 — 눌림은 버튼 자체 효과(눌림·불꽃)로 보여준다 */
 button,a,label,summary,[role="button"],[data-nick]{-webkit-tap-highlight-color:transparent}
+/* 게임 화면에서는 글자·이미지·버튼을 끌어서 선택(파란 블록)되거나, 꾹 눌러 확대경·복사 메뉴가 뜨지 않게 한다.
+   연타·드래그 커맨드 중에 선택이 생기면 손맛이 끊긴다. 입력칸만 예외(닉네임·PIN·이메일 입력). */
+body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+input,textarea,select,[contenteditable="true"]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
+img,svg,canvas{-webkit-user-drag:none}
 /* 아이폰 햅틱 오버레이(app.js hxAttach): 버튼 위를 덮는 투명 라벨 + 안 보이는 스위치. 손가락 탭이 라벨에 닿아야 '톡' */
 .hx{position:absolute;inset:0;z-index:3;display:block;margin:0;padding:0;border-radius:inherit;background:transparent;
   cursor:inherit;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
@@ -498,7 +503,17 @@ body.loading-on #globalLoading{opacity:1}
 .hunt-top{font-family:var(--display);font-weight:900;font-size:18px;margin:2px 0 4px}
 .hunt-top small{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",system-ui,sans-serif;color:var(--muted);font-weight:800;font-size:12.5px;margin-left:6px}
 .hunt-stage{position:relative;display:flex;align-items:center;justify-content:center;
-  height:170px;margin:6px 0;-webkit-user-select:none;user-select:none;overflow:visible}
+  height:210px;margin:6px 0;-webkit-user-select:none;user-select:none;overflow:visible;
+  touch-action:none;border-radius:14px}   /* 강공격 커맨드를 그리는 판 — 끄는 동안 모달이 스크롤되지 않게 */
+.hunt-stage.buffed{box-shadow:inset 0 0 0 1px rgba(201,166,255,.35),inset 0 0 38px rgba(167,112,239,.22)}
+.hunt-cmd{margin:6px 0 2px;font-size:12.5px;color:var(--muted);line-height:1.5}
+.hunt-cmd b{color:var(--molten-hi);font-weight:800}
+.hunt-cmd .bf{color:#d6b0ff;font-weight:800}
+.gest-tip{position:fixed;z-index:121;pointer-events:none;transform:translate(-50%,-50%);white-space:nowrap;
+  font-size:13px;font-weight:800;color:#e9dfd2;background:rgba(20,16,13,.78);padding:4px 10px;border-radius:999px;
+  animation:gestTip .9s ease-out forwards}
+.gest-tip.ok{color:var(--molten-hi);font-size:15px;background:rgba(40,24,8,.8)}
+@keyframes gestTip{0%{opacity:0;margin-top:6px}15%{opacity:1;margin-top:0}75%{opacity:1}100%{opacity:0;margin-top:-14px}}
 .hunt-mon{position:relative;cursor:pointer;line-height:1;touch-action:none;
   -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;will-change:transform}
 .hunt-mon .hunt-emoji{display:block;font-size:104px;filter:drop-shadow(0 8px 12px rgba(0,0,0,.5))}
