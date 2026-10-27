@@ -570,7 +570,8 @@ const server = http.createServer(async (req, res) => {
       else if (p === '/api/attend') r = game.attend(db, id);
       else if (p === '/api/mine') r = game.mine(db, id);
       else if (p === '/api/mine-swing') r = game.mineSwing(db, id);
-      else if (p === '/api/hunt') r = game.hunt(db, id);
+      else if (p === '/api/hunt') { const b = await readBody(req); r = game.hunt(db, id, b.atk); }
+      else if (p === '/api/atk-report') { const b = await readBody(req); r = game.atkReport(db, id, b.atk); }
       else if (p === '/api/title') { const b = await readBody(req); r = game.equipTitle(db, id, b.title || null); }
       else if (p === '/api/protect') { const b = await readBody(req); r = game.buyProtect(db, id, b.qty); }
       else if (p === '/api/mission-claim') { const b = await readBody(req); r = game.missionClaim(db, id, b.id); }

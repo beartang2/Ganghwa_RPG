@@ -582,6 +582,19 @@ body.loading-on #globalLoading{opacity:1}
 .modal h3{margin:.1em 0 .6em;font-family:var(--display);font-weight:900;font-size:20px}
 /* 칭호 */
 .titles-row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 12px}
+/* 프로필 칭호 아코디언 — 처음엔 접힘. 머리줄: 개수 · 장착 칭호 · 화살표 */
+.titles-acc{margin:10px 0 12px;border-radius:12px;background:var(--card2)}
+.titles-acc>summary{list-style:none;display:flex;align-items:center;gap:8px;padding:11px 12px;cursor:pointer;
+  font-size:12.5px;font-weight:800;color:var(--muted);-webkit-tap-highlight-color:transparent}
+.titles-acc>summary::-webkit-details-marker{display:none}
+.tacc-h{flex:1;min-width:0;color:var(--text)}
+.tacc-h small{color:var(--muted);font-weight:700;margin-left:2px}
+.tacc-eq{max-width:52%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:800}
+.tacc-eq.none{color:var(--muted);font-weight:700}
+.tacc-arrow{font-style:normal;font-size:16px;line-height:1;color:var(--muted);transition:transform .18s}
+.titles-acc[open] .tacc-arrow{transform:rotate(90deg)}
+.titles-acc .titles-row{margin:0;padding:0 12px 12px;animation:taccIn .18s ease-out}
+@keyframes taccIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 .title-chip{font-size:12px;font-weight:800;padding:4px 9px;border-radius:20px;
   border:1px solid transparent;background:color-mix(in srgb,currentColor 13%,transparent);text-shadow:0 0 6px currentColor}
 .titles-empty{color:var(--muted);font-size:12px;margin:6px 0 12px}

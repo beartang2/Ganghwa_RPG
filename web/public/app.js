@@ -10,6 +10,7 @@ const PATCH = {
   version: '6',
   title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
+    '🏷️ <b>새 칭호 23종</b> — ⚡ 일반 공격·강공격 횟수(무기별 강공격 칭호도!) · 🌌 초월 던전(약점 저격·무기 교체·무피격 돌파 등) · 💎 프리즘 도박(상자·연금술·캡슐 대박과 꽝). 프로필의 칭호는 이제 <b>접었다 펼 수 있어요</b>',
     '⚡ <b>강공격 커맨드 (시험판 · 사냥터)</b> — 몬스터 근처에 무기별 커맨드를 그리면 강공격! ⚔️ 검은 원의 호 · 🏹 활은 몬스터 반대쪽으로 당겼다 놓기 · ✨ 지팡이는 별 한 붓(가장 강하고 5초간 연타 ×1.5) · 🛡️ 방패는 꾹 눌렀다 떼기',
     '🛠️ <b>고침</b> — 레이드 탭에 들어갈 때마다 지난 보스 결과가 다시 뜨던 문제(끝난 결과는 1분 뒤 로비로) · 강화 버튼 빛 꼬리가 하얗게 타던 문제 · 버튼 누를 때 생기던 파란 사각형 · 📳 <b>아이폰 진동</b>(누르는 순간 \'톡\')',
     '⚙️ <b>설정 화면</b> — 오른쪽 위 ⚙️ 에서 내 계정 · 효과음 · 📳 <b>진동</b>(휴대폰) · 공지사항 · 플레이 방법 · 로그아웃 · 회원 탈퇴를 한 곳에서',
@@ -936,6 +937,9 @@ const HUNT_TAP_MS = 70;              // 사냥 연타 최소 간격(매크로는
 const HUNT_SPAWN_DELAY = 650;        // 처치 후 다음 몬스터 스폰까지 대기(연출 감상용)
 let huntOpen = false, huntSession = 0, huntKills = 0;
 let huntCur = null, huntSpawning = false, huntLastTap = 0;
+// 칭호용 공격 기록(일반·강공격 횟수) — 서버는 한 번에 받는 양과 시간 간격으로 상한을 둔다
+let huntAtk = { n: 0, s: 0 };
+function takeHuntAtk() { const a = huntAtk; huntAtk = { n: 0, s: 0 }; return a.n || a.s ? a : undefined; }
 function openHunt() {
   if (!me) return;
   huntOpen = true;
@@ -950,7 +954,10 @@ function openHunt() {
   }
 }
 // 모달을 닫아도 huntCur 는 유지(다시 열면 같은 몬스터). 죽여야만 새 몬스터가 나온다.
-function closeHunt() { huntOpen = false; el('huntModal').hidden = true; if (gst) { if (GTRAIL) GTRAIL.cancel(); gEnd(); } }
+function closeHunt() {
+  huntOpen = false; el('huntModal').hidden = true; if (gst) { if (GTRAIL) GTRAIL.cancel(); gEnd(); }
+  const a = takeHuntAtk(); if (a) api('atk-report', 'POST', { atk: a }).catch(() => {});   // 마지막 몬스터 기록
+}
 function restoreHuntMonster() {
   const c = huntCur; if (!c) return;
   const m = c.r.monster;
@@ -972,7 +979,7 @@ async function spawnHuntMonster() {
   huntSpawning = true;
   // 이전 몬스터는 죽은(사라진) 상태 그대로 유지한 채 다음 몬스터를 받아온다.
   // (여기서 'dead' 를 미리 지우면 응답 대기 동안 방금 잡은 몬스터가 되살아나 보임)
-  const r = await withLoad(() => api('hunt', 'POST'));   // 서버가 몬스터·보상·치명타 결정(보상은 서버에 즉시 반영)
+  const r = await withLoad(() => api('hunt', 'POST', { atk: takeHuntAtk() }));   // 서버가 몬스터·보상·치명타 결정(보상은 서버에 즉시 반영)
   huntSpawning = false;
   if (!huntOpen) return;                  // 그새 닫힘
   if (!r.ok) { el('huntFb').textContent = r.error + ' — 잠시 후 다시'; huntCur = null;
@@ -993,7 +1000,7 @@ function tapMonster(e) {
   const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
   if (now - huntLastTap < HUNT_TAP_MS || now < huntLockUntil) return;
   huntLastTap = now;
-  const c = huntCur, amt = huntBuffMult(now); c.taps += amt;
+  const c = huntCur, amt = huntBuffMult(now); c.taps += amt; huntAtk.n++;
   const last = c.taps >= c.need;
   const isCrit = last && c.r.crit;                 // 실제 치명타는 마지막 타격에 표시
   vibe(isCrit ? [12, 28, 22] : last ? 18 : 7);     // 타격 햅틱(처치·치명타는 강하게)
@@ -1012,7 +1019,7 @@ function tapMonster(e) {
 let huntPendingTap = null;
 function refundTap(p) {
   if (!p || p.done || huntCur !== p.mon || p.mon.dead) return;
-  p.done = true;
+  p.done = true; huntAtk.n = Math.max(0, huntAtk.n - 1);
   p.mon.taps = Math.max(0, p.mon.taps - p.amt);
   if (p.dmgEl) p.dmgEl.remove();
   el('huntHpFill').style.width = Math.max(0, 100 - p.mon.taps / p.mon.need * 100) + '%';
@@ -1057,7 +1064,7 @@ function huntStrong(cfg, power) {
   if (now < huntLockUntil) return false;
   huntLockUntil = now + STRONG_DELAY; huntLastTap = now;
   const units = Math.max(1, Math.round(cfg.taps * (power || 1)));
-  c.taps += units;
+  c.taps += units; huntAtk.s++;
   const last = c.taps >= c.need, isCrit = last && c.r.crit;
   vibe(isCrit ? [16, 30, 34] : [14, 26, 24]); sfx(isCrit ? 'crit' : 'kill');
   const monEl = el('huntMon');
@@ -2041,8 +2048,13 @@ async function openProfile(nick) {
     });
   }
 }
-// 프로필 칭호 진열장. 내 프로필이면 클릭으로 장착/해제(미획득은 🔒 잠금), 남이면 획득 칭호만 표시.
+// 프로필 칭호 진열장 — 아코디언(<details>). 프로필을 열면 접혀 있고, 머리줄에 개수·장착 칭호만 보인다.
+// 내 프로필이면 펼쳐서 칭호를 눌러 장착/해제(미획득은 🔒), 남이면 획득한 칭호만.
+let keepTitlesOpen = false;   // 장착/해제 뒤 다시 그릴 때만 펼친 채로
 function titlesSection(p, isMe, eq) {
+  const open = keepTitlesOpen ? ' open' : ''; keepTitlesOpen = false;
+  const eqTag = eq ? `<span class="tacc-eq" style="color:${eq.color}">${esc(eq.title)}</span>` : '<span class="tacc-eq none">장착 없음</span>';
+  const head = (n, total) => `<summary><span class="tacc-h">🏷️ 칭호 <small>${n}${total != null ? '/' + total : ''}</small></span>${eqTag}<i class="tacc-arrow" aria-hidden="true">›</i></summary>`;
   if (isMe) {
     const roster = p.titleRoster || [];
     const chips = roster.map(t => {
@@ -2052,19 +2064,20 @@ function titlesSection(p, isMe, eq) {
       }
       return `<span class="title-chip locked" style="background:${t.color}1a">🔒</span>`;
     }).join('');
-    return `<div class="titles-head">칭호 <small>${p.titleEarned || 0}/${p.titleTotal || roster.length}</small></div>
+    return `<details class="titles-acc"${open}>${head(p.titleEarned || 0, p.titleTotal || roster.length)}
       <div class="titles-row">
         <span class="title-chip clear${eq ? '' : ' equipped'}" data-title-id="">칭호 없음</span>${chips}
-      </div>`;
+      </div></details>`;
   }
   return (p.titles && p.titles.length)
-    ? `<div class="titles-row">${p.titles.map(t => `<span class="title-chip${eq && eq.id === t.id ? ' equipped' : ''}" style="color:${t.color}">${esc(t.title)}</span>`).join('')}</div>`
+    ? `<details class="titles-acc"${open}>${head(p.titles.length)}<div class="titles-row">${p.titles.map(t => `<span class="title-chip${eq && eq.id === t.id ? ' equipped' : ''}" style="color:${t.color}">${esc(t.title)}</span>`).join('')}</div></details>`
     : `<div class="titles-empty">아직 획득한 칭호가 없어요</div>`;
 }
 async function doEquipTitle(titleId) {
   const r = await withLoad(() => api('title', 'POST', { title: titleId || null }));
   if (!r.ok) return toast(r.error, 'bad');
   applyMe(r.me); render();
+  keepTitlesOpen = true;   // 펼쳐 놓고 고르던 중이니 다시 그려도 펼친 채로
   openProfile(me.nick);  // 모달 새로고침(선택 상태 반영)
   toast(r.msg, 'ok');
 }

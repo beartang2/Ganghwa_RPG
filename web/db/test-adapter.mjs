@@ -324,6 +324,34 @@ async function main() {
   dme = (await req('GET', '/api/me', { token: tok3 })).body.me;
   ok(dme.inv.items.find(i => i.id === 'eltkt').count === 3 && !dme.inv.items.some(i => i.id === 'classtkt'), '남은 직업 변경권 2장 → 재련권으로 이관(1+2=3)');
 
+  // 🏷️ 칭호용 누적 기록 — 일반·강공격(사냥 보고는 상한), 레이드·던전 연타, 던전·프리즘 도박
+  console.log('\n[칭호 기록]');
+  const dataOf = async nick => { const d = (await q('SELECT data FROM players WHERE nick=$1', [nick]))[0].data; return typeof d === 'string' ? JSON.parse(d) : d; };
+  const titlesOf = async t => (await req('GET', '/api/me', { token: t })).body.me.titles.map(x => x.id);
+  let gd = await dataOf('검사');
+  ok(gd.atk && gd.atk.n > 0, '레이드 연타(서버가 시간으로 깎은 실제 타수)가 일반 공격으로 쌓임(' + (gd.atk && gd.atk.n) + ')');
+  ok(gd.gs && gd.gs.box === 1 && gd.gs.alch === 1 && gd.gs.cap === 10, '상자 1 · 연금 1 · 캡슐 10회 기록');
+  const nPre = gd.atk.n;
+  await q("UPDATE players SET data = jsonb_set(data, '{atk,ts}', '0') WHERE nick='검사'");   // 마지막 보고가 오래전인 상태
+  r = await req('POST', '/api/hunt', { token: tok, body: { atk: { n: 6, s: 1 } } });
+  gd = await dataOf('검사');
+  ok(r.body.ok && gd.atk.n === nPre + 6 && gd.atk.s === 1 && gd.atk.w.warrior === 1, '사냥에 얹은 보고: 일반 6 · 강공격 1(검)');
+  r = await req('POST', '/api/atk-report', { token: tok, body: { atk: { n: 500, s: 50 } } });
+  gd = await dataOf('검사');
+  ok(r.body.ok && gd.atk.n - (nPre + 6) <= 1 && gd.atk.s - 1 <= 1, '바로 이어 부풀린 보고(500·50)는 흐른 시간만큼만 인정');
+  await q("UPDATE players SET data = jsonb_set(data, '{atk,ts}', '0') WHERE nick='검사'");
+  r = await req('POST', '/api/atk-report', { token: tok, body: { atk: { n: 500, s: 50 } } });
+  gd = await dataOf('검사');
+  ok(gd.atk.n - (nPre + 6) <= 21 && gd.atk.s <= 6, '한 번에 최대 일반 20 · 강공격 4까지만');
+  // 던전 기록 — 앞 테스트에서 던전러가 1·2·15층… 돌파·교체·스킬을 했다
+  const dd = await dataOf('던전러');
+  ok(dd.ds && dd.ds.clear >= 1 && dd.ds.elem >= 1 && dd.atk.n > 0, '던전 돌파 ' + (dd.ds && dd.ds.clear) + ' · 속성 스킬 ' + (dd.ds && dd.ds.elem) + ' · 연타 기록');
+  // 칭호 조건
+  await q("UPDATE players SET data = data || '{\"atk\":{\"n\":1000,\"s\":30,\"w\":{\"healer\":500}},\"ds\":{\"flaw\":1},\"gs\":{\"boxJ\":1,\"capJ\":1}}'::jsonb WHERE nick='검사'");
+  const tl = await titlesOf(tok);
+  ok(['tap1k', 'str30', 'str_healer', 'dflawless', 'boxjack', 'capjack'].every(id => tl.includes(id)), '칭호: 연타 입문 · 한 방의 맛 · 별을 그리는 자 · 무결의 정복자 · 황금 열쇠 · 천운');
+  ok(!tl.includes('tap10k') && !tl.includes('alch100'), '조건 미달 칭호는 없음');
+
   // 🗑️ 회원 탈퇴 — 파티장 탈퇴 시 해산, 모든 세션 무효, 소유 행 삭제, 닉네임 재사용 가능
   console.log('\n[회원 탈퇴]');
   r = await req('POST', '/api/login', { body: { nick: '탈퇴러', pin: '13579135' } });

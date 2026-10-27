@@ -254,7 +254,8 @@ async function handle(method, pathname, ctx) {
     else if (pathname === '/api/attend') fn = (db) => game.attend(db, id);
     else if (pathname === '/api/mine') fn = (db) => game.mine(db, id);
     else if (pathname === '/api/mine-swing') fn = (db) => game.mineSwing(db, id);
-    else if (pathname === '/api/hunt') fn = (db) => game.hunt(db, id);
+    else if (pathname === '/api/hunt') fn = (db) => game.hunt(db, id, b.atk);
+    else if (pathname === '/api/atk-report') fn = (db) => game.atkReport(db, id, b.atk);
     else if (pathname === '/api/title') fn = (db) => game.equipTitle(db, id, b.title || null);
     else if (pathname === '/api/protect') fn = (db) => game.buyProtect(db, id, b.qty);
     else if (pathname === '/api/mission-claim') fn = (db) => game.missionClaim(db, id, b.id);

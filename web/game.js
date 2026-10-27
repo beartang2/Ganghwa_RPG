@@ -43,6 +43,10 @@ const CONFIG = {
   pityBase: 0.015,      // 장인의 기운 기본 상승폭(실패당) — 저확률에서도 결국 참
   pityScale: 0.34,      // + 성공률 비례분(성공률 높을수록 살짝 더 빨리 참)
   // 사냥
+  atkReportMaxN: 20,        // 사냥 공격 기록 보고 한 번에 인정하는 일반 공격 수(몬스터 1마리 최대 7타 + 여유)
+  atkReportMaxS: 4,         //            〃               강공격 수
+  atkMsPerTap: 70,          // 보고 사이 흐른 시간으로 본 일반 공격 최소 간격(사냥 연타 간격과 같음)
+  atkMsPerStrong: 300,      //            〃          강공격 최소 간격(커맨드를 그리는 시간)
   huntOvertimeMult: 0.15,   // 일일 사냥 소진 후 '무한 사냥' 골드 배율(채굴이 주 수급이라 낮게)
   huntPotionChance: 0.06,   // 무한 사냥 시 '채광 물약' 드랍 확률 → 채굴 기력 회복
   huntPotionStamina: 20,    // 채광 물약 1개가 채워주는 채굴 기력
@@ -224,6 +228,32 @@ const TITLE_GRADES = {
   legend:    { rank: 3, color: '#ffd93d' },
   transcend: { rank: 4, color: '#ff5d6c' },
 };
+/* ---------- 칭호용 누적 기록 ----------
+ * p.atk = { n: 일반 공격, s: 강공격, w: { 직업: 그 무기 강공격 }, ts: 마지막 사냥 보고 시각 }
+ * p.ds  = 초월 던전 { clear 층 돌파, weak 약점 타수, swap 무기 교체, elem 속성 스킬, flaw 무피격 심층 돌파 }
+ * p.gs  = 프리즘 도박 { box, boxJ, alch, ash, alchJ, cap, capE, capJ }
+ * 전부 단조 증가라 한 번 얻은 칭호는 사라지지 않는다. (저장 제외 키 level·gold·nick 은 이름으로 쓰지 않는다) */
+const atkN = p => (p.atk && p.atk.n) || 0;
+const atkS = p => (p.atk && p.atk.s) || 0;
+const atkSW = (p, cls) => (p.atk && p.atk.w && p.atk.w[cls]) || 0;
+const dStat = (p, k) => (p.ds && p.ds[k]) || 0;
+const gStat = (p, k) => (p.gs && p.gs[k]) || 0;
+function atkStat(p) { if (!p.atk || typeof p.atk !== 'object') p.atk = { n: 0, s: 0, w: {} }; if (!p.atk.w) p.atk.w = {}; return p.atk; }
+function bumpD(p, k, n) { if (!p.ds || typeof p.ds !== 'object') p.ds = {}; p.ds[k] = (p.ds[k] || 0) + (n == null ? 1 : n); }
+function bumpG(p, k, n) { if (!p.gs || typeof p.gs !== 'object') p.gs = {}; p.gs[k] = (p.gs[k] || 0) + (n == null ? 1 : n); }
+function addTaps(p, n) { n = n | 0; if (n > 0) atkStat(p).n += n; }
+// 사냥 공격 기록 보고(클라 → 서버). 위조할 수 있으니 한 번에 n≤20·s≤4, 그리고 지난 보고 이후
+// 흐른 시간 안에 사람이 낼 수 있는 만큼만 센다(일반 0.07초·강공격 0.3초에 1번).
+function reportAtk(p, a) {
+  if (!a || typeof a !== 'object') return;
+  const st = atkStat(p), now = Date.now(), dt = Math.max(0, now - (st.ts || 0));
+  const n = Math.max(0, Math.min(parseInt(a.n, 10) || 0, CONFIG.atkReportMaxN, Math.floor(dt / CONFIG.atkMsPerTap) + 1));
+  const sN = Math.max(0, Math.min(parseInt(a.s, 10) || 0, CONFIG.atkReportMaxS, Math.floor(dt / CONFIG.atkMsPerStrong) + 1));
+  st.ts = now; st.n += n; st.s += sN;
+  if (sN && p.class) st.w[p.class] = (st.w[p.class] || 0) + sN;
+}
+// 사냥창을 닫을 때 남은 기록만 따로 보낼 때
+function atkReport(db, id, a) { reportAtk(norm(db.players[id]), a); return { ok: true, silent: true }; }
 const ACHIEVEMENTS = [
   // 강화 최고기록
   { id: 'enh25',  title: '강화 입문자',    grade: 'common',    desc: '무기 +25 달성',   check: p => (p.best || 0) >= 25 },
@@ -274,6 +304,34 @@ const ACHIEVEMENTS = [
   { id: 'dun10', title: '심연 탐험가',   grade: 'epic',      desc: '초월 던전 10층 돌파', check: p => dunBest(p) >= 10 },
   { id: 'dun30', title: '심연의 정복자', grade: 'legend',    desc: '초월 던전 30층 돌파', check: p => dunBest(p) >= 30 },
   { id: 'dun50', title: '초월 던전 정상', grade: 'transcend', desc: '초월 던전 50층 돌파', check: p => dunBest(p) >= 50 },
+  // ⚡ 일반 공격 — 사냥 연타 + 레이드·던전 연타(서버가 검증한 타수)
+  { id: 'tap1k',   title: '연타 입문',     grade: 'common',    desc: '일반 공격 1,000회',     check: p => atkN(p) >= 1000 },
+  { id: 'tap10k',  title: '연타의 달인',   grade: 'rare',      desc: '일반 공격 10,000회',    check: p => atkN(p) >= 10000 },
+  { id: 'tap100k', title: '손가락 폭풍',   grade: 'epic',      desc: '일반 공격 100,000회',   check: p => atkN(p) >= 100000 },
+  { id: 'tap300k', title: '무한 연타',     grade: 'legend',    desc: '일반 공격 300,000회',   check: p => atkN(p) >= 300000 },
+  // ⚡ 강공격 — 무기별 커맨드(지금은 사냥터)
+  { id: 'str30',   title: '한 방의 맛',    grade: 'common',    desc: '강공격 30회',           check: p => atkS(p) >= 30 },
+  { id: 'str300',  title: '필살의 손끝',   grade: 'rare',      desc: '강공격 300회',          check: p => atkS(p) >= 300 },
+  { id: 'str2000', title: '일격필살',      grade: 'epic',      desc: '강공격 2,000회',        check: p => atkS(p) >= 2000 },
+  { id: 'str_warrior', title: '검풍',          grade: 'epic',  desc: '⚔️ 베어 가르기(검 강공격) 500회',  check: p => atkSW(p, 'warrior') >= 500 },
+  { id: 'str_archer',  title: '백발백중',      grade: 'epic',  desc: '🏹 관통 사격(활 강공격) 500회',    check: p => atkSW(p, 'archer') >= 500 },
+  { id: 'str_tanker',  title: '부동의 방패',   grade: 'epic',  desc: '🛡️ 방패 강타(방패 강공격) 500회',  check: p => atkSW(p, 'tanker') >= 500 },
+  { id: 'str_healer',  title: '별을 그리는 자', grade: 'epic', desc: '✨ 별빛 폭발(지팡이 강공격) 500회', check: p => atkSW(p, 'healer') >= 500 },
+  // 🌌 초월 던전 전용 — 누적 기록(주간 초기화와 무관)
+  { id: 'dclear100', title: '심연 순례자',  grade: 'epic',     desc: '초월 던전 층 돌파 누적 100회',      check: p => dStat(p, 'clear') >= 100 },
+  { id: 'dweak3k',   title: '약점 저격수',  grade: 'epic',     desc: '초월 던전에서 약점 속성으로 3,000타', check: p => dStat(p, 'weak') >= 3000 },
+  { id: 'dswap100',  title: '천변만화',     grade: 'rare',     desc: '초월 던전 전투 중 무기 교체 100회',  check: p => dStat(p, 'swap') >= 100 },
+  { id: 'delem30',   title: '원소술사',     grade: 'rare',     desc: '초월 던전에서 속성 스킬 30회',      check: p => dStat(p, 'elem') >= 30 },
+  { id: 'dflawless', title: '무결의 정복자', grade: 'legend',  desc: '초월 던전 31층 이상을 한 대도 안 맞고 돌파', check: p => dStat(p, 'flaw') >= 1 },
+  // 💎 프리즘 도박 — 상자·연금술·캡슐
+  { id: 'box50',     title: '보물상자 사냥꾼', grade: 'rare',      desc: '📦 상자 50회 열기',               check: p => gStat(p, 'box') >= 50 },
+  { id: 'boxjack',   title: '황금 열쇠',       grade: 'legend',    desc: '📦 상자에서 💎 프리즘 15개 당첨',  check: p => gStat(p, 'boxJ') >= 1 },
+  { id: 'alch100',   title: '연금술사',        grade: 'epic',      desc: '⚗️ 연금술 100회',                 check: p => gStat(p, 'alch') >= 100 },
+  { id: 'ash50',     title: '잿더미 수집가',   grade: 'rare',      desc: '⚗️ 연금술 꽝(잿더미) 50회',        check: p => gStat(p, 'ash') >= 50 },
+  { id: 'alchjack',  title: '현자의 돌',       grade: 'legend',    desc: '⚗️ 연금술 최고 칸 당첨',           check: p => gStat(p, 'alchJ') >= 1 },
+  { id: 'cap500',    title: '캡슐 중독',       grade: 'epic',      desc: '🧸 캡슐 500회',                   check: p => gStat(p, 'cap') >= 500 },
+  { id: 'capempty50', title: '허탕의 달인',    grade: 'rare',      desc: '🧸 빈 캡슐 50회',                 check: p => gStat(p, 'capE') >= 50 },
+  { id: 'capjack',   title: '천운',            grade: 'transcend', desc: '🧸 캡슐에서 💎 프리즘 50개 당첨',  check: p => gStat(p, 'capJ') >= 1 },
   // 염색
   { id: 'colormage', title: '색채 마술사',  grade: 'epic',     desc: '염색약 40회 사용',       check: p => (p.dyeCount || 0) >= 40 },
   { id: 'fashion',  title: '패션의 완성',   grade: 'transcend', desc: '염색에서 무지개 획득',   check: p => !!p.gotRainbow },
@@ -760,6 +818,7 @@ function openBox(db, id, pick) {
   if (!takeItem(p, 'boxkey', 1)) return { ok: false, error: '🗝️ 상자 열쇠가 없어요. 몬스터를 사냥하면 가끔 나와요.' };
   const rolls = [rollTable(BOX_TABLE), rollTable(BOX_TABLE), rollTable(BOX_TABLE)];
   const got = grantRoll(p, rolls[pick]);
+  bumpG(p, 'box'); if (rolls[pick] === BOX_TABLE[3]) bumpG(p, 'boxJ');   // 칭호용(💎15 = 상자 최고 칸)
   if (got.kind === 'prism' && got.n >= 5) addLog(db, '📦 ' + p.nick + ' 상자에서 💎 프리즘 ' + got.n + '개!');
   return { ok: true, pick, boxes: rolls.map(rewardText), got, keysLeft: itemCount(p, 'boxkey'), msg: '📦 ' + got.text + ' 획득!' };
 }
@@ -774,6 +833,7 @@ function alchemy(db, id, tierId) {
   p.gold -= a.gold; p.goldSpent = (p.goldSpent || 0) + a.gold;
   const e = rollTable(a.table);
   const n = gainPrism(p, e.n);
+  bumpG(p, 'alch'); if (!e.n) bumpG(p, 'ash'); if (e === a.table[a.table.length - 1]) bumpG(p, 'alchJ');   // 칭호용
   if (n >= 30) addLog(db, '⚗️ ' + p.nick + ' 연금술 대성공! 💎 프리즘 ' + n + '개');
   return { ok: true, tier: a.id, prism: n, msg: n > 0 ? '⚗️ ' + a.name + ' 연금 성공! 💎 프리즘 +' + n : '💨 잿더미만 남았어요… (' + a.name + ')' };
 }
@@ -787,8 +847,9 @@ function capsule(db, id, times) {
   let prism = 0, gold = 0;
   for (let i = 0; i < times && p.gold >= price; i++) {
     p.gold -= price; p.goldSpent = (p.goldSpent || 0) + price;
-    const g = grantRoll(p, rollTable(CAPSULE_TABLE));
+    const e = rollTable(CAPSULE_TABLE), g = grantRoll(p, e);
     results.push(g);
+    bumpG(p, 'cap'); if (e.kind === 'none') bumpG(p, 'capE'); if (e === CAPSULE_TABLE[3]) bumpG(p, 'capJ');   // 칭호용(💎50 = 최고 칸)
     if (g.kind === 'prism') prism += g.n;
     if (g.kind === 'gold') gold += g.n;
   }
@@ -1006,6 +1067,7 @@ function dunTick(db, p, f) {
     if (f.block > 0) { f.block--; dunEvent(f, a.t, '❄️ 빙결 — 보스의 공격을 막았다!'); continue; }
     const net = a.pct * (1 - dunDR(p, f, a.t));
     f.hp = Math.max(0, f.hp - net);
+    if (net > 0) f.hurt = true;   // 한 대라도 맞았나(무결의 정복자)
     dunEvent(f, a.t, '💥 보스 공격! HP -' + Math.round(net) + '%');
     if (f.hp <= 0) break;
   }
@@ -1016,6 +1078,8 @@ function dunResolve(db, p, f, win) {
   if (f.status === 'done') return;
   f.status = 'done'; f.win = !!win; f.endTs = Date.now();
   if (!win) { dunEvent(f, f.lastEl || 0, '☠️ 패배…'); return; }
+  bumpD(p, 'clear');
+  if (f.floor >= 31 && !f.hurt) p.ds.flaw = 1;
   const d = dunState(p);
   const rw = dunReward(f.floor), got = { shard: 0, essence: 0, prism: 0, first: false };
   if (f.floor === (d.fl || 0) + 1) {           // 이번 주 처음 넘는 층만 보상(재도전 파밍 방지)
@@ -1121,6 +1185,7 @@ function dunHit(db, id, hits) {
   const mult = elemMult(p.element, dunPhaseEl(f, t));
   const dmg = hits * memberStats(p).atk * CONFIG.raidHitDmgMult * mult * haste;
   f.bossHP = Math.max(0, f.bossHP - dmg); f.hits += hits; f.dmg += dmg;
+  addTaps(p, hits); if (mult > 1 && hits) bumpD(p, 'weak', hits);   // 칭호용
   if (f.bossHP <= 0) dunTick(db, p, f);
   return { ok: true, silent: true, dmg: Math.round(dmg), mult, fight: dunFightView(p) };
 }
@@ -1147,7 +1212,7 @@ function dunSkill(db, id, kind) {
   if (kind === 'elem') {
     if ((p.ascend || 0) < 1) return { ok: false, error: '속성 스킬은 ★1 이상 무기만 쓸 수 있어요.' };
     if (u.e) return { ok: false, error: '이 무기의 속성 스킬은 이미 썼어요.' };
-    u.e = true;
+    u.e = true; bumpD(p, 'elem');
     const s = ELEMENT_SKILLS[p.element], e = elementOf(p.element);
     text = e.emoji + ' ' + s.name + '! ' + dunApplySkill(p, f, s, t, p.element);
   } else {
@@ -1167,7 +1232,7 @@ function dunSwap(db, id, cls) {
   if (now < (f.swapAt || 0)) return { ok: false, error: '교체 준비 중… (' + ((f.swapAt - now) / 1000).toFixed(1) + '초)' };
   const r = swapWeapon(db, p, cls);
   if (!r.ok) return r;
-  f.swapAt = now + DUNGEON.swapCooldown;
+  f.swapAt = now + DUNGEON.swapCooldown; bumpD(p, 'swap');
   const t = now - f.startTs, e = elementOf(p.element), m = elemMult(p.element, dunPhaseEl(f, t));
   dunEvent(f, t, '🔄 ' + classOf(p).emoji + ' ' + classOf(p).weapon + '(' + e.emoji + e.name + ')로 교체' + (m > 1 ? ' — 약점을 찌른다!' : m < 1 ? ' — 상성 불리…' : ''));
   dunTick(db, p, f);
@@ -1707,8 +1772,9 @@ function mineSwing(db, id) {
     mineLevel: p.mineLevel, mineXp: p.mineXp, mineXpNext: mineXpNext(p.mineLevel), msg,
   };
 }
-function hunt(db, id) {
+function hunt(db, id, atk) {
   const p = norm(db.players[id]);
+  reportAtk(p, atk);   // 직전 몬스터를 잡을 때의 일반·강공격 횟수(칭호용)
   if (p.huntDay !== today()) { p.huntDay = today(); p.huntsUsed = 0; }
   // 일일 사냥(20회)은 풀보상 + 희귀 드랍. 소진 후엔 '무한 사냥'(보상↓·가끔 채광 물약)으로 계속 가능
   const overtime = p.huntsUsed >= limitOf(p, 'dailyHunts');
@@ -2077,6 +2143,7 @@ function raidHit(db, id, hits) {
   raid.bossHP = Math.max(0, raid.bossHP - dmg);
   raid.contrib[p.nick] = (raid.contrib[p.nick] || 0) + dmg;
   raid.hits[p.nick] = (raid.hits[p.nick] || 0) + hits;
+  addTaps(p, hits);   // 칭호용 일반 공격(서버가 검증한 타수)
   if (raid.bossHP <= 0) raidTick(db, pt);
   return { ok: true, dmg, raid: raidView(raid) };
 }
@@ -2336,6 +2403,7 @@ function bpBuyPremium(db, id) {
 }
 
 module.exports = {
+  atkReport, reportAtk, ACHIEVEMENTS,
   CONFIG, GRADES, RARITIES, CLASSES, BOSSES, odds, enhanceCost, weaponName, grade,
   missionView, missionClaim, bpView, bpClaim, bpBuyPremium,
   login, setClass, rename, publicView, enhance, ascend, attend, mine, mineSwing, hunt, buyProtect, fight,
