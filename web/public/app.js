@@ -1635,10 +1635,18 @@ window.forge = {
 // ④ sudo — 데스크톱 키보드로 입력(입력칸 밖에서). 마지막 글자를 칠 때마다 최근 11글자의 해시를 비교한다.
 const SUDO_HASH = '86a73f76391a8c2d48778aec3cef92e9d2993ef862f34fa19eed38869cb4036b';
 let keyBuf = '';
+// 한/영 상태와 상관없이 — 글자(e.key)가 아니라 누른 자판 위치(e.code: KeyS·Space…)로 읽는다.
+// 한글 입력 중이면 e.key 는 'ㄴ'·'Process' 로 오지만 e.code 는 그대로 'KeyS' 다.
+function keyOf(e) {
+  if (/^Key[A-Z]$/.test(e.code || '')) return e.code.slice(3).toLowerCase();
+  if (e.code === 'Space') return ' ';
+  return e.key && e.key.length === 1 && /[a-z ]/i.test(e.key) ? e.key.toLowerCase() : '';   // code 가 없는 브라우저
+}
 document.addEventListener('keydown', async e => {
-  if (!me || e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+  if (!me || e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.target instanceof Element && e.target.closest('input,textarea,[contenteditable="true"]')) return;
-  keyBuf = (keyBuf + e.key.toLowerCase()).slice(-16);
+  const ch = keyOf(e); if (!ch) return;
+  keyBuf = (keyBuf + ch).slice(-16);
   if (keyBuf.length < 11 || eggDone('sudo') || !(window.crypto && crypto.subtle)) return;
   try {
     const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(keyBuf.slice(-11)));
