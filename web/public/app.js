@@ -1446,7 +1446,7 @@ function gUp(e) {
   // 🥚 이스터에그 커맨드(무기와 상관없이) — 하트·∞·소용돌이면 평소대로 일반 공격 1회 + 연출 + 1회성 숨은 칭호
   if (g.drawing && !(cfg.cmd !== 'hold' && r.ok)) {
     const eg = window.Gesture.egg(g.pts);
-    if (eg) { if (GTRAIL) GTRAIL.end(true); huntEgg(eg); return; }
+    if (eg && !eggDone(eg)) { if (GTRAIL) GTRAIL.end(true); huntEgg(eg); return; }   // 찾은 뒤엔 그냥 '커맨드 아님'
   }
   const kon = g.drawing ? konamiStep(window.Gesture.swipeDir(g.pts)) : false;   // 코나미 입력 중이면 안내를 숨긴다
   if (cfg.cmd === 'hold') {
@@ -1470,8 +1470,10 @@ document.querySelector('.hunt-stage').addEventListener('pointerdown', gDown);
  *         코나미(↑↑↓↓←→←→ 스와이프 후 몬스터 톡톡) → 그 판은 8비트 소리
  * 대장간: 무기를 3초 안에 10번 두드리기 · 서버 판정: +44 파괴 · 딱 +77 · 기운 99% 파괴 · 빈 캡슐 3연속 · 할로윈 사냥 */
 const eggSent = new Set();
+// 유저마다 1회짜리 트리거 — 이미 칭호를 얻었으면(또는 이번 접속에서 방금 보냈으면) 그 커맨드는 더는 반응하지 않는다
+const eggDone = id => eggSent.has(id) || !!(me && me.titles && me.titles.some(t => t.id === 'egg_' + id));
 function unlockEgg(id) {
-  if (eggSent.has(id)) return;
+  if (eggDone(id)) return;
   eggSent.add(id);
   api('egg', 'POST', { id }).then(r => { if (r && r.ok && r.found && r.me) { applyMe(r.me); render(); } }).catch(() => {});
 }
@@ -1504,7 +1506,7 @@ function huntEgg(kind) {
 const KONAMI = ['U', 'U', 'D', 'D', 'L', 'R', 'L', 'R'];
 let konBuf = 0, konLast = 0, konArmed = 0, konTaps = 0, retroMode = false;
 function konamiStep(dir) {
-  if (!dir) return false;
+  if (!dir || eggDone('konami')) return false;
   const now = performance.now();
   if (now - konLast > 2500) konBuf = 0;
   konLast = now;
@@ -1524,6 +1526,7 @@ function activateKonami() {
 // 대장간: 무기를 3초 안에 10번 두드리면 대장장이가 한마디
 let forgeKnocks = [];
 el('weaponArt').addEventListener('pointerdown', () => {
+  if (eggDone('forge')) return;   // 한 번 찾았으면 끝
   const now = performance.now();
   forgeKnocks = forgeKnocks.filter(t => now - t < 3000); forgeKnocks.push(now);
   const art = el('weaponArt'); art.classList.remove('knock'); void art.offsetWidth; art.classList.add('knock');
@@ -2407,9 +2410,12 @@ const chipTxt = t => t.grade === 'prism' ? `<span class="prism-txt">${esc(t.titl
 
 /* ---------- 프로필 모달 ---------- */
 async function openProfile(nick) {
-  const r = await withLoad(() => api('profile?name=' + encodeURIComponent(nick)));
+  // 내 프로필은 로그인한 내 정보(/api/me — 칭호 진열장 포함), 남의 프로필은 공개용 요약(/api/profile)
+  const mine = !!(me && nick === me.nick);
+  const r = await withLoad(() => mine ? api('me') : api('profile?name=' + encodeURIComponent(nick)));
   if (!r.ok) return toast(r.error, 'bad');
-  const p = r.profile;
+  const p = mine ? r.me : r.profile;
+  if (mine) { applyMe(r.me); }
   const isMe = me && p.nick === me.nick;
   const eq = p.equippedTitle;
   el('modalBody').innerHTML =

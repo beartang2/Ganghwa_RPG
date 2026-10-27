@@ -1659,7 +1659,7 @@ function enhance(db, id) {
   // 장인의 기운 상승폭 — 부스트권 사용 시 더 크게 오른다(성공률↑ + 실패해도 pity 빨리 참)
   const pg = pityGain(o.success, p.ascend) * (boosted ? CONFIG.boostPityMult : 1);
   const r = Math.random();
-  let result, msg, egg = null;
+  let result, msg, egg = null, d44First = false;
   if (r < o.success) {
     const gain = successGain(before);
     p.level = Math.min(CONFIG.maxLevel, before + gain);
@@ -1670,7 +1670,7 @@ function enhance(db, id) {
     bumpRank(db);
     result = 'success';
     msg = (gain > 1 ? '💫 대성공! +' + gain + '  ' : '강화 성공! ') + '+' + before + ' → +' + p.level;
-    if (p.level === 77) { msg = '🎰 럭키 세븐! ' + msg; if (setEgg(p, 'l77')) egg = 'l77'; }
+    if (p.level === 77 && setEgg(p, 'l77')) { egg = 'l77'; msg = '🎰 럭키 세븐! ' + msg; }   // 처음 한 번만
     addLog(db, '✅ ' + p.nick + ' +' + before + '→+' + p.level + (gain > 1 ? ' (+' + gain + ')' : ''));
   } else if (r < o.success + o.destroy) {
     if (protectWorks(p) && takeItem(p, 'protect', 1)) {
@@ -1685,8 +1685,8 @@ function enhance(db, id) {
       if (p.destroyDay !== today()) { p.destroyDay = today(); p.destroysToday = 0; }
       p.destroysToday++;
       result = 'destroy';
-      if (before === 44 && setEgg(p, 'd44')) egg = 'd44';
-      if (pityBefore >= 0.99 && setEgg(p, 'pity99')) egg = 'pity99';
+      if (before === 44 && setEgg(p, 'd44')) { egg = 'd44'; d44First = true; }
+      if (pityBefore >= 0.99 && setEgg(p, 'pity99')) egg = egg || 'pity99';
       if (floor === 0) {
         // +0으로 떨어지는 진짜 파괴 → 속성 재부여
         const newElem = randomElementKey(); p.element = newElem;
@@ -1706,7 +1706,7 @@ function enhance(db, id) {
     result = 'fail';
     msg = '❌ 실패... +' + before + ' 유지 · 🔨 장인의 기운 ' + Math.round(p.pity * 100) + '%';
   }
-  if (result === 'destroy' && before === 44) msg += '\n…사(死)의 숫자였다.';
+  if (d44First) msg += '\n…사(死)의 숫자였다.';   // 처음 한 번만
   return { ok: true, result, msg, cost, boosted, boostLeft: itemCount(p, 'boost'), pity: p.pity, egg };
 }
 /* 초월 실행 — +99 에서만. 무기를 +0 으로 되돌리고 ★을 하나 얻는다.
@@ -2235,10 +2235,22 @@ function raidProject(raid) {
 }
 
 /* ---------- 조회 ---------- */
+// 남의 프로필(로그인 없이도 열린다) — 프로필 창이 그리는 필드만 보낸다.
+// 예전엔 publicView 를 통째로 보내서 이메일·가방·칭호 진열장(얻는 법 설명 포함)까지 응답에 실렸다.
+// 내 프로필은 클라가 /api/me(로그인 필요)로 그린다.
+const PROFILE_KEYS = ['nick', 'nickColor', 'class', 'className', 'classEmoji', 'weaponBase', 'level', 'best', 'breaks',
+  'wins', 'losses', 'winRate', 'gold', 'prism', 'protects', 'weapon', 'grade', 'element', 'elementName', 'elementEmoji', 'elementColor',
+  'equippedTitle', 'ascend', 'dunBest', 'rank'];
 function profile(db, nick) {
   const k = findByNick(db, nick);
   if (!k) return { ok: false, error: '"' + nick + '" 님을 찾을 수 없어요.' };
-  return { ok: true, profile: publicView(db, k) };
+  const v = publicView(db, k), out = {};
+  for (const key of PROFILE_KEYS) out[key] = v[key];
+  out.titles = v.titles;                                   // 얻은 칭호 이름·등급만(얻는 법은 비공개)
+  // 보유 무기 줄 — 이름·등급·속성만(장인의 기운 같은 진행 정보는 뺀다)
+  out.weapons = { list: (v.weapons.list || []).map(w => ({ cls: w.cls, classEmoji: w.classEmoji, name: w.name, level: w.level, ascend: w.ascend,
+    grade: w.grade, elementEmoji: w.elementEmoji, equipped: w.equipped })) };
+  return { ok: true, profile: out };
 }
 function ranking(db) {
   // 순위·표시는 '가장 좋은 무기' 기준 — 새 직업 무기를 들고 있어도 순위가 떨어지지 않는다

@@ -380,6 +380,12 @@ async function main() {
     Math.random = realRandom;
     const t44 = r.body.me.titles.map(t => t.id);
     ok(r.body.result === 'destroy' && /사\(死\)/.test(r.body.msg) && t44.includes('egg_44') && t44.includes('egg_pity99'), '+44 · 기운 99.5% 에서 파괴 → 「불길한 숫자」「한 끗 차이」');
+    // 두 번째 +44 파괴는 평범한 파괴(특별 문구 없음 — 1회 트리거)
+    await q("UPDATE players SET level = 44 WHERE nick='이스터'");
+    Math.random = () => 0.149;
+    r = await req('POST', '/api/enhance', { token: tokX });
+    Math.random = realRandom;
+    ok(r.body.result === 'destroy' && !/사\(死\)/.test(r.body.msg) && !r.body.egg, '두 번째 +44 파괴는 특별 문구 없음(1회)');
     Math.random = () => 0.9999;  // 캡슐 표의 마지막 칸 = 빈 캡슐
     r = await req('POST', '/api/capsule', { token: tokX, body: { times: 3 } });
     Math.random = realRandom;
@@ -387,6 +393,15 @@ async function main() {
   } finally { Math.random = realRandom; }
   mx = (await req('GET', '/api/me', { token: tokX })).body.me;
   ok(mx.titleRoster.filter(t => t.hidden).length === 4 && mx.titleRoster.find(t => t.id === 'egg_heart').desc.includes('하트'), '찾은 건 이름·설명 공개, 나머지 4개는 여전히 ❓');
+
+  // 🔒 남의 프로필(로그인 없이) — 화면에 필요한 것만, 이메일·가방·칭호 얻는 법은 안 나간다
+  console.log('\n[공개 프로필]');
+  await q("UPDATE players SET data = jsonb_set(data, '{email}', '\"secret@example.com\"') WHERE nick='이스터'");
+  const pub = (await req('GET', '/api/profile', { query: 'name=' + encodeURIComponent('이스터') })).body;
+  const pj = JSON.stringify(pub);
+  ok(pub.ok && pub.profile.nick === '이스터' && Array.isArray(pub.profile.titles) && pub.profile.weapon, '공개 프로필 기본 정보');
+  ok(!pj.includes('secret@example.com') && !('email' in pub.profile) && !('inv' in pub.profile) && !('titleRoster' in pub.profile), '이메일·가방·칭호 진열장 없음');
+  ok(!pj.includes('하트') && pub.profile.titles.every(t => !('desc' in t)) && pub.profile.titles.some(t => t.grade === 'prism'), '이스터에그 칭호는 이름만(얻는 법 비공개)');
 
   // 🗑️ 회원 탈퇴 — 파티장 탈퇴 시 해산, 모든 세션 무효, 소유 행 삭제, 닉네임 재사용 가능
   console.log('\n[회원 탈퇴]');
