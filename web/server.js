@@ -378,6 +378,8 @@ function readBody(req) {
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.webmanifest': 'application/manifest+json; charset=utf-8' };
 function serveStatic(res, urlPath) {
   let rel = urlPath === '/' ? '/index.html' : urlPath;
+  if (rel.endsWith('/')) rel += 'index.html';                 // /privacy/ → /privacy/index.html
+  else if (!path.extname(rel) && fs.existsSync(path.join(PUBLIC_DIR, path.normalize(rel), 'index.html'))) rel += '/index.html';
   // 빌드된 난독화 파일이 있으면 app.js 대신 서빙 (npm run build 후)
   if (rel === '/app.js' && fs.existsSync(path.join(PUBLIC_DIR, 'app.min.js'))) rel = '/app.min.js';
   const filePath = path.join(PUBLIC_DIR, path.normalize(rel));
@@ -568,7 +570,9 @@ const server = http.createServer(async (req, res) => {
       else if (p === '/api/attend') r = game.attend(db, id);
       else if (p === '/api/mine') r = game.mine(db, id);
       else if (p === '/api/mine-swing') r = game.mineSwing(db, id);
-      else if (p === '/api/hunt') r = game.hunt(db, id);
+      else if (p === '/api/hunt') { const b = await readBody(req); r = game.hunt(db, id, b.atk); }
+      else if (p === '/api/atk-report') { const b = await readBody(req); r = game.atkReport(db, id, b.atk); }
+      else if (p === '/api/egg') { const b = await readBody(req); r = game.eggFound(db, id, b.id); }
       else if (p === '/api/title') { const b = await readBody(req); r = game.equipTitle(db, id, b.title || null); }
       else if (p === '/api/protect') { const b = await readBody(req); r = game.buyProtect(db, id, b.qty); }
       else if (p === '/api/mission-claim') { const b = await readBody(req); r = game.missionClaim(db, id, b.id); }

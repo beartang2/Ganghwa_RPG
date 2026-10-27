@@ -10,6 +10,9 @@ const PATCH = {
   version: '6',
   title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
+    '🌈 <b>숨겨진 칭호</b> — 새 등급 <b>프리즘</b>! 어딘가에 숨어 있는 걸 찾으면 열려요. 무엇을 하면 열리는지는… 비밀 🤫',
+    '🏷️ <b>새 칭호 23종</b> — ⚡ 일반 공격·강공격 횟수(무기별 강공격 칭호도!) · 🌌 초월 던전(약점 저격·무기 교체·무피격 돌파 등) · 💎 프리즘 도박(상자·연금술·캡슐 대박과 꽝). 프로필의 칭호는 이제 <b>접었다 펼 수 있어요</b>',
+    '⚡ <b>강공격 커맨드 (시험판 · 사냥터)</b> — 몬스터 근처에 무기별 커맨드를 그리면 강공격! ⚔️ 검은 원의 호 · 🏹 활은 몬스터 반대쪽으로 당겼다 놓기 · ✨ 지팡이는 별 한 붓(가장 강하고 5초간 연타 ×1.5) · 🛡️ 방패는 꾹 눌렀다 떼기',
     '🛠️ <b>고침</b> — 레이드 탭에 들어갈 때마다 지난 보스 결과가 다시 뜨던 문제(끝난 결과는 1분 뒤 로비로) · 강화 버튼 빛 꼬리가 하얗게 타던 문제 · 버튼 누를 때 생기던 파란 사각형 · 📳 <b>아이폰 진동</b>(누르는 순간 \'톡\')',
     '⚙️ <b>설정 화면</b> — 오른쪽 위 ⚙️ 에서 내 계정 · 효과음 · 📳 <b>진동</b>(휴대폰) · 공지사항 · 플레이 방법 · 로그아웃 · 회원 탈퇴를 한 곳에서',
     '📱 <b>모바일 화면 개편</b> — 아래 탭바(⚒️대장간 · 🗡️사냥 · 🐉레이드 · 💎프리즘 · 🏅더보기)로 화면을 바꿔요. 대장간은 스크롤 없이 한 화면, 전투는 화면 전체로 열려요',
@@ -201,7 +204,7 @@ function show(which) {
 // 안내창은 한 번 닫으면 다시 안 뜬다(기기에 영구 저장). ❔ 버튼으로 다시 열 수 있음.
 // 신규 유저는 가이드를 보여주고(패치노트는 건너뜀), 기존 유저는 새 버전이면 패치노트를 띄운다.
 function maybeShowGuide() {
-  if (!localStorage.getItem('guideSeen')) { el('guide').hidden = false; localStorage.setItem('patchSeen', PATCH.version); return true; }
+  if (!localStorage.getItem('guideSeen')) { openGuide(); localStorage.setItem('patchSeen', PATCH.version); return true; }
   return false;
 }
 function patchUnread() { return localStorage.getItem('patchSeen') !== PATCH.version; }
@@ -235,7 +238,7 @@ function enterGame() {
   show('game'); seedInvites(); seedTitles(); render();
   if (oneCol.matches) { currentTab = 'forge'; el('game').dataset.view = 'forge'; document.querySelectorAll('.bb-btn').forEach(b => b.classList.toggle('on', b.dataset.view === 'forge')); }
   else withLoad(loadTab);
-  refreshSide(); const shownGuide = maybeShowGuide(); if (!shownGuide) maybeShowPatch(); openEvents(); initRealtime(); }
+  refreshSide(); updateAds(); const shownGuide = maybeShowGuide(); if (!shownGuide) maybeShowPatch(); openEvents(); initRealtime(); }
 
 /* 파티 레이드 초대 알림 — 어느 탭에 있어도 새 초대가 오면 토스트로 띄운다.
  * 폴링(api('me'))으로 me.invites 가 갱신될 때마다 새로 생긴 초대를 감지. */
@@ -260,8 +263,8 @@ function checkTitles() {
   me.titles.forEach(t => {
     if (!seenTitles.has(t.id)) {
       seenTitles.add(t.id);
-      toast('🏆 새 칭호 획득!  「' + t.title + '」', 'ok');
-      vibe([15, 45, 25]); sfx('guaranteed');
+      if (t.grade === 'prism') { toast('🌈 숨겨진 칭호 발견!  「' + t.title + '」', 'ok'); vibe([12, 30, 12, 30, 40]); sfx('jackpot'); }
+      else { toast('🏆 새 칭호 획득!  「' + t.title + '」', 'ok'); vibe([15, 45, 25]); sfx('guaranteed'); }
     }
   });
 }
@@ -529,131 +532,419 @@ function goPrismShop() {
 }
 
 /* ---------- 💎 프리즘 탭 — 📦 상자 · ⚗️ 연금술 · 🧸 캡슐 · 💎 상점 ----------
- * 확률표는 서버가 굴리는 표를 그대로 받아서 보여준다(확률 공개). */
+ * 확률표는 서버가 굴리는 표를 그대로 받아서 보여준다(확률 공개).
+ * 그림은 prism-art.js(SVG), 움직임은 style.css 키프레임 + 아래 연출 함수(Web Animations)가 맡는다.
+ * 연출 순서(셋 다 같음): 누름 → '기대감'(상자 덜컹·도가니 끓음·손잡이 돌림)과 서버 요청을 동시에 →
+ *   응답이 오면 '터뜨림'(불꽃·빛줄기·보상 튀어나옴) → 끝나면 결과 화면을 다시 그린다(연출 끝 모습과 똑같이 그려서 티 안 나게).
+ * 보상·잔액은 터지는 순간에 반영한다(미리 숫자가 바뀌어 결과가 스포일러되지 않게).
+ * 연출 중 화면을 한 번 더 누르면 건너뛴다(pskip). prefers-reduced-motion 이면 짧은 페이드만 남는다. */
 let prismSub = 'box', prismData = null, boxReveal = null, alchLast = null, capLast = null;
-const CHESTS = [
-  { name: '루비 상자',     body: '#6e2620', body2: '#8f3a2c', trim: '#e0aa45', gem: '#ff5d6c' },
-  { name: '사파이어 상자', body: '#1f3a63', body2: '#2c5288', trim: '#d6dee8', gem: '#4facfe' },
-  { name: '에메랄드 상자', body: '#1f4f34', body2: '#2c6b47', trim: '#d4a24c', gem: '#49d17a' },
+let alchTier = (() => { try { return localStorage.getItem('alchTier') || 'low'; } catch (_) { return 'low'; } })();
+let prismGlares = [];   // 이 화면에 붙인 광택(Fx.glare) — 다시 그릴 때 정리
+let pfx = null;         // 진행 중인 연출 { sub, skip, waits, anims }
+let boxEnter = false;   // '다시 열기' 직후 상자가 새로 놓이는 등장 연출
+const PA = window.PrismArt || null;
+const CHEST_NAMES = PA ? PA.CHESTS.map(c => c.name) : ['루비 상자', '사파이어 상자', '에메랄드 상자'];
+const CHEST_SPARK = [['#ffd6de', '#ff4d6d', '#ffd27a'], ['#e0f1ff', '#3aa0ff', '#ffffff'], ['#dcffe9', '#33d17a', '#ffd27a']];
+const PRISM_RAINBOW = ['#ff7ab6', '#ffe27a', '#7affc1', '#7ab8ff', '#b27aff'];
+// 연출 등급(0 꽝 ~ 5 대박)별 불꽃 색
+const TIER_SPARK = [
+  ['#c9c2ba', '#8a8580'],
+  ['#fff4d6', '#ffd27a', '#ff9a3c'],
+  ['#ffffff', '#bdf6ff', '#7df9ff'],
+  ['#e8d6ff', '#a66cff', '#7df9ff'],
+  ['#fff1c1', '#ffd27a', '#7df9ff', '#ffffff'],
+  PRISM_RAINBOW,
 ];
-function chestSVG(c, open) {
-  return `<svg class="chest-svg${open ? ' open' : ''}" viewBox="0 0 84 76" aria-hidden="true">
-    <ellipse cx="42" cy="70" rx="32" ry="5" fill="#000" opacity=".35"/>
-    <g class="chest-glow"><circle cx="42" cy="30" r="22" fill="${c.gem}" opacity=".45"/></g>
-    <rect x="9" y="32" width="66" height="34" rx="3" fill="${c.body}" stroke="#170f0a" stroke-width="2"/>
-    <rect x="9" y="32" width="66" height="10" fill="${c.body2}"/>
-    <path d="M9 47 H75 M9 57 H75" stroke="#170f0a" stroke-width="1" opacity=".35"/>
-    <rect x="9" y="32" width="66" height="5" fill="${c.trim}"/>
-    <rect x="35" y="32" width="14" height="34" fill="${c.trim}" stroke="#170f0a" stroke-width="1"/>
-    <g class="chest-lid">
-      <path d="M9 32 Q9 9 42 9 Q75 9 75 32 Z" fill="${c.body2}" stroke="#170f0a" stroke-width="2"/>
-      <path d="M12 30 Q13 13 42 12" fill="none" stroke="#fff" stroke-width="2" opacity=".18"/>
-      <path d="M9 32 Q9 9 42 9 Q75 9 75 32" fill="none" stroke="${c.trim}" stroke-width="3"/>
-      <rect x="35" y="10" width="14" height="22" fill="${c.trim}" stroke="#170f0a" stroke-width="1"/>
-    </g>
-    <circle cx="42" cy="45" r="5.5" fill="${c.gem}" stroke="#170f0a" stroke-width="1.5"/>
-    <circle cx="40.5" cy="43.5" r="1.6" fill="#fff" opacity=".8"/>
-  </svg>`;
+const tierOf = r => (PA ? PA.tierOf(r) : (r && r.kind === 'prism' ? 3 : 1));
+const prizeIcon = (r, cls) => (PA ? PA.icon(r, cls) : '<span class="picon-txt">🎁</span>');
+const manG = n => (n >= 10000 && n % 10000 === 0 ? (n / 10000) + '만' : n.toLocaleString()) + 'G';
+// 아이콘 옆에 붙일 보상 이름(아이콘과 겹치는 이모지는 뺀다)
+function rewardLabel(r) {
+  if (!r || r.kind === 'none') return '빈 캡슐';
+  if (r.kind === 'prism') return '프리즘 ' + r.n;
+  if (r.kind === 'gold') return r.n.toLocaleString() + 'G';
+  return String(r.text || '').replace(/^\S+\s/, '');
 }
-function capsuleMachineSVG() {
-  const balls = [['#ff5d6c', 34, 40], ['#4facfe', 50, 36], ['#ffd93d', 42, 50], ['#49d17a', 58, 50], ['#a770ef', 28, 54], ['#ff9f45', 46, 26], ['#7df9ff', 62, 30]];
-  return `<svg class="cap-svg" viewBox="0 0 92 120" aria-hidden="true">
-    <circle cx="46" cy="42" r="34" fill="rgba(200,230,255,.08)" stroke="#d6dee8" stroke-width="2.5"/>
-    ${balls.map(([c, x, y]) => `<g><circle cx="${x}" cy="${y}" r="7.5" fill="${c}" stroke="#170f0a" stroke-width="1.3"/><path d="M${x - 7.5} ${y} H${x + 7.5}" stroke="#fff" stroke-width="1.2" opacity=".7"/></g>`).join('')}
-    <path d="M22 26 Q30 14 44 12" fill="none" stroke="#fff" stroke-width="3" opacity=".3" stroke-linecap="round"/>
-    <path d="M14 74 H78 L72 112 H20 Z" fill="#b8420c" stroke="#170f0a" stroke-width="2"/>
-    <path d="M14 74 H78 V80 H14 Z" fill="#e0aa45" stroke="#170f0a" stroke-width="1.5"/>
-    <circle cx="46" cy="94" r="9" fill="#2b231d" stroke="#e0aa45" stroke-width="2.5"/>
-    <path d="M40 94 H52" stroke="#e0aa45" stroke-width="3" stroke-linecap="round"/>
-    <rect x="58" y="100" width="12" height="8" rx="2" fill="#100d0b"/>
-  </svg>`;
+// 캡슐 칸처럼 좁은 자리용 짧은 보상 글자
+function shortReward(r) {
+  if (!r || r.kind === 'none') return '꽝';
+  if (r.kind === 'prism') return '+' + r.n;
+  if (r.kind === 'gold') return manG(r.n);
+  if (r.kind === 'item') return (r.item === 'stone' ? '마석' : r.item === 'boost' ? '부스트' : r.item === 'protect' ? '방지권' : '아이템') + ' ×' + r.n;
+  return '';
 }
-const pct = p => { const v = p * 100; return (v >= 1 ? (Math.round(v * 10) / 10) : (Math.round(v * 100) / 100)) + '%'; };
-function oddsTable(title, table) {
-  return `<details class="odds-table"><summary>📊 ${title}</summary><table>${table.map(e => `<tr><td>${esc(e.text)}</td><td>${pct(e.p)}</td></tr>`).join('')}</table></details>`;
+
+/* ----- 연출 진행 도우미: 기다림·애니메이션을 한곳에 모아 두었다가 건너뛰기 때 한꺼번에 끝낸다 ----- */
+const pReduced = () => !!(window.Fx && window.Fx.reducedMotion && window.Fx.reducedMotion());
+function pfxStart(sub) { pfx = { sub, skip: false, waits: new Set(), anims: new Set() }; return pfx; }
+function pfxEnd(run) { if (pfx === run) pfx = null; }
+const pLive = run => pfx === run && !run.skip;
+function pwait(run, ms) {
+  return new Promise(res => {
+    if (!pLive(run)) return res();
+    const fin = () => { clearTimeout(t); run.waits.delete(fin); res(); };
+    const t = setTimeout(fin, pReduced() ? Math.min(ms, 120) : ms);
+    run.waits.add(fin);
+  });
 }
+function panim(run, node, keyframes, opts) {
+  if (!node || !node.animate) return Promise.resolve();
+  const a = node.animate(keyframes, Object.assign({ fill: 'forwards', easing: 'ease-out' }, opts));
+  if (run) { run.anims.add(a); if (!pLive(run)) a.finish(); }
+  return a.finished.then(() => {}, () => {});
+}
+function pskip() {
+  const run = pfx; if (!run || run.skip) return;
+  run.skip = true;
+  run.anims.forEach(a => { try { a.finish(); } catch (_) { /* 이미 끝남 */ } });
+  run.waits.forEach(f => f());
+}
+// 화면 좌표 도우미
+const pCenter = node => { const r = node.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, r }; };
+function pSpark(node, opts) { if (FX && FX.sparks && node) FX.sparks.burstAt(node, opts); }
+function pSparkXY(x, y, opts) { if (FX && FX.sparks) FX.sparks.burst(x, y, opts); }
+let prismBurstFx;   // 분광 폭발은 프리즘 탭에 처음 들어올 때 만든다(안 오는 사람은 WebGL 컨텍스트를 하나 덜 쓴다)
+function ensurePrismBurst() {
+  if (prismBurstFx !== undefined || !window.Fx || !window.Fx.prismBurst) return prismBurstFx || null;
+  try {
+    prismBurstFx = window.Fx.prismBurst({ colors: PRISM_RAINBOW, intensity: 2.2, quality: window.innerWidth < 600 ? 0.4 : 0.55, grain: 0.6, fade: 0.7 });
+    if (prismBurstFx.warm) prismBurstFx.warm();   // 셰이더를 미리 컴파일 — 첫 대박 때 멈칫하지 않게
+  } catch (e) { prismBurstFx = null; console.warn('[fx] prismBurst', e); }
+  return prismBurstFx;
+}
+function pPrismBurst(node, opts) {
+  const fx = node && ensurePrismBurst();
+  if (!fx) return;
+  const c = pCenter(node);
+  fx.play(c.x, c.y, opts);
+}
+function pShake(run, node, power) {
+  const p = power || 1;
+  return panim(run, node, [
+    { transform: 'translate(0,0)' }, { transform: `translate(${-5 * p}px,${2 * p}px)` }, { transform: `translate(${4 * p}px,${-3 * p}px)` },
+    { transform: `translate(${-3 * p}px,${1 * p}px)` }, { transform: `translate(${2 * p}px,0)` }, { transform: 'translate(0,0)' },
+  ], { duration: 360, easing: 'linear', fill: 'none' });
+}
+
 function syncPrismFromMe() {
   if (!prismData || !me) return;
   const cnt = id => { const it = me.inv.items.find(i => i.id === id); return it ? it.count : 0; };
   prismData.prism = me.prism || 0; prismData.gold = me.gold; prismData.keys = cnt('boxkey'); prismData.stones = cnt('stone');
 }
+const pct = p => { const v = p * 100; return (v >= 1 ? (Math.round(v * 10) / 10) : (Math.round(v * 100) / 100)) + '%'; };
+function oddsTable(title, table) {
+  return `<details class="odds-table"><summary>📊 ${title}</summary><table>${table.map(e => `<tr><td>${esc(e.text)}</td><td>${pct(e.p)}</td></tr>`).join('')}</table></details>`;
+}
 function paintPrism() {
   const d = prismData; if (!d || currentTab !== 'prism') return;
+  prismGlares.forEach(g => { try { g.destroy(); } catch (_) { /* 무시 */ } });
+  prismGlares = [];
   const subs = [['box', '📦', '상자'], ['alch', '⚗️', '연금술'], ['cap', '🧸', '캡슐'], ['shop', '💎', '상점']];
   let h = `<div class="prism-head"><span class="prism-bal">💎 <b>${d.prism.toLocaleString()}</b></span>
     <span class="prism-mats"><span title="상자 열쇠">🗝️ ${d.keys}</span><span title="마석">🔮 ${d.stones}</span><span title="골드">💰 ${d.gold.toLocaleString()}</span></span></div>`;
   h += `<div class="psub-tabs">${subs.map(([k, e, l]) => `<button class="psub${prismSub === k ? ' active' : ''}" data-psub="${k}"><span>${e}</span>${l}</button>`).join('')}</div>`;
   h += prismSub === 'box' ? boxHTML(d) : prismSub === 'alch' ? alchHTML(d) : prismSub === 'cap' ? capHTML(d) : pshopHTML(d);
   el('panel').innerHTML = h;
+  // 아직 안 연 상자 위를 광택이 번갈아 훑는다(React Bits GlareHover) — '눌러 보세요' 신호
+  if (prismSub === 'box' && !boxReveal && window.Fx && window.Fx.glare && !pReduced()) {
+    document.querySelectorAll('.chest[data-pick]:not(:disabled)').forEach((b, i) => {
+      try { prismGlares.push(window.Fx.glare(b, { mode: 'loop', interval: 3.4, delay: i * 0.35, glareOpacity: 0.3, glareSize: 34, glareAngle: -35, transitionDuration: 900 })); } catch (_) { /* 무시 */ }
+    });
+  }
+  boxEnter = false;
+  if (prismBurstFx === undefined && !pReduced()) setTimeout(() => { if (currentTab === 'prism' && !pfx) ensurePrismBurst(); }, 400);
 }
+
+/* ================= 📦 상자 ================= */
 function boxHTML(d) {
   const rv = boxReveal;
-  let h = `<p class="hint" style="margin:0 0 10px">🗝️ 열쇠 1개로 상자 3개 중 <b>하나</b>를 골라 열어요. 열고 나면 나머지 둘에 뭐가 들어 있었는지도 보여 줘요.</p>`;
-  h += '<div class="chests">' + CHESTS.map((c, i) => {
-    const mine = rv && rv.pick === i;
-    return `<button class="chest${rv ? (mine ? ' opened' : ' missed') : ''}" ${rv ? 'data-noop' : `data-pick="${i}"`} ${!rv && d.keys < 1 ? 'disabled' : ''}>
-      ${chestSVG(c, !!rv)}<span class="chest-name">${c.name}</span>${rv ? `<span class="chest-reward">${mine ? '' : '놓친 보상 · '}${esc(rv.boxes[i])}</span>` : ''}</button>`;
+  let h = `<p class="hint pz-hint">🗝️ 열쇠 1개로 상자 <b>하나</b>를 골라 열어요 · 나머지 둘에 뭐가 있었는지도 보여 줘요</p>`;
+  h += `<div class="chests${rv ? ' revealed' : ''}${rv && rv.fresh ? ' fresh' : ''}${boxEnter ? ' enter' : ''}">` + CHEST_NAMES.map((name, i) => {
+    const mine = rv && rv.pick === i, item = rv && rv.items ? rv.items[i] : null;
+    const state = rv ? (mine ? ' opened' : ' missed') : '';
+    const prize = rv ? `<span class="chest-prize t${tierOf(item)}">${prizeIcon(item)}</span>` : '';
+    return `<button class="chest c${i}${state}" ${rv ? 'data-noop tabindex="-1"' : `data-pick="${i}"`} ${!rv && d.keys < 1 ? 'disabled' : ''} aria-label="${name}${rv ? ' — ' + esc(rv.boxes[i]) : ' 열기'}">
+      <span class="chest-stage"><span class="chest-rays"></span>${PA ? PA.chest(i) : '📦'}${prize}</span>
+      <span class="chest-name">${name}</span>${rv ? `<span class="chest-reward">${mine ? '' : '<small>놓친 보상</small>'}${esc(rv.boxes[i])}</span>` : ''}</button>`;
   }).join('') + '</div>';
-  if (rv) h += `<div class="prism-result ok">🎉 ${esc(rv.got.text)} 획득!</div>
-    <button class="btn primary big" data-box-again ${d.keys < 1 ? 'disabled' : ''}>🗝️ 다시 열기 <small>(남은 열쇠 ${d.keys})</small></button>`;
+  if (rv) h += `<div class="pz-after${rv.fresh ? ' fresh' : ''}"><div class="prism-result ok">🎉 ${esc(rv.got.text)} 획득!</div>
+    <button class="btn primary big" data-box-again ${d.keys < 1 ? 'disabled' : ''}>🗝️ 다시 열기 <small>(남은 열쇠 ${d.keys})</small></button></div>`;
   else if (d.keys < 1) h += '<div class="prism-result">🗝️ 열쇠가 없어요 — 🗡️ 사냥에서 가끔 나와요(무한 사냥에서도 낮은 확률로)</div>';
   return h + oddsTable('상자 하나에 들어 있을 확률', d.info.box.table);
 }
+async function doOpenBox(i) {
+  const run = pfxStart('box');
+  const btn = document.querySelector(`.chest[data-pick="${i}"]`);
+  const wrap = btn && btn.closest('.chests');
+  // ① 기대감: 고른 상자가 덜컹거리고 틈새로 빛이 샌다(나머지는 어두워짐). 서버 응답과 동시에 진행
+  if (wrap) wrap.classList.add('picking');
+  if (btn) btn.classList.add('charging');
+  const stopRattle = (() => {
+    let n = 0;
+    const tick = () => { if (!pLive(run)) return; sfx('rattle'); vibe(5); if (++n === 3 && btn) btn.classList.add('charging2'); t = setTimeout(tick, n < 3 ? 210 : 140); };
+    let t = setTimeout(tick, 0);
+    return () => clearTimeout(t);
+  })();
+  const [r] = await Promise.all([api('box-open', 'POST', { pick: i }), pwait(run, 950)]);
+  stopRattle();
+  if (!r.ok) {
+    pfxEnd(run);
+    if (wrap) wrap.classList.remove('picking');
+    if (btn) btn.classList.remove('charging', 'charging2');
+    return toast(r.error, 'bad');
+  }
+  // ② 터뜨림: 결과 화면을 'fresh' 로 그리면 CSS 가 뚜껑 열림·보상 튀어나옴·나머지 상자 열림을 시간차로 재생한다
+  boxReveal = { pick: r.pick, boxes: r.boxes, items: r.items || null, got: r.got, fresh: !run.skip };
+  applyMe(r.me); render(); syncPrismFromMe();
+  paintPrism();
+  boxReveal.fresh = false;
+  const tier = tierOf(r.got);
+  const chest = document.querySelector(`.chest.c${r.pick}`);
+  const stage = chest && chest.querySelector('.chest-stage');
+  if (pLive(run) && stage) {
+    await pwait(run, 90);   // 뚜껑이 튀는 순간에 맞춘다
+    const c = pCenter(stage);
+    sfx('lid'); vibe(tier >= 4 ? [30, 40, 80] : 25);
+    pSparkXY(c.x, c.y - c.r.height * 0.1, { sparkColor: CHEST_SPARK[r.pick], sparkCount: 14, sparkRadius: 64, sparkSize: 11, shape: 'star', ring: true, gravity: 0.35, duration: 680, glow: 1 });
+    pSparkXY(c.x, c.y, { sparkColor: TIER_SPARK[tier], sparkCount: 10 + tier * 3, sparkRadius: 40 + tier * 12, shape: 'streak', spread: 160, gravity: 0.9, duration: 640, glow: 0.9 });
+    if (FX && FX.embers) FX.embers.burst(c.x, c.y);
+    pShake(run, el('panel'), tier >= 4 ? 1.6 : 0.8);
+    if (tier >= 4) { pPrismBurst(stage, { size: Math.min(420, window.innerWidth * 0.95), intensity: tier >= 5 ? 2.8 : 2.2 }); sfx('guaranteed'); }
+    else sfx(tier >= 2 ? 'pang' : 'coin');
+    await pwait(run, 520);
+    if (pLive(run)) sfx('creak');   // 나머지 두 상자가 열림(CSS)
+    await pwait(run, 700);
+  }
+  if (run.skip) paintPrism();   // 건너뛰었으면 마지막 모습으로 바로
+  pfxEnd(run);
+}
+
+/* ================= ⚗️ 연금술 ================= */
+const ALCH_BIG = 10;   // 이 이상이면 '대성공' 연출(분광 폭발)
 function alchHTML(d) {
-  let h = '<p class="hint" style="margin:0 0 10px">🔮 마석과 💰 골드를 도가니에 함께 넣고 돌려요. 불이 셀수록 <b>마석</b> 하나당 기대값은 높고, <b>골드</b> 하나당 기대값은 낮아요.</p>';
-  h += '<div class="alch-list">' + d.info.alchemy.map(a => {
-    const can = d.stones >= a.stone && d.gold >= a.gold;
-    return `<div class="alch-card t-${a.id}"><div class="alch-top"><span class="alch-fire">${a.emoji}</span><b>${a.name}</b>
-        <span class="alch-cost"><span class="${d.stones >= a.stone ? '' : 'short'}">🔮 ${a.stone}</span> + <span class="${d.gold >= a.gold ? '' : 'short'}">💰 ${a.gold.toLocaleString()}G</span></span></div>
-      <div class="alch-odds">${a.table.map(e => `<span>${e.text.replace('💎 프리즘 ', '💎')} <b>${pct(e.p)}</b></span>`).join('')}</div>
-      <button class="btn primary sm" data-alch="${a.id}" ${can ? '' : 'disabled'}>⚗️ 돌리기</button></div>`;
-  }).join('') + '</div>';
-  if (alchLast) h += `<div class="prism-result ${alchLast.prism > 0 ? 'ok' : ''}">${esc(alchLast.msg)}</div>`;
+  const tiers = d.info.alchemy;
+  const a = tiers.find(x => x.id === alchTier) || tiers[0];
+  const can = d.stones >= a.stone && d.gold >= a.gold;
+  const res = alchLast;
+  const resCls = res ? (res.prism >= ALCH_BIG ? ' res-ok res-big' : res.prism > 0 ? ' res-ok' : ' res-fail') : '';
+  let h = `<div class="pz-stage alch-stage fire-${a.id}${resCls}${res && res.fresh ? ' fresh' : ''}">
+    <div class="alch-pot">${PA ? PA.cauldron() : '⚗️'}</div><div class="pz-layer"></div>`;
+  if (res) h += `<div class="alch-prize t${res.prism >= ALCH_BIG ? 5 : res.prism > 0 ? 3 : 0}">${prizeIcon(res.prism > 0 ? { kind: 'prism' } : { kind: 'none' })}<b class="alch-n">${res.prism > 0 ? '+' + res.prism : '꽝'}</b></div>`;
+  h += '</div>';
+  h += `<div class="alch-tiers" role="radiogroup" aria-label="불 세기">${tiers.map(t => `<button class="alch-tier t-${t.id}${t.id === a.id ? ' on' : ''}" data-alch-tier="${t.id}" role="radio" aria-checked="${t.id === a.id}">
+      <span class="at-fire">${t.emoji}</span><b>${t.name}</b>
+      <span class="at-cost"><span class="${d.stones >= t.stone ? '' : 'short'}">🔮${t.stone}</span><span class="${d.gold >= t.gold ? '' : 'short'}">💰${manG(t.gold)}</span></span></button>`).join('')}</div>`;
+  h += `<div class="alch-odds">${a.table.map(e => `<span>${e.text.replace('💎 프리즘 ', '💎')} <b>${pct(e.p)}</b></span>`).join('')}</div>`;
+  h += `<button class="btn primary big alch-go" data-alch="${a.id}" ${can ? '' : 'disabled'}>⚗️ ${a.name}로 연성하기</button>`;
+  if (res) h += `<div class="prism-result${res.prism > 0 ? ' ok' : ''}${res.fresh ? ' pz-late' : ''}">${esc(res.msg)}</div>`;
+  else h += '<p class="hint pz-hint" style="margin-top:8px">🔮 마석과 💰 골드를 함께 넣고 끓여요. 불이 셀수록 <b>마석</b> 하나당 기대값은 높고 <b>골드</b> 하나당 기대값은 낮아요.</p>';
   return h;
 }
+// 도가니 그림 안의 한 점(viewBox 좌표) → 무대(.alch-stage) 기준 좌표
+function alchPoint(stage, vx, vy) {
+  const svg = stage.querySelector('.pcauldron'), sr = stage.getBoundingClientRect();
+  if (!svg) return { x: sr.width / 2, y: sr.height / 3 };
+  const r = svg.getBoundingClientRect();
+  return { x: r.left - sr.left + (vx / 220) * r.width, y: r.top - sr.top + (vy / 186) * r.height };
+}
+// 무대 위에 떠다니는 조각 하나(재료·결정·연기)
+function pPiece(layer, html, cls, x, y, size) {
+  const n = document.createElement('span');
+  n.className = 'pz-piece ' + (cls || '');
+  n.innerHTML = html;
+  Object.assign(n.style, { left: `${x - size / 2}px`, top: `${y - size / 2}px`, width: `${size}px`, height: `${size}px` });
+  layer.appendChild(n);
+  return n;
+}
+async function doAlchemy(tier) {
+  const d = prismData; if (!d) return;
+  const a = d.info.alchemy.find(x => x.id === tier); if (!a) return;
+  const run = pfxStart('alch');
+  const stage = document.querySelector('.alch-stage'), layer = stage && stage.querySelector('.pz-layer');
+  // ① 기대감: 재료가 도가니로 퐁당 → 불이 확 붙고 물약이 요동친다. 서버 응답과 동시에 진행
+  if (stage) {
+    stage.classList.remove('res-ok', 'res-big', 'res-fail', 'fresh');
+    const old = stage.querySelector('.alch-prize'); if (old) old.remove();
+    stage.classList.add('brewing');
+  }
+  const req = api('alchemy', 'POST', { tier });
+  const drops = [];
+  if (stage && layer && PA && !pReduced()) {
+    const liq = alchPoint(stage, 110, 58), W = stage.clientWidth;
+    const count = tier === 'high' ? 7 : tier === 'mid' ? 5 : 3;
+    for (let k = 0; k < count; k++) {
+      const isStone = k % 2 === 0, size = isStone ? 26 : 24;
+      const sx = W / 2 + (k % 2 ? 1 : -1) * (40 + Math.random() * Math.min(110, W / 2 - 30));
+      const node = pPiece(layer, PA.icon(isStone ? { kind: 'item', item: 'stone' } : { kind: 'gold' }), 'alch-ing', sx, -10, size);
+      const dx = liq.x - sx + (Math.random() - 0.5) * 50, dy = liq.y + 10;
+      drops.push(panim(run, node, [
+        { transform: 'translate(0,0) rotate(0) scale(.6)', opacity: 0 },
+        { transform: `translate(${dx * 0.45}px,${dy * 0.25 - 26}px) rotate(${(Math.random() - 0.5) * 200}deg) scale(1)`, opacity: 1, offset: 0.45, easing: 'ease-in' },
+        { transform: `translate(${dx}px,${dy}px) rotate(${(Math.random() - 0.5) * 360}deg) scale(.5)`, opacity: 1, offset: 0.92 },
+        { transform: `translate(${dx}px,${dy + 6}px) scale(.2)`, opacity: 0 },
+      ], { duration: 560, delay: k * 120, easing: 'ease-out' }).then(() => {
+        node.remove();
+        if (!pLive(run)) return;
+        sfx('plop');
+        const sr = stage.getBoundingClientRect();
+        pSparkXY(sr.left + liq.x + dx * 0.15, sr.top + liq.y, { sparkColor: ['#e6fffb', '#43e6c8'], sparkCount: 6, sparkRadius: 22, shape: 'dot', spread: 120, gravity: 1.2, duration: 420, glow: 0.4 });
+      }));
+    }
+    setTimeout(() => { if (pLive(run)) { sfx('boil'); vibe([8, 30, 8, 30, 8]); } }, count * 120 + 200);
+  }
+  const [r] = await Promise.all([req, pwait(run, 1300), Promise.all(drops)]);
+  if (!r.ok) {
+    pfxEnd(run);
+    if (stage) stage.classList.remove('brewing');
+    return toast(r.error, 'bad');
+  }
+  // ② 터뜨림
+  alchLast = { tier: r.tier, prism: r.prism, msg: r.msg, fresh: !run.skip };
+  applyMe(r.me); render(); syncPrismFromMe();
+  paintPrism();
+  alchLast.fresh = false;
+  const st = document.querySelector('.alch-stage'), ly = st && st.querySelector('.pz-layer');
+  if (pLive(run) && st && ly) {
+    const liq = alchPoint(st, 110, 58), sr = st.getBoundingClientRect();
+    const lx = sr.left + liq.x, lyy = sr.top + liq.y;
+    if (r.prism > 0) {
+      const big = r.prism >= ALCH_BIG;
+      sfx(big ? 'guaranteed' : 'pang'); vibe(big ? [30, 40, 90] : 25);
+      pSparkXY(lx, lyy, { sparkColor: big ? PRISM_RAINBOW : TIER_SPARK[3], sparkCount: big ? 22 : 14, sparkRadius: big ? 110 : 76, sparkSize: 12, shape: 'star', ring: true, gravity: 0.3, duration: 760, glow: 1 });
+      pShake(run, el('panel'), big ? 1.6 : 0.7);
+      if (big) pPrismBurst(st, { size: Math.min(440, window.innerWidth * 0.98), intensity: 2.6 });
+      // 결정이 분수처럼 솟았다가 흩어져 떨어진다(개수 = 받은 프리즘, 최대 16)
+      const n = Math.min(16, Math.max(3, r.prism));
+      for (let k = 0; k < n; k++) {
+        const node = pPiece(ly, PA ? PA.icon({ kind: 'prism' }) : '💎', 'alch-crystal', liq.x, liq.y, 18 + Math.random() * 10);
+        const dx = (Math.random() - 0.5) * Math.min(300, sr.width * 0.9), up = 60 + Math.random() * 70, fall = sr.height - liq.y + 20;
+        panim(run, node, [
+          { transform: 'translate(0,0) scale(.3) rotate(0)', opacity: 0 },
+          { transform: `translate(${dx * 0.5}px,${-up}px) scale(1) rotate(${dx > 0 ? 120 : -120}deg)`, opacity: 1, offset: 0.4, easing: 'ease-in' },
+          { transform: `translate(${dx}px,${fall}px) scale(.8) rotate(${dx > 0 ? 300 : -300}deg)`, opacity: 0 },
+        ], { duration: 1100 + Math.random() * 300, delay: k * 35, easing: 'ease-out' }).then(() => node.remove());
+      }
+      const nEl = st.querySelector('.alch-n');
+      if (nEl && window.Fx && window.Fx.counter && !pReduced()) {   // +0 → +N 숫자가 굴러 올라간다(Counter)
+        try {
+          nEl.textContent = '';
+          const plus = document.createElement('span'); plus.textContent = '+';
+          const num = document.createElement('span');
+          nEl.append(plus, num);
+          const ctr = window.Fx.counter(num, { duration: 0.9, bounce: 0.25, stagger: 0.06 });
+          ctr.set(0); setTimeout(() => ctr.set(r.prism), 180);
+        } catch (_) { nEl.textContent = '+' + r.prism; }
+      }
+    } else {
+      // 꽝: 연기가 펑 피어오르고 재가 떨어진다
+      sfx('poof'); vibe([12, 40, 12]);
+      pSparkXY(lx, lyy - 6, { sparkColor: ['#8a8580', '#c9c2ba', '#5b5651'], sparkCount: 12, sparkRadius: 54, shape: 'line', spread: 200, gravity: 1.4, duration: 620, glow: 0 });
+      for (let k = 0; k < 7; k++) {
+        const node = pPiece(ly, '', 'alch-smoke', liq.x + (k - 3) * 12, liq.y, 34 + Math.random() * 20);
+        panim(run, node, [
+          { transform: 'translate(0,0) scale(.3)', opacity: 0 },
+          { transform: `translate(${(k - 3) * 8}px,-30px) scale(1)`, opacity: 0.85, offset: 0.3 },
+          { transform: `translate(${(k - 3) * 16}px,-90px) scale(1.8)`, opacity: 0 },
+        ], { duration: 1200, delay: k * 50, easing: 'ease-out' }).then(() => node.remove());
+      }
+    }
+    await pwait(run, 1100);
+  }
+  if (run.skip) paintPrism();
+  pfxEnd(run);
+}
+
+/* ================= 🧸 캡슐 ================= */
 function capHTML(d) {
   const price = d.info.capsule.price, n10 = d.info.capsule.batchMax;
-  let h = `<div class="cap-machine">${capsuleMachineSVG()}<div class="cap-side">
+  const res = capLast ? capLast.results : [];
+  let h = `<div class="pz-stage cap-stage"><div class="cap-machine-wrap">${PA ? PA.machine() : '🧸'}</div><div class="cap-side">
       <div class="cap-price">한 번 <b>${price.toLocaleString()}G</b><br><small>골드만 있으면 몇 번이든</small></div>
       <button class="btn primary" data-cap="1" ${d.gold < price ? 'disabled' : ''}>🧸 1회</button>
       <button class="btn primary" data-cap="${n10}" ${d.gold < price ? 'disabled' : ''}>🧸 ${n10}회 <small>${(price * n10).toLocaleString()}G</small></button></div></div>`;
-  if (capLast) {
-    h += '<div class="cap-results">' + capLast.results.map(r => `<span class="cap-ball k-${r.kind}${r.kind === 'prism' && r.n >= 10 ? ' big' : ''}">${esc(r.text)}</span>`).join('') + '</div>';
-    h += `<div class="prism-result ${capLast.prism > 0 ? 'ok' : ''}">${esc(capLast.msg)}</div>`;
-  }
+  h += `<div class="cap-tray${res.length ? '' : ' empty'} n${res.length > 1 ? 'm' : res.length}">${res.map(capSlotHTML).join('')}</div>`;
+  if (capLast) h += `<div class="prism-result${capLast.prism > 0 ? ' ok' : ''}">${esc(capLast.msg)}</div>`;
   return h + oddsTable('캡슐 하나의 확률', d.info.capsule.table);
 }
+function capSlotHTML(r, k) {
+  const t = tierOf(r);
+  return `<div class="cap-slot t${t}" data-k="${k}"><span class="cap-prize" title="${esc(r.text)}">${prizeIcon(r)}<b>${esc(capLast && capLast.results.length === 1 ? rewardLabel(r) : shortReward(r))}</b></span></div>`;
+}
+async function doCapsule(times) {
+  const d = prismData; if (!d) return;
+  const run = pfxStart('cap');
+  const stage = document.querySelector('.cap-stage');
+  const svg = stage && stage.querySelector('.pmachine');
+  // ① 기대감: 손잡이가 드르륵 돌고 기계가 흔들리며 캡슐이 섞인다
+  if (svg) { svg.classList.remove('cranking', 'cranking10'); void svg.getBoundingClientRect(); svg.classList.add(times > 1 ? 'cranking10' : 'cranking'); }
+  sfx('crank'); vibe([6, 60, 6, 60, 6]);
+  const crankMore = setTimeout(() => { if (pLive(run)) sfx('crank'); }, 380);
+  const [r] = await Promise.all([api('capsule', 'POST', { times }), pwait(run, times > 1 ? 900 : 760)]);
+  clearTimeout(crankMore);
+  if (!r.ok) {
+    pfxEnd(run);
+    if (svg) svg.classList.remove('cranking', 'cranking10');
+    return toast(r.error, 'bad');
+  }
+  capLast = { results: r.results, prism: r.prism, gold: r.gold, msg: r.msg };
+  const finish = () => { applyMe(r.me); render(); syncPrismFromMe(); paintPrism(); pfxEnd(run); };
+  const tray = document.querySelector('.cap-tray');
+  if (!pLive(run) || !tray || !PA) return finish();
+  // 받침대에 칸을 만들고, 칸마다 캡슐이 배출구에서 튀어나와 굴러 들어온다
+  tray.className = 'cap-tray n' + (r.results.length > 1 ? 'm' : '1') + ' running';
+  tray.innerHTML = r.results.map((x, k) => capSlotHTML(x, k).replace('class="cap-slot', 'class="cap-slot pending')).join('');
+  const slots = [...tray.querySelectorAll('.cap-slot')];
+  const chute = stage.querySelector('.pm-chute');
+  const flap = stage.querySelector('.pm-flap');
+  const from = chute ? pCenter(chute) : null;
+  const gap = r.results.length > 1 ? 75 : 0;
+  const landed = slots.map((slot, k) => {
+    const t = tierOf(r.results[k]);
+    const cap = document.createElement('span');
+    cap.className = 'cap-ball-wrap';
+    cap.innerHTML = PA.capsule(t);
+    slot.appendChild(cap);
+    const to = pCenter(slot);
+    const dx = from ? from.x - to.x : 0, dy = from ? from.y - to.y : -60;
+    return panim(run, cap, [
+      { transform: `translate(${dx}px,${dy}px) scale(.5)`, opacity: 0 },
+      { transform: `translate(${dx}px,${dy + 6}px) scale(.8)`, opacity: 1, offset: 0.12 },
+      { transform: `translate(${dx * 0.4}px,${Math.min(dy, 0) * 0.3 - 34}px) scale(1) rotate(${dx > 0 ? -200 : 200}deg)`, offset: 0.5, easing: 'ease-in' },
+      { transform: 'translate(0,0) scale(1.18,.8) rotate(360deg)', offset: 0.78, easing: 'ease-out' },
+      { transform: 'translate(0,-9px) scale(.94,1.06) rotate(360deg)', offset: 0.9 },
+      { transform: 'translate(0,0) scale(1) rotate(360deg)' },
+    ], { duration: 580, delay: k * gap, easing: 'linear', fill: 'both' }).then(() => { if (pLive(run)) { sfx('drop'); slot.classList.remove('pending'); } });
+  });
+  if (flap) panim(run, flap, [{ transform: 'scaleY(1)' }, { transform: 'scaleY(.15)', offset: 0.2 }, { transform: 'scaleY(.15)', offset: 0.85 }, { transform: 'scaleY(1)' }], { duration: 400 + gap * slots.length, fill: 'none' });
+  await Promise.all(landed);
+  // ② 하나씩 뿅! 좋은 캡슐일수록 오래 꿈틀대다 크게 터진다
+  const order = slots.map((s, k) => k);
+  for (const k of order) {
+    if (!pLive(run)) break;
+    const slot = slots[k], t = tierOf(r.results[k]);
+    slot.classList.add('wiggle');
+    await pwait(run, t >= 4 ? 480 : t >= 3 ? 260 : r.results.length > 1 ? 80 : 260);
+    if (!pLive(run)) break;
+    slot.classList.remove('wiggle');
+    slot.classList.add('popped');
+    const c = pCenter(slot);
+    pSparkXY(c.x, c.y, { sparkColor: TIER_SPARK[t], sparkCount: 6 + t * 3, sparkRadius: 22 + t * 9, sparkSize: 8 + t, shape: t >= 2 ? 'star' : 'dot', ring: t >= 2, gravity: 0.4, duration: 480 + t * 60, glow: t >= 2 ? 1 : 0.4 });
+    sfx(t >= 3 ? 'popbig' : 'pop'); vibe(t >= 3 ? [20, 30, 40] : 10);
+    if (t >= 4) { pPrismBurst(slot, { size: Math.min(380, window.innerWidth * 0.9), intensity: t >= 5 ? 2.8 : 2.1 }); pShake(run, el('panel'), 1.3); }
+    await pwait(run, r.results.length > 1 ? 55 : 380);
+  }
+  await pwait(run, 350);
+  finish();
+}
+
+/* ================= 💎 상점 ================= */
 function pshopHTML(d) {
   return '<p class="hint" style="margin:0 0 10px">💎 프리즘으로만 살 수 있는 물건이에요.</p>' + d.shop.map(it =>
     `<div class="raid-boss"><span class="bemoji">${it.emoji}</span>
       <div class="binfo"><div class="bname">${it.nickPreview ? `<span class="nick-${it.nickPreview}">${esc(it.name)}</span>` : esc(it.name)} ${it.soldOut ? '<span class="shop-lim off">최대</span>' : `<small class="pprice">💎 ${it.price}</small>`}</div>
         ${it.locked ? `<div class="plock">🔒 ${esc(it.lockMsg)} 필요</div>` : ''}<div class="bstat">${esc(it.desc)}</div></div>
       <button class="btn sm primary" data-pbuy="${it.id}" ${it.soldOut || it.locked || d.prism < it.price ? 'disabled' : ''}>구매</button></div>`).join('');
-}
-async function doOpenBox(i) {
-  const r = await api('box-open', 'POST', { pick: i });
-  if (!r.ok) return toast(r.error, 'bad');
-  applyMe(r.me); render(); syncPrismFromMe();
-  boxReveal = { pick: r.pick, boxes: r.boxes, got: r.got };
-  paintPrism();
-  const big = r.got.kind === 'prism' && r.got.n >= 5;
-  sfx(big ? 'guaranteed' : 'pang'); vibe(big ? [20, 40, 60] : 15);
-}
-async function doAlchemy(tier) {
-  const r = await api('alchemy', 'POST', { tier });
-  if (!r.ok) return toast(r.error, 'bad');
-  applyMe(r.me); render(); syncPrismFromMe();
-  alchLast = { prism: r.prism, msg: r.msg };
-  paintPrism();
-  sfx(r.prism > 0 ? 'pang' : 'fail'); vibe(r.prism > 0 ? 20 : [10, 30, 10]);
-}
-async function doCapsule(times) {
-  const r = await api('capsule', 'POST', { times });
-  if (!r.ok) return toast(r.error, 'bad');
-  applyMe(r.me); render(); syncPrismFromMe();
-  capLast = { results: r.results, prism: r.prism, msg: r.msg };
-  paintPrism();
-  sfx(r.prism >= 10 ? 'guaranteed' : 'pang'); vibe(15);
 }
 async function doPrismBuy(item) {
   const r = await api('prism-buy', 'POST', { item });
@@ -761,6 +1052,10 @@ function hxAttach(host) {
   sw.addEventListener('click', stop); sw.addEventListener('change', stop); sw.addEventListener('input', stop);
   host.appendChild(lb);
 }
+/* 끌어서 선택·이미지 끌기·꾹 누르기 메뉴 막기(CSS 의 user-select:none 과 짝) — 입력칸과 링크는 예외 */
+document.addEventListener('dragstart', e => { if (!(e.target instanceof Element) || !e.target.closest('input,textarea')) e.preventDefault(); });
+document.addEventListener('selectstart', e => { if (!(e.target instanceof Element) || !e.target.closest('input,textarea,[contenteditable="true"]')) e.preventDefault(); });
+if (touchDevice) document.addEventListener('contextmenu', e => { if (!(e.target instanceof Element) || !e.target.closest('input,textarea,a[href]')) e.preventDefault(); });
 if (canIosHaptic && touchDevice) {
   let hxQueued = false;
   const hxScan = () => { hxQueued = false; document.querySelectorAll(HX_SEL).forEach(hxAttach); };
@@ -787,7 +1082,7 @@ function tone(freq, dur, type, vol, freqTo, delay) {
   const ctx = audioCtx; if (!ctx) return;
   const t0 = ctx.currentTime + (delay || 0);
   const osc = ctx.createOscillator(), g = ctx.createGain();
-  osc.type = type || 'sine';
+  osc.type = retroMode ? 'square' : (type || 'sine');   // 🎮 코나미 커맨드를 찾으면 그 판은 8비트 소리
   osc.frequency.setValueAtTime(freq, t0);
   if (freqTo) osc.frequency.exponentialRampToValueAtTime(Math.max(1, freqTo), t0 + dur);
   g.gain.setValueAtTime(0.0001, t0);
@@ -815,6 +1110,17 @@ function sfx(name) {
     case 'charge':  tone(180, 0.42, 'sawtooth', 0.11, 900); tone(360, 0.42, 'sine', 0.06, 1400); break; // 슈우웅(상승)
     case 'pang':    tone(880, 0.1, 'triangle', 0.22, 1500); tone(1320, 0.12, 'square', 0.14, null, 0.03); tone(660, 0.18, 'triangle', 0.12, null, 0.05); break; // 팡!
     case 'clink':   [1400, 1000, 1700, 800].forEach((f, i) => tone(f, 0.07, 'square', 0.12, f * 0.7, i * 0.045)); break; // 쨍그랑
+    // 💎 프리즘 탭 연출
+    case 'rattle':  tone(110 + Math.random() * 40, 0.05, 'square', 0.07, 70); break;                       // 상자 덜컹
+    case 'lid':     tone(140, 0.09, 'triangle', 0.2, 60); tone(1200, 0.06, 'square', 0.08, 1800, 0.02); break; // 뚜껑 퍽
+    case 'creak':   tone(320, 0.16, 'sawtooth', 0.05, 180); break;                                        // 나머지 상자 끼익
+    case 'plop':    tone(520 + Math.random() * 200, 0.08, 'sine', 0.16, 160); break;                       // 재료 퐁당
+    case 'boil':    tone(90, 0.5, 'sawtooth', 0.06, 160); tone(240, 0.5, 'sine', 0.05, 520, 0.1); break;   // 부글부글(상승)
+    case 'poof':    tone(260, 0.3, 'sawtooth', 0.14, 50); tone(90, 0.35, 'triangle', 0.12, 40, 0.04); break; // 펑(꽝)
+    case 'crank':   [0, 0.12, 0.24].forEach(d => tone(700, 0.035, 'square', 0.08, 500, d)); break;        // 손잡이 드르륵
+    case 'drop':    tone(480 + Math.random() * 120, 0.05, 'triangle', 0.12, 240); break;                   // 캡슐 톡
+    case 'pop':     tone(900, 0.06, 'sine', 0.2, 1700); tone(1500, 0.05, 'triangle', 0.1, null, 0.03); break; // 뿅
+    case 'popbig':  tone(700, 0.08, 'triangle', 0.22, 1600); [1046, 1318, 1568].forEach((f, i) => tone(f, 0.12, 'triangle', 0.16, null, 0.05 + i * 0.06)); break;
   }
 }
 // 첫 사용자 제스처에서 오디오 unlock (iOS 자동재생 정책)
@@ -918,6 +1224,7 @@ async function doEnhance() {
   const wait = 300 - ((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0);
   if (wait > 0) await new Promise(res => setTimeout(res, wait));
   applyMe(r.me); render();
+  if (r.egg) setTimeout(() => sfx('jackpot'), 260);   // 🥚 +77 · +44 · 한 끗 차이
   if (r.result === 'success') { toast(r.msg, 'ok'); weaponResult('success'); vibe(r.guaranteed ? [18, 40, 30] : 16); sfx(r.guaranteed ? 'guaranteed' : 'success'); sfx('pang'); }
   else if (r.result === 'destroy') { toast(r.msg, 'bad'); weaponResult('destroy'); vibe([30, 50, 30, 50, 40]); sfx('destroy'); sfx('clink'); }
   else if (r.result === 'protected') { toast(r.msg, 'info'); weaponResult('protect'); vibe([20, 35, 20]); sfx('protect'); sfx('pang'); }
@@ -931,11 +1238,14 @@ const HUNT_TAP_MS = 70;              // 사냥 연타 최소 간격(매크로는
 const HUNT_SPAWN_DELAY = 650;        // 처치 후 다음 몬스터 스폰까지 대기(연출 감상용)
 let huntOpen = false, huntSession = 0, huntKills = 0;
 let huntCur = null, huntSpawning = false, huntLastTap = 0;
+// 칭호용 공격 기록(일반·강공격 횟수) — 서버는 한 번에 받는 양과 시간 간격으로 상한을 둔다
+let huntAtk = { n: 0, s: 0 };
+function takeHuntAtk() { const a = huntAtk; huntAtk = { n: 0, s: 0 }; return a.n || a.s ? a : undefined; }
 function openHunt() {
   if (!me) return;
   huntOpen = true;
   el('huntModal').hidden = false;
-  updateHuntHud();
+  updateHuntHud(); updateHuntCmd();
   if (huntCur && !huntCur.dead) {
     restoreHuntMonster();   // 진행 중이던 몬스터 복원 — 껐다 켜도 리롤 불가(죽여야 다음 몬스터)
   } else {
@@ -945,14 +1255,17 @@ function openHunt() {
   }
 }
 // 모달을 닫아도 huntCur 는 유지(다시 열면 같은 몬스터). 죽여야만 새 몬스터가 나온다.
-function closeHunt() { huntOpen = false; el('huntModal').hidden = true; }
+function closeHunt() {
+  huntOpen = false; el('huntModal').hidden = true; if (gst) { if (GTRAIL) GTRAIL.cancel(); gEnd(); }
+  const a = takeHuntAtk(); if (a) api('atk-report', 'POST', { atk: a }).catch(() => {});   // 마지막 몬스터 기록
+}
 function restoreHuntMonster() {
   const c = huntCur; if (!c) return;
   const m = c.r.monster;
   const monEl = el('huntMon');
   monEl.className = 'hunt-mon t' + (m.tier || 0);
-  monEl.querySelector('.hunt-emoji').textContent = m.emoji;
-  el('huntName').innerHTML = m.emoji + ' [' + esc(m.name) + '] <small>' + esc(m.rarity) + '</small>';
+  monEl.querySelector('.hunt-emoji').textContent = huntEmoji(m);
+  el('huntName').innerHTML = huntEmoji(m) + ' [' + esc(m.name) + '] <small>' + esc(m.rarity) + (isHalloween() ? ' · 🎃 분장 중' : '') + '</small>';
   el('huntHpFill').style.width = Math.max(0, 100 - c.taps / c.need * 100) + '%';
   el('huntFb').textContent = c.r.overtime ? '♾️ 무한 사냥 (보상↓)' : '연타해서 처치!';
 }
@@ -967,7 +1280,7 @@ async function spawnHuntMonster() {
   huntSpawning = true;
   // 이전 몬스터는 죽은(사라진) 상태 그대로 유지한 채 다음 몬스터를 받아온다.
   // (여기서 'dead' 를 미리 지우면 응답 대기 동안 방금 잡은 몬스터가 되살아나 보임)
-  const r = await withLoad(() => api('hunt', 'POST'));   // 서버가 몬스터·보상·치명타 결정(보상은 서버에 즉시 반영)
+  const r = await withLoad(() => api('hunt', 'POST', { atk: takeHuntAtk() }));   // 서버가 몬스터·보상·치명타 결정(보상은 서버에 즉시 반영)
   huntSpawning = false;
   if (!huntOpen) return;                  // 그새 닫힘
   if (!r.ok) { el('huntFb').textContent = r.error + ' — 잠시 후 다시'; huntCur = null;
@@ -977,8 +1290,8 @@ async function spawnHuntMonster() {
   huntCur = { r, taps: 0, need, dmgPerTap: Math.max(1, Math.ceil((m.hp || 10) / need)) };
   const monEl = el('huntMon');
   monEl.className = 'hunt-mon t' + (m.tier || 0);   // 'dead' 제거 + 새 등급 = 새 몬스터로 즉시 교체
-  monEl.querySelector('.hunt-emoji').textContent = m.emoji;
-  el('huntName').innerHTML = m.emoji + ' [' + esc(m.name) + '] <small>' + esc(m.rarity) + '</small>';
+  monEl.querySelector('.hunt-emoji').textContent = huntEmoji(m);
+  el('huntName').innerHTML = huntEmoji(m) + ' [' + esc(m.name) + '] <small>' + esc(m.rarity) + (isHalloween() ? ' · 🎃 분장 중' : '') + '</small>';
   el('huntHpFill').style.width = '100%';
   el('huntFb').textContent = r.overtime ? '♾️ 무한 사냥 (보상↓)' : '연타해서 처치!';
 }
@@ -986,19 +1299,251 @@ function tapMonster(e) {
   if (e) e.preventDefault();
   if (!huntOpen || !huntCur || huntCur.dead) return;
   const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-  if (now - huntLastTap < HUNT_TAP_MS) return;
+  if (now - huntLastTap < HUNT_TAP_MS || now < huntLockUntil) return;
   huntLastTap = now;
-  const c = huntCur; c.taps++;
+  const c = huntCur, amt = huntBuffMult(now); c.taps += amt; huntAtk.n++;
+  if (konArmed && now - konArmed < 3000 && ++konTaps >= 2) { konArmed = 0; activateKonami(); }   // ↑↑↓↓←→←→ 다음 B·A 대신 톡톡
   const last = c.taps >= c.need;
   const isCrit = last && c.r.crit;                 // 실제 치명타는 마지막 타격에 표시
   vibe(isCrit ? [12, 28, 22] : last ? 18 : 7);     // 타격 햅틱(처치·치명타는 강하게)
   sfx(isCrit ? 'crit' : last ? 'kill' : 'hit');
   const monEl = el('huntMon');
   if (monEl) { monEl.classList.remove('hit'); void monEl.offsetWidth; monEl.classList.add('hit'); }
-  spawnHuntDmg(isCrit ? c.dmgPerTap * 2 : c.dmgPerTap, isCrit);
+  const dmgEl = spawnHuntDmg(Math.round((isCrit ? 2 : 1) * c.dmgPerTap * amt), isCrit);
   el('huntHpFill').style.width = Math.max(0, 100 - c.taps / c.need * 100) + '%';
+  // 이 탭이 곧 드래그·홀딩(강공격)으로 이어지면 refundTap() 이 되돌린다 — 일반 공격과 강공격이 같이 나가지 않게
+  huntPendingTap = last || !e ? null : { ev: e, amt, dmgEl, mon: c };
   if (last) killMonster();
 }
+// 몬스터를 누른 그 손가락이 커맨드(끌기·꾹 누르기)가 되면 누르는 순간 들어간 일반 공격 1회를 취소한다.
+// (처치한 탭은 되돌리지 않는다 — 그때는 몬스터가 이미 쓰러져 커맨드도 시작되지 않는다)
+// 같은 누름인지는 pointerdown 이벤트 객체가 같은지로 본다(마우스는 pointerId 가 늘 같아서 id 로는 못 가린다).
+let huntPendingTap = null;
+function refundTap(p) {
+  if (!p || p.done || huntCur !== p.mon || p.mon.dead) return;
+  p.done = true; huntAtk.n = Math.max(0, huntAtk.n - 1);
+  p.mon.taps = Math.max(0, p.mon.taps - p.amt);
+  if (p.dmgEl) p.dmgEl.remove();
+  el('huntHpFill').style.width = Math.max(0, 100 - p.mon.taps / p.mon.need * 100) + '%';
+}
+
+/* ---------- ⚡ 강공격 커맨드 (시험판: 사냥) ----------
+ * 지금 장착한 무기(me.class)마다 그리는 커맨드가 다르다 — 인식은 gesture.js.
+ *   ⚔️ 검 = 원의 호 긋기 · 🏹 활 = 몬스터 반대쪽으로 당겼다 놓기(당긴 길이 = 위력)
+ *   ✨ 지팡이 = 별 한 붓(가장 셈 + 미니버프) · 🛡️ 방패 = 꾹 눌렀다 떼기
+ * 위력은 '연타 n회분'. 사냥 몬스터는 결과를 서버가 미리 정하고 연타 4~7회로 쓰러지므로
+ * 여기서는 클라이언트만 바뀐다. 레이드·던전에 붙일 땐 같은 표를 서버로 옮겨 쿨타임·횟수를 서버가 막는다.
+ * 강공격 뒤에는 일반 공격 간격의 2배 동안 다음 공격이 안 나간다(STRONG_DELAY). */
+const STRONG = {
+  warrior: { cmd: 'arc',  style: 'blade',  wpn: '⚔️ 검은',     name: '베어 가르기', taps: 6,  how: '원의 <b>호</b>를 그어요' },
+  archer:  { cmd: 'line', style: 'string', wpn: '🏹 활은',     name: '관통 사격',   taps: 8,  how: '몬스터 반대쪽으로 <b>당겼다 놓아요</b>' },
+  tanker:  { cmd: 'hold', style: null,     wpn: '🛡️ 방패는',   name: '방패 강타',   taps: 5,  how: '<b>꾹</b> 눌렀다 떼요' },
+  healer:  { cmd: 'star', style: 'magic',  wpn: '✨ 지팡이는', name: '별빛 폭발',   taps: 22, how: '<b>별</b>을 한 붓에 그려요', buff: { mult: 1.5, ms: 5000, name: '마력 공명' } },
+};
+const CMD_NAME = { arc: '⚔️ 검 커맨드', line: '🏹 활 커맨드', star: '✨ 지팡이 커맨드', hold: '🛡️ 방패 커맨드' };
+const STRONG_DELAY = HUNT_TAP_MS * 2;
+let huntLockUntil = 0, huntBuff = null, huntBuffT = null;
+function huntBuffMult(now) { return huntBuff && now < huntBuff.until ? huntBuff.mult : 1; }
+function strongCfg() { return STRONG[(me && me.class) || 'warrior'] || STRONG.warrior; }
+function updateHuntCmd() {
+  const box = el('huntCmd'); if (!box) return;
+  if (!window.Gesture) { box.textContent = ''; return; }
+  const c = strongCfg(), now = performance.now();
+  const bf = huntBuff && now < huntBuff.until ? ` · <span class="bf">✨ ${huntBuff.name} 연타 ×${huntBuff.mult}</span>` : '';
+  box.innerHTML = `⚡ 강공격 <b>${c.name}</b> — ${c.how}${bf}`;
+  document.querySelector('.hunt-stage').classList.toggle('buffed', !!bf);
+}
+function gestTip(text, x, y, ok) {
+  const t = document.createElement('div');
+  t.className = 'gest-tip' + (ok ? ' ok' : ''); t.textContent = text;
+  t.style.left = Math.max(70, Math.min(window.innerWidth - 70, x)) + 'px'; t.style.top = y + 'px';
+  document.body.appendChild(t); setTimeout(() => t.remove(), 900);
+}
+function monCenter() { const r = el('huntMon').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }
+function huntStrong(cfg, power) {
+  const c = huntCur; if (!huntOpen || !c || c.dead) return false;
+  const now = performance.now();
+  if (now < huntLockUntil) return false;
+  huntLockUntil = now + STRONG_DELAY; huntLastTap = now;
+  const units = Math.max(1, Math.round(cfg.taps * (power || 1)));
+  c.taps += units; huntAtk.s++;
+  const last = c.taps >= c.need, isCrit = last && c.r.crit;
+  vibe(isCrit ? [16, 30, 34] : [14, 26, 24]); sfx(isCrit ? 'crit' : 'kill');
+  const monEl = el('huntMon');
+  if (monEl) { monEl.classList.remove('hit'); void monEl.offsetWidth; monEl.classList.add('hit'); }
+  spawnHuntDmg(units * c.dmgPerTap * (isCrit ? 2 : 1), true);
+  const m = monCenter();
+  if (FX && FX.sparks) FX.sparks.burst(m.x, m.y, { sparkCount: 16, sparkRadius: 70, duration: 520, sparkSize: 12 });
+  gestTip('⚡ ' + cfg.name + (power && power < 1 ? ' ' + Math.round(power * 100) + '%' : ''), m.x, m.y - 70, true);
+  if (cfg.buff) {
+    huntBuff = { mult: cfg.buff.mult, until: now + cfg.buff.ms, name: cfg.buff.name };
+    clearTimeout(huntBuffT); huntBuffT = setTimeout(updateHuntCmd, cfg.buff.ms + 30);
+    updateHuntCmd();
+  }
+  el('huntHpFill').style.width = Math.max(0, 100 - c.taps / c.need * 100) + '%';
+  if (last) killMonster();
+  return true;
+}
+// 그리기 추적: 무대(.hunt-stage)에서 누르기 시작한 손가락 하나만. 몬스터 위에서 누르면 그 탭은 일반 공격으로도 들어간다.
+// 포인터 캡처는 하지 않는다 — 터치는 브라우저가 알아서 누른 요소로 묶어 주고, 캡처하면 아이폰 햅틱 라벨의 클릭이 빗나간다.
+const GTRAIL = window.Gesture ? (() => { try { return window.Gesture.createTrail({ z: 115 }); } catch (e) { console.warn('[gesture]', e); return null; } })() : null;
+let gst = null, gLastEnd = -1e9;
+function gPoint(e) { return { x: e.clientX, y: e.clientY, t: performance.now() }; }
+function gDown(e) {
+  if (gst || !window.Gesture || !huntOpen || !huntCur || huntCur.dead) return;
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  const cfg = strongCfg();
+  gst = { id: e.pointerId, cfg, pts: [gPoint(e)], drawing: false, holdRaf: 0,
+    tap: huntPendingTap && huntPendingTap.ev === e ? huntPendingTap : null };   // 이 누름이 몬스터 위 일반 공격이었나
+  window.addEventListener('pointermove', gMove);
+  window.addEventListener('pointerup', gUp);
+  window.addEventListener('pointercancel', gCancel);
+  if (cfg.cmd === 'hold') gst.holdRaf = requestAnimationFrame(holdTick);
+}
+function holdTick() {
+  if (!gst || gst.cfg.cmd !== 'hold') return;
+  const G = window.Gesture.CFG, held = performance.now() - gst.pts[0].t;
+  const moved = window.Gesture.maxDisplacement(gst.pts) > G.holdSlop;
+  if (moved) { if (GTRAIL) GTRAIL.ring(0, 0, -1); return; }
+  const p = (held - 150) / (G.holdMs - 150);
+  if (held >= 200) refundTap(gst.tap);   // 연타의 짧은 탭(<0.2초)은 그대로 일반 공격
+  if (p > 0 && GTRAIL) GTRAIL.ring(gst.pts[0].x, gst.pts[0].y, Math.min(1, p));
+  if (p >= 1 && !gst.full) { gst.full = true; vibe(10); sfx('charge'); }
+  gst.holdRaf = requestAnimationFrame(holdTick);
+}
+function gMove(e) {
+  if (!gst || e.pointerId !== gst.id) return;
+  const list = (typeof e.getCoalescedEvents === 'function' && e.getCoalescedEvents()) || [];
+  // iOS 18.2 사파리는 coalesced 이벤트에 pointerId 가 비어 있다는 보고가 있어 좌표만 쓴다
+  const pts = list.length ? list.map(gPoint) : [gPoint(e)];
+  for (const p of pts) gst.pts.push(p);
+  if (!gst.drawing && window.Gesture.maxDisplacement(gst.pts) >= window.Gesture.CFG.tapSlop) {
+    gst.drawing = true;
+    refundTap(gst.tap);
+    if (GTRAIL) GTRAIL.begin(gst.cfg.style || 'plain', gst.pts);   // 방패는 끌면 '커맨드 아님' 회색 선
+  } else if (gst.drawing && GTRAIL) for (const p of pts) GTRAIL.add(p);
+}
+function gEnd() {
+  window.removeEventListener('pointermove', gMove);
+  window.removeEventListener('pointerup', gUp);
+  window.removeEventListener('pointercancel', gCancel);
+  if (gst && gst.holdRaf) cancelAnimationFrame(gst.holdRaf);
+  if (gst && gst.drawing) gLastEnd = performance.now();
+  huntPendingTap = null;
+  if (GTRAIL) GTRAIL.ring(0, 0, -1);
+  gst = null;
+}
+function gCancel(e) { if (!gst || e.pointerId !== gst.id) return; if (GTRAIL) GTRAIL.cancel(); gEnd(); }
+function gUp(e) {
+  if (!gst || e.pointerId !== gst.id) return;
+  const g = gst, cfg = g.cfg, last = gPoint(e);
+  g.pts.push(last);
+  const heldMs = last.t - g.pts[0].t;
+  const tgt = monCenter();
+  const r = window.Gesture.judge(cfg.cmd, g.pts, { target: tgt, heldMs });
+  window.__lastGesture = { cmd: cfg.cmd, ms: Math.round(heldMs), n: g.pts.length, ...r };   // 디버그·테스트용(콘솔에서 확인)
+  gEnd();
+  // 🥚 이스터에그 커맨드(무기와 상관없이) — 하트·∞·소용돌이면 평소대로 일반 공격 1회 + 연출 + 1회성 숨은 칭호
+  if (g.drawing && !(cfg.cmd !== 'hold' && r.ok)) {
+    const eg = window.Gesture.egg(g.pts);
+    if (eg) { if (GTRAIL) GTRAIL.end(true); huntEgg(eg); return; }
+  }
+  const kon = g.drawing ? konamiStep(window.Gesture.swipeDir(g.pts)) : false;   // 코나미 입력 중이면 안내를 숨긴다
+  if (cfg.cmd === 'hold') {
+    if (r.ok) { if (GTRAIL) GTRAIL.shock(tgt.x, tgt.y); huntStrong(cfg, 1); }
+    else if (g.drawing) { if (GTRAIL) GTRAIL.end(false); if (!kon) gestTip('🛡️ 방패는 움직이지 말고 꾹 눌러요', last.x, last.y - 40); }
+    return;
+  }
+  if (!g.drawing) return;                       // 그냥 탭(일반 공격은 몬스터 pointerdown 에서 이미 처리)
+  if (r.ok && huntStrong(cfg, r.power)) { if (GTRAIL) GTRAIL.end(true, { target: tgt }); return; }
+  if (GTRAIL) GTRAIL.end(false);
+  if (kon || r.why === 'short') return;         // 짧게 슥 — 실수일 수 있어 조용히
+  const tip = r.looks ? `그건 ${CMD_NAME[r.looks]}예요 · ${cfg.wpn} ${cfg.how.replace(/<[^>]+>/g, '')}`
+    : r.why === 'direction' ? '🏹 몬스터 반대쪽으로 당겨요' : '궤적이 흐트러졌어요';
+  gestTip(tip, last.x, last.y - 40);
+}
+document.querySelector('.hunt-stage').addEventListener('pointerdown', gDown);
+
+/* ---------- 🥚 이스터에그 ----------
+ * 찾으면 서버에 한 번만 알리고(1회 bool) 🌈 프리즘 등급 숨은 칭호가 열린다. 보상은 칭호·연출뿐(경제 영향 없음).
+ * 사냥터: ❤️ 하트 · 🌀 소용돌이 · ♾️ 무한 그리기 → 평소대로 일반 공격 1회 + 연출
+ *         코나미(↑↑↓↓←→←→ 스와이프 후 몬스터 톡톡) → 그 판은 8비트 소리
+ * 대장간: 무기를 3초 안에 10번 두드리기 · 서버 판정: +44 파괴 · 딱 +77 · 기운 99% 파괴 · 빈 캡슐 3연속 · 할로윈 사냥 */
+const eggSent = new Set();
+function unlockEgg(id) {
+  if (eggSent.has(id)) return;
+  eggSent.add(id);
+  api('egg', 'POST', { id }).then(r => { if (r && r.ok && r.found && r.me) { applyMe(r.me); render(); } }).catch(() => {});
+}
+const EGG_FX = { heart: { emoji: ['💕', '💖', '💗'], cls: 'egg-heart', tip: '💕 몬스터가 반해 버렸다!' },
+  spiral: { emoji: ['🌀', '💫'], cls: 'egg-spin', tip: '🌀 몬스터가 어지러워한다!' },
+  inf: { emoji: ['♾️', '✨'], cls: 'egg-inf', tip: '♾️ 끝없는 사냥…' } };
+function eggBurst(list, x, y) {
+  for (let i = 0; i < 9; i++) {
+    const t = document.createElement('div');
+    t.className = 'egg-float'; t.textContent = list[i % list.length];
+    t.style.left = (x + (Math.random() - 0.5) * 120) + 'px'; t.style.top = (y + (Math.random() - 0.3) * 60) + 'px';
+    t.style.animationDelay = (i * 45) + 'ms';
+    document.body.appendChild(t); setTimeout(() => t.remove(), 1500);
+  }
+}
+function huntEgg(kind) {
+  const c = huntCur, fx = EGG_FX[kind]; if (!huntOpen || !c || c.dead || !fx) return;
+  const now = performance.now();
+  const amt = huntBuffMult(now); c.taps += amt; huntAtk.n++; huntLastTap = now;   // 데미지는 평소대로 — 일반 공격 1회
+  spawnHuntDmg(Math.round(c.dmgPerTap * amt), false);
+  const monEl = el('huntMon');
+  monEl.classList.remove('egg-heart', 'egg-spin', 'egg-inf'); void monEl.offsetWidth; monEl.classList.add(fx.cls);
+  const m = monCenter(); eggBurst(fx.emoji, m.x, m.y); gestTip(fx.tip, m.x, m.y - 80, true);
+  sfx('jackpot'); vibe([10, 30, 10, 30, 20]);
+  el('huntHpFill').style.width = Math.max(0, 100 - c.taps / c.need * 100) + '%';
+  if (c.taps >= c.need) killMonster();
+  unlockEgg(kind);
+}
+// 코나미 커맨드 — 스와이프 방향을 순서대로 맞추면 '장전', 3초 안에 몬스터를 두 번 톡톡
+const KONAMI = ['U', 'U', 'D', 'D', 'L', 'R', 'L', 'R'];
+let konBuf = 0, konLast = 0, konArmed = 0, konTaps = 0, retroMode = false;
+function konamiStep(dir) {
+  if (!dir) return false;
+  const now = performance.now();
+  if (now - konLast > 2500) konBuf = 0;
+  konLast = now;
+  if (KONAMI[konBuf] === dir) konBuf++;
+  else konBuf = dir === 'U' ? (konBuf >= 2 ? 2 : 1) : 0;   // ↑↑↑ 처럼 넘쳐도 ↑↑ 로 이어 간다
+  if (konBuf === KONAMI.length) { konBuf = 0; konArmed = now; konTaps = 0; }
+  return konBuf > 0 || !!konArmed;
+}
+function activateKonami() {
+  retroMode = true;
+  const top = document.querySelector('.hunt-top');
+  if (top && !top.querySelector('.retro-badge')) top.insertAdjacentHTML('beforeend', '<span class="retro-badge">8-BIT</span>');
+  const m = monCenter(); eggBurst(['🎮', '👾', '🕹️'], m.x, m.y); gestTip('🎮 전설의 커맨드! 8비트 모드', m.x, m.y - 80, true);
+  sfx('jackpot');
+  unlockEgg('konami');
+}
+// 대장간: 무기를 3초 안에 10번 두드리면 대장장이가 한마디
+let forgeKnocks = [];
+el('weaponArt').addEventListener('pointerdown', () => {
+  const now = performance.now();
+  forgeKnocks = forgeKnocks.filter(t => now - t < 3000); forgeKnocks.push(now);
+  const art = el('weaponArt'); art.classList.remove('knock'); void art.offsetWidth; art.classList.add('knock');
+  if (forgeKnocks.length >= 10) { forgeKnocks = []; toast('🧔 대장장이: "손님, 거긴 무기 말고 화로예요…"', 'info'); unlockEgg('forge'); }
+});
+// 🎃 할로윈(한국 시간 10월 31일) — 사냥터 몬스터가 할로윈 친구들로(서버 이름·보상은 그대로)
+const kstMonthDay = () => { const d = new Date(Date.now() + 9 * 3600e3); return (d.getUTCMonth() + 1) + '-' + d.getUTCDate(); };
+const isHalloween = () => kstMonthDay() === '10-31';
+const HW_MONS = ['🎃', '👻', '🦇', '🕷️', '🧛', '🧟', '💀'];
+function huntEmoji(m) {
+  if (!isHalloween()) return m.emoji;
+  let h = 0; for (const ch of String(m.name || '')) h = (h + ch.codePointAt(0)) % 997;
+  return HW_MONS[h % HW_MONS.length];
+}
+document.body.classList.toggle('halloween', isHalloween());
+// 개발자 도구를 연 사람에게만 보이는 인사
+try {
+  console.log('%c⚒️ 강화 RPG', 'font:900 22px sans-serif;color:#ffd27a;text-shadow:0 0 8px #ff8a2a');
+  console.log('%c개발자세요? 🔨 이 게임 어딘가에 🌈 숨겨진 칭호들이 있어요. 코드를 뒤지는 것보다 직접 찾는 게 더 재밌을걸요?', 'color:#c9b8ff;font-size:12px');
+} catch (_) { /* 무시 */ }
 function killMonster() {
   const c = huntCur; if (!c || c.dead) return;
   c.dead = true;
@@ -1024,6 +1569,7 @@ function spawnHuntDmg(n, crit) {
   t.style.top = (rc.top + rc.height * 0.3) + 'px';
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 650);
+  return t;
 }
 function spawnHuntReward(text, crit) {
   const mon = el('huntMon'); if (!mon) return;
@@ -1701,6 +2247,47 @@ async function dunLoopTick() {
  * 넓은 화면에서만 그린다(좁으면 숨겨져 있으니 요청도 하지 않는다). */
 const wideCol = window.matchMedia('(min-width:1280px)');
 let sideAt = 0;
+/* ---------- 📢 광고 (Google 애드센스) ----------
+ * 게시자 ID 는 상위 도메인 beartanh.dev 와 같다 — ads.txt 도 beartanh.dev/ads.txt 하나가 서브도메인까지 덮는다.
+ * 애드센스에서 '디스플레이 광고 단위' 를 만든 뒤 그 번호(data-ad-slot)를 slots 에 넣으면 그 칸만 열린다.
+ * 비어 있으면 광고 스크립트도 안 불러온다(승인 전·설정 전 안전).
+ * 위치(애드센스 배치 정책 — 게임 창·버튼 근처 금지, 콘텐츠 없는 화면 금지):
+ *   넓은 화면(1280+) → 오른쪽 단 맨 아래(adSide) / 그 밖 → 더보기의 읽는 화면(랭킹·부자·추모·로그) 아래(adMore).
+ *   로그인 화면·대장간·사냥·레이드·전투·상점(구매 버튼)에는 넣지 않는다.
+ * 한 칸은 한 번만 채운다 — 탭을 오갈 때 다시 그려 새 광고를 받는 건 '인위적 새로고침' 이라 정책 위반 소지. */
+const ADS = { client: 'ca-pub-3744140142372436', slots: { side: '', more: '' } };
+const AD_READ_TABS = ['rank', 'goldrank', 'hogu', 'log'];
+let adsScriptLoaded = false;
+function loadAdsScript() {
+  if (adsScriptLoaded) return;
+  adsScriptLoaded = true;
+  const s = document.createElement('script');
+  s.async = true; s.crossOrigin = 'anonymous';
+  s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=' + ADS.client;
+  document.head.appendChild(s);
+}
+function fillAd(box, slot) {   // 칸이 화면에 보이는 상태에서 불러야 한다(숨긴 칸은 폭 0 이라 광고가 안 붙음)
+  const holder = box.querySelector('.ad-slot');
+  if (holder.dataset.filled) return;
+  holder.dataset.filled = '1';
+  loadAdsScript();
+  const ins = document.createElement('ins');
+  ins.className = 'adsbygoogle'; ins.style.display = 'block';
+  ins.dataset.adClient = ADS.client; ins.dataset.adSlot = slot;
+  ins.dataset.adFormat = 'auto'; ins.dataset.fullWidthResponsive = 'true';
+  holder.appendChild(ins);
+  try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (_) { /* 광고 차단기 등 — 게임엔 영향 없음 */ }
+}
+function showAd(id, slot, on) {
+  const box = el(id);
+  box.hidden = !(slot && on);
+  if (!box.hidden) fillAd(box, slot);
+}
+function updateAds() {
+  const inGame = !!me && !el('game').hidden;
+  showAd('adSide', ADS.slots.side, inGame && wideCol.matches);
+  showAd('adMore', ADS.slots.more, inGame && !wideCol.matches && AD_READ_TABS.includes(currentTab));
+}
 async function refreshSide() {
   if (!wideCol.matches || !me) return;
   sideAt = Date.now();
@@ -1716,7 +2303,7 @@ async function refreshSide() {
     if (lg && lg.list) el('sideLog').innerHTML = lg.list.slice(0, 8).map(x => `<div class="side-row">${esc(x.text)}</div>`).join('') || emptyMsg('아직 기록이 없어요');
   } catch (_) { /* 네트워크 순간 오류 무시 */ }
 }
-wideCol.addEventListener('change', () => { if (wideCol.matches) refreshSide(); });
+wideCol.addEventListener('change', () => { if (wideCol.matches) refreshSide(); updateAds(); });
 document.querySelector('.col-side').addEventListener('click', e => {
   if (e.target.closest('#sideMissionMore') || e.target.closest('[data-side-mission]')) return openMissions();
   const nm = e.target.closest('[data-nick]'); if (nm) return openProfile(nm.dataset.nick);
@@ -1811,8 +2398,12 @@ function nmLine(nick, nc, title, emoji) {
 }
 // 장착 칭호 태그 (닉네임 옆 작게). t = {title,color} 또는 null
 function titleTag(t) {
-  return t ? ` <span class="title-tag" style="color:${t.color}">「${esc(t.title)}」</span>` : '';
+  if (!t) return '';
+  if (t.grade === 'prism') return ` <span class="title-tag prism"><span class="prism-txt">「${esc(t.title)}」</span></span>`;
+  return ` <span class="title-tag" style="color:${t.color}">「${esc(t.title)}」</span>`;
 }
+// 칭호 칩 안쪽 — 프리즘 등급은 무지갯빛 글자
+const chipTxt = t => t.grade === 'prism' ? `<span class="prism-txt">${esc(t.title)}</span>` : esc(t.title);
 
 /* ---------- 프로필 모달 ---------- */
 async function openProfile(nick) {
@@ -1850,30 +2441,37 @@ async function openProfile(nick) {
     });
   }
 }
-// 프로필 칭호 진열장. 내 프로필이면 클릭으로 장착/해제(미획득은 🔒 잠금), 남이면 획득 칭호만 표시.
+// 프로필 칭호 진열장 — 아코디언(<details>). 프로필을 열면 접혀 있고, 머리줄에 개수·장착 칭호만 보인다.
+// 내 프로필이면 펼쳐서 칭호를 눌러 장착/해제(미획득은 🔒), 남이면 획득한 칭호만.
+let keepTitlesOpen = false;   // 장착/해제 뒤 다시 그릴 때만 펼친 채로
 function titlesSection(p, isMe, eq) {
+  const open = keepTitlesOpen ? ' open' : ''; keepTitlesOpen = false;
+  const eqTag = eq ? `<span class="tacc-eq${eq.grade === 'prism' ? ' prism' : ''}" style="color:${eq.color}">${chipTxt(eq)}</span>` : '<span class="tacc-eq none">장착 없음</span>';
+  const head = (n, total) => `<summary><span class="tacc-h">🏷️ 칭호 <small>${n}${total != null ? '/' + total : ''}</small></span>${eqTag}<i class="tacc-arrow" aria-hidden="true">›</i></summary>`;
   if (isMe) {
     const roster = p.titleRoster || [];
     const chips = roster.map(t => {
       if (t.earned) {
         const on = eq && eq.id === t.id;
-        return `<span class="title-chip earn${on ? ' equipped' : ''}" data-title-id="${t.id}" style="color:${t.color}">${esc(t.title)}</span>`;
+        return `<span class="title-chip earn${on ? ' equipped' : ''}${t.grade === 'prism' ? ' prism' : ''}" data-title-id="${t.id}" style="color:${t.color}"${t.desc ? ` title="${esc(t.desc)}"` : ''}>${chipTxt(t)}</span>`;
       }
+      if (t.hidden) return `<span class="title-chip locked q-prism" title="숨겨진 칭호">❓</span>`;   // 🥚 이스터에그 — 등급도 비공개
       return `<span class="title-chip locked" style="background:${t.color}1a">🔒</span>`;
     }).join('');
-    return `<div class="titles-head">칭호 <small>${p.titleEarned || 0}/${p.titleTotal || roster.length}</small></div>
+    return `<details class="titles-acc"${open}>${head(p.titleEarned || 0, p.titleTotal || roster.length)}
       <div class="titles-row">
         <span class="title-chip clear${eq ? '' : ' equipped'}" data-title-id="">칭호 없음</span>${chips}
-      </div>`;
+      </div></details>`;
   }
   return (p.titles && p.titles.length)
-    ? `<div class="titles-row">${p.titles.map(t => `<span class="title-chip${eq && eq.id === t.id ? ' equipped' : ''}" style="color:${t.color}">${esc(t.title)}</span>`).join('')}</div>`
+    ? `<details class="titles-acc"${open}>${head(p.titles.length)}<div class="titles-row">${p.titles.map(t => `<span class="title-chip${eq && eq.id === t.id ? ' equipped' : ''}${t.grade === 'prism' ? ' prism' : ''}" style="color:${t.color}">${chipTxt(t)}</span>`).join('')}</div></details>`
     : `<div class="titles-empty">아직 획득한 칭호가 없어요</div>`;
 }
 async function doEquipTitle(titleId) {
   const r = await withLoad(() => api('title', 'POST', { title: titleId || null }));
   if (!r.ok) return toast(r.error, 'bad');
   applyMe(r.me); render();
+  keepTitlesOpen = true;   // 펼쳐 놓고 고르던 중이니 다시 그려도 펼친 채로
   openProfile(me.nick);  // 모달 새로고침(선택 상태 반영)
   toast(r.msg, 'ok');
 }
@@ -1918,14 +2516,16 @@ function doLogout() { stopRaidLoop(); closeEvents(); closeRealtime(); if (sbAuth
 // 버튼 연타 방지: 액션 사이 최소 간격
 const COOLDOWN = 450;
 let busy = false;
-async function act(fn, btn) {
+// opts.quiet: 상단 '로딩 중…' 표시를 띄우지 않는다 — 💎 프리즘 연출처럼 기다리는 동안 화면이 이미 움직이는 동작용
+async function act(fn, btn, opts) {
   if (busy) return;
   busy = true;
+  const quiet = !!(opts && opts.quiet);
   vibe(6); sfx('click');   // 버튼 누름 피드백(진동+효과음)
-  loadStart();
+  if (!quiet) loadStart();
   if (btn) btn.classList.add('acting');   // 클릭 즉시 버튼에 처리중 표시(서버 응답 지연 체감↓)
   try { await fn(); }
-  finally { loadEnd(); if (btn) btn.classList.remove('acting'); setTimeout(() => { busy = false; }, COOLDOWN); }
+  finally { if (!quiet) loadEnd(); if (btn) btn.classList.remove('acting'); setTimeout(() => { busy = false; }, COOLDOWN); }
 }
 el('enhanceBtn').onclick = () => act(doEnhance, el('enhanceBtn'));
 el('huntBtn').onclick = openHunt;   // 사냥터(연타 처치) 모달 열기
@@ -1935,11 +2535,13 @@ el('attendBtn').onclick = () => act(doAttend, el('attendBtn'));
 el('hNick').onclick = () => { if (me) openProfile(me.nick); };
 
 function selectTab(tab) {
+  if (pfx && tab !== 'prism') pskip();   // 💎 연출 도중 다른 탭으로 가면 바로 끝낸다(연출이 다른 버튼을 붙잡지 않게)
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   currentTab = tab;
   if (MORE_TABS.includes(tab)) moreTab = tab;
   // 본 적 있는 탭이면 캐시를 즉시 표시(로딩 없이), 처음이면 로딩 표시. 그다음 loadTab 이 갱신.
   if (cacheableTab(currentTab)) el('panel').innerHTML = tabHtmlCache[currentTab] || '<div class="empty">불러오는 중…</div>';
+  updateAds();
   withLoad(loadTab);
 }
 document.querySelectorAll('.tab').forEach(btn => { btn.onclick = () => selectTab(btn.dataset.tab); });
@@ -1956,7 +2558,7 @@ function setView(v) {
   document.querySelectorAll('.bb-btn').forEach(b => b.classList.toggle('on', b.dataset.view === v));
   const tab = v === 'more' ? moreTab : VIEW_TAB[v];
   if (tab) { if (tab !== currentTab || v === 'more') selectTab(tab); }
-  else { stopRaidLoop(); currentTab = 'forge'; }
+  else { stopRaidLoop(); if (pfx) pskip(); currentTab = 'forge'; updateAds(); }
   window.scrollTo(0, 0);
 }
 function viewOfTab(t) { return t === 'raid' ? 'raid' : t === 'prism' ? 'prism' : t === 'fight' ? 'act' : MORE_TABS.includes(t) ? 'more' : 'forge'; }
@@ -1969,6 +2571,8 @@ oneCol.addEventListener('change', () => {
 });
 
 el('panel').addEventListener('click', e => {
+  // 💎 프리즘 연출 중 화면을 누르면 건너뛴다(서브탭을 누른 경우엔 건너뛰고 그 탭으로 이동)
+  if (pfx) { pskip(); if (!e.target.closest('[data-psub]')) return; }
   const f = e.target.closest('[data-fight]'); if (f) return act(() => doFight(f.dataset.fight), f);
   const r = e.target.closest('[data-raid]'); if (r) return act(() => doRaid(r.dataset.raid), r);
   const j = e.target.closest('[data-join]'); if (j) return act(() => doPartyJoin(j.dataset.join), j);
@@ -1984,10 +2588,12 @@ el('panel').addEventListener('click', e => {
   const dl = e.target.closest('[data-dun-leave]'); if (dl) return act(doDunLeave, dl);
   const dw = e.target.closest('[data-dswap]'); if (dw) return act(() => doDunSwap(dw.dataset.dswap), dw);
   const dk = e.target.closest('[data-dskill]'); if (dk) return act(() => doDunSkill(dk.dataset.dskill), dk);
-  const pk = e.target.closest('[data-pick]'); if (pk) return act(() => doOpenBox(+pk.dataset.pick), pk);
-  if (e.target.closest('[data-box-again]')) { boxReveal = null; return paintPrism(); }
-  const al = e.target.closest('[data-alch]'); if (al) return act(() => doAlchemy(al.dataset.alch), al);
-  const ca = e.target.closest('[data-cap]'); if (ca) return act(() => doCapsule(+ca.dataset.cap), ca);
+  const pk = e.target.closest('[data-pick]'); if (pk) return act(() => doOpenBox(+pk.dataset.pick), pk, { quiet: true });
+  if (e.target.closest('[data-box-again]')) { boxReveal = null; boxEnter = true; return paintPrism(); }
+  const at = e.target.closest('[data-alch-tier]');
+  if (at) { alchTier = at.dataset.alchTier; try { localStorage.setItem('alchTier', alchTier); } catch (_) { /* 무시 */ } sfx('click'); return paintPrism(); }
+  const al = e.target.closest('[data-alch]'); if (al) return act(() => doAlchemy(al.dataset.alch), al, { quiet: true });
+  const ca = e.target.closest('[data-cap]'); if (ca) return act(() => doCapsule(+ca.dataset.cap), ca, { quiet: true });
   const pb = e.target.closest('[data-pbuy]'); if (pb) return act(() => doPrismBuy(pb.dataset.pbuy), pb);
   const cp = e.target.closest('#createPartyBtn'); if (cp) return act(doPartyCreate, cp);
   const lp = e.target.closest('#leavePartyBtn'); if (lp) return act(doPartyLeave, lp);
@@ -1998,12 +2604,41 @@ el('modalClose').onclick = () => { el('modal').hidden = true; };
 // 사냥터 모달: 몬스터 연타(pointerdown), 닫기
 el('huntMon').addEventListener('pointerdown', tapMonster);
 el('huntClose').onclick = closeHunt;
-el('huntModal').addEventListener('click', e => { if (e.target === el('huntModal')) closeHunt(); });
+// 마우스로 그리다 카드 밖(어두운 배경)에서 떼면 click 이 배경으로 가서 사냥창이 닫히던 것 방지
+el('huntModal').addEventListener('click', e => { if (e.target === el('huntModal') && performance.now() - gLastEnd > 350) closeHunt(); });
 // 채굴장 모달: 닫기
 el('mineClose').onclick = closeMine;
 el('mineModal').addEventListener('click', e => { if (e.target === el('mineModal')) closeMine(); });
 el('modal').addEventListener('click', e => { if (e.target === el('modal')) el('modal').hidden = true; });
 el('guideClose').onclick = () => { el('guide').hidden = true; localStorage.setItem('guideSeen', '1'); };
+/* 플레이 방법 — 카테고리 탭 + 사냥 탭의 직업별 강공격(STRONG 표에서 그대로 만들어 수치가 어긋나지 않게) */
+function setGuideTab(g) {
+  document.querySelectorAll('.gtab').forEach(b => { const on = b.dataset.g === g; b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); });
+  document.querySelectorAll('.guide-pane').forEach(p => { p.hidden = p.dataset.g !== g; });
+  el('guide').querySelector('.guide-card').scrollTop = 0;
+}
+document.querySelectorAll('.gtab').forEach(b => { b.onclick = () => setGuideTab(b.dataset.g); });
+// 커맨드 모양 미니 그림(44px) — 선 색은 사냥터 트레일과 같은 계열
+const GS_GLYPH = {
+  arc: '<path d="M10 32 A16 16 0 0 1 34 14" fill="none" stroke="#ffd66b" stroke-width="3.2" stroke-linecap="round"/><path d="M30 10 l5 4 -6 2" fill="none" stroke="#ffd66b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>',
+  line: '<circle cx="22" cy="9" r="4" fill="#ff8a2a"/><path d="M22 15 V35" stroke="#7fd4ff" stroke-width="3" stroke-linecap="round" stroke-dasharray="4 3"/><path d="M17 31 l5 5 5 -5" fill="none" stroke="#7fd4ff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>',
+  star: '<path d="M22 7 L31 35 L8 17.5 H36 L13 35 Z" fill="none" stroke="#d6b0ff" stroke-width="2.6" stroke-linejoin="round"/>',
+  hold: '<circle cx="22" cy="22" r="13" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="4"/><path d="M22 9 A13 13 0 1 1 9.6 26" fill="none" stroke="#ffd66b" stroke-width="4" stroke-linecap="round"/><circle cx="22" cy="22" r="4" fill="#7fb4d6"/>',
+};
+const GS_ORDER = [['warrior', '⚔️ 검 · 근거리 딜러'], ['archer', '🏹 활 · 원거리 딜러'], ['tanker', '🛡️ 방패 · 탱커'], ['healer', '✨ 지팡이 · 힐러']];
+function renderGuideStrong() {
+  const box = el('guideStrong'); if (!box) return;
+  const mine = me && me.class;
+  box.innerHTML = GS_ORDER.map(([cls, who]) => {
+    const c = STRONG[cls];
+    const extra = cls === 'archer' ? ' · 길게 당길수록 셈(40~100%)' : '';
+    const buff = c.buff ? ` · <b>${c.buff.name}</b> ${c.buff.ms / 1000}초간 연타 ×${c.buff.mult}` : '';
+    return `<div class="gs-row${cls === mine ? ' me' : ''}"><svg class="gs-glyph" viewBox="0 0 44 44" aria-hidden="true">${GS_GLYPH[c.cmd]}</svg>
+      <div class="gs-txt"><b>${who}${cls === mine ? '<span class="gs-me">내 무기</span>' : ''}</b>
+      <span>${c.how} → ⚡${c.name} (연타 ${c.taps}회분${extra})${buff}</span></div></div>`;
+  }).join('');
+}
+function openGuide(tab) { renderGuideStrong(); setGuideTab(tab || 'forge'); el('guide').hidden = false; }
 el('patchClose').onclick = closePatch;
 el('noticeItem').onclick = () => { closeMenu(); openPatch(false); };
 /* ---------- ⚙️ 설정 (상단 오른쪽) ----------
@@ -2027,6 +2662,7 @@ function updateVibeBtn() {
   el('vibeLabel').textContent = (on ? '📳' : '📴') + ' 진동';
 }
 function closeMenu() { el('setModal').hidden = true; }
+el('privacyItem').addEventListener('click', closeMenu);
 function openSettings() {
   if (!me) return;
   el('setNick').textContent = me.nick;
@@ -2046,7 +2682,7 @@ el('vibeItem').onclick = () => {
   if (vibeOn) vibe([18, 40, 18]);   // 켰을 때 바로 한 번 느껴보게(아이폰은 이 줄 위의 탭 오버레이가 톡)
 };
 el('soundItem').onclick = () => { soundOn = !soundOn; localStorage.setItem('soundOff', soundOn ? '0' : '1'); updateSoundBtn(); if (soundOn) { ensureAudio(); sfx('click'); } };
-el('helpItem').onclick = () => { closeMenu(); el('guide').hidden = false; };
+el('helpItem').onclick = () => { closeMenu(); openGuide(); };
 el('accountItem').onclick = () => {
   closeMenu();
   if (me && me.linked) { toast('✉️ ' + (me.email || '') + ' 계정에 연결돼 있어요', 'ok'); return; }

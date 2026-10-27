@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>개인정보처리방침 | 강화 RPG</title>
+<meta name="description" content="강화 RPG 개인정보처리방침: 받는 정보, 보관과 삭제, 호스팅, 광고 쿠키에 대해 알려 드려요.">
+<link rel="canonical" href="https://ganghwa.beartanh.dev/privacy/">
+<link rel="icon" href="/favicon.ico">
+<meta name="theme-color" content="#15110e">
+<style>
+  :root{--bg:#15110e;--card:#221b16;--line:#3a2f26;--text:#f1e8dc;--muted:#a9a196;--primary:#d4a24c;--gold:#f2c14e}
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:15px/1.75 "Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;word-break:keep-all}
+  main{max-width:720px;margin:0 auto;padding:calc(env(safe-area-inset-top,0px) + 28px) 16px calc(env(safe-area-inset-bottom,0px) + 48px)}
+  .back{display:inline-block;color:var(--primary);text-decoration:none;font-size:14px;margin-bottom:18px}
+  h1{font-family:"Hahmlet","Noto Serif KR",serif;font-size:26px;line-height:1.3;margin:0 0 4px}
+  .date{color:var(--muted);font-size:13px;margin:0 0 24px}
+  section{background:var(--card);border-radius:14px;padding:16px 18px;margin:0 0 12px}
+  h2{font-size:16px;color:var(--gold);margin:0 0 6px}
+  p,ul{margin:0 0 8px}
+  p:last-child,ul:last-child{margin-bottom:0}
+  ul{padding-left:20px}
+  li{margin:2px 0}
+  a{color:var(--primary)}
+  code{font-size:13px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:5px}
+</style>
+</head>
+<body>
+<main>
+  <a class="back" href="/">← 강화 RPG로 돌아가기</a>
+  <h1>개인정보처리방침</h1>
+  <p class="date">강화 RPG (ganghwa.beartanh.dev) · 시행일 2026년 10월 27일</p>
+
+  <section>
+    <h2>받는 정보</h2>
+    <ul>
+      <li><b>닉네임</b> — 랭킹·로그·파티처럼 다른 플레이어에게 보이는 이름이에요.</li>
+      <li><b>PIN</b> — PIN 자체는 저장하지 않아요. PIN을 한 방향으로 변환(SHA-256)한 값만 계정 구분에 써요.</li>
+      <li><b>이메일</b> — 이메일 로그인을 쓸 때만 받아요. 로그인은 Supabase 인증으로 처리돼요.</li>
+      <li><b>게임 기록</b> — 무기·강화 수치·재화·전투와 레이드 기록, 일일 이용 횟수 같은 플레이 정보예요.</li>
+    </ul>
+    <p>실명, 전화번호, 결제 정보는 받지 않아요.</p>
+  </section>
+
+  <section>
+    <h2>쓰는 곳</h2>
+    <p>계정 로그인, 게임 진행 저장, 랭킹과 실시간 로그 표시, 파티·레이드 같은 함께하는 기능, 그리고 부정 이용(연타 매크로 등)을 막는 데만 써요.</p>
+  </section>
+
+  <section>
+    <h2>기기에 저장하는 것</h2>
+    <p>이 브라우저의 로컬 저장소(localStorage)에 로그인 유지용 토큰과 효과음·진동·화면 설정을 저장해요. 브라우저 데이터를 지우면 함께 지워져요.</p>
+  </section>
+
+  <section>
+    <h2>호스팅과 보관</h2>
+    <p>게임은 Vercel에서 돌아가고, 게임 데이터는 Supabase(Postgres)에 저장돼요. 두 곳은 서비스 운영과 보안을 위해 IP 주소 같은 접속 기록을 처리할 수 있어요.
+      자세한 내용은 <a href="https://vercel.com/legal/privacy-policy" rel="noopener">Vercel</a>·<a href="https://supabase.com/privacy" rel="noopener">Supabase</a> 개인정보처리방침을 확인해 주세요.</p>
+    <p>게임 데이터는 회원 탈퇴 전까지 보관해요.</p>
+  </section>
+
+  <section>
+    <h2>삭제 (회원 탈퇴)</h2>
+    <p>게임 안 <b>⚙️ 설정 → 🗑️ 회원 탈퇴</b>에서 바로 지울 수 있어요. 캐릭터, 게임 기록, 일일 기록, 모든 기기의 로그인이 지워지고 되돌릴 수 없어요.</p>
+    <p>이메일 로그인 계정이라면 Supabase 인증에 남은 이메일 계정 정보는 아래 문의처로 요청해 주시면 지워 드려요.</p>
+  </section>
+
+  <section>
+    <h2>광고와 쿠키</h2>
+    <ul>
+      <li>강화 RPG에는 Google 애드센스 같은 제3자 광고가 표시될 수 있어요.</li>
+      <li>Google을 포함한 제3자 공급업체는 쿠키를 사용해, 이용자가 이 사이트나 다른 사이트를 방문한 기록을 바탕으로 광고를 보여 줘요.</li>
+      <li>Google은 광고 쿠키를 사용해 이용자가 이 사이트와 다른 사이트를 방문한 기록에 따라 Google과 파트너가 광고를 보여 줄 수 있게 해요.</li>
+      <li>맞춤 광고는 <a href="https://adssettings.google.com/" rel="noopener">Google 광고 설정</a>에서 끌 수 있어요. 다른 제3자 공급업체의 맞춤 광고 쿠키는 <a href="https://www.aboutads.info/choices/" rel="noopener">aboutads.info</a>에서 끌 수 있어요.</li>
+      <li>Google이 정보를 쓰는 방식은 <a href="https://policies.google.com/technologies/partner-sites" rel="noopener">Google 파트너 사이트 정보 사용 안내</a>에 있어요.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>바뀔 때</h2>
+    <p>이 방침이 바뀌면 이 페이지에 알리고 위의 시행일을 고쳐요.</p>
+  </section>
+
+  <section>
+    <h2>문의</h2>
+    <p><a href="https://github.com/beartang2" rel="noopener">github.com/beartang2</a></p>
+  </section>
+</main>
+</body>
+</html>
