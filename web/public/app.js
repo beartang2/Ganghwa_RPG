@@ -235,7 +235,7 @@ function enterGame() {
   show('game'); seedInvites(); seedTitles(); render();
   if (oneCol.matches) { currentTab = 'forge'; el('game').dataset.view = 'forge'; document.querySelectorAll('.bb-btn').forEach(b => b.classList.toggle('on', b.dataset.view === 'forge')); }
   else withLoad(loadTab);
-  refreshSide(); const shownGuide = maybeShowGuide(); if (!shownGuide) maybeShowPatch(); openEvents(); initRealtime(); }
+  refreshSide(); updateAds(); const shownGuide = maybeShowGuide(); if (!shownGuide) maybeShowPatch(); openEvents(); initRealtime(); }
 
 /* 파티 레이드 초대 알림 — 어느 탭에 있어도 새 초대가 오면 토스트로 띄운다.
  * 폴링(api('me'))으로 me.invites 가 갱신될 때마다 새로 생긴 초대를 감지. */
@@ -1701,6 +1701,47 @@ async function dunLoopTick() {
  * 넓은 화면에서만 그린다(좁으면 숨겨져 있으니 요청도 하지 않는다). */
 const wideCol = window.matchMedia('(min-width:1280px)');
 let sideAt = 0;
+/* ---------- 📢 광고 (Google 애드센스) ----------
+ * 게시자 ID 는 상위 도메인 beartanh.dev 와 같다 — ads.txt 도 beartanh.dev/ads.txt 하나가 서브도메인까지 덮는다.
+ * 애드센스에서 '디스플레이 광고 단위' 를 만든 뒤 그 번호(data-ad-slot)를 slots 에 넣으면 그 칸만 열린다.
+ * 비어 있으면 광고 스크립트도 안 불러온다(승인 전·설정 전 안전).
+ * 위치(애드센스 배치 정책 — 게임 창·버튼 근처 금지, 콘텐츠 없는 화면 금지):
+ *   넓은 화면(1280+) → 오른쪽 단 맨 아래(adSide) / 그 밖 → 더보기의 읽는 화면(랭킹·부자·추모·로그) 아래(adMore).
+ *   로그인 화면·대장간·사냥·레이드·전투·상점(구매 버튼)에는 넣지 않는다.
+ * 한 칸은 한 번만 채운다 — 탭을 오갈 때 다시 그려 새 광고를 받는 건 '인위적 새로고침' 이라 정책 위반 소지. */
+const ADS = { client: 'ca-pub-3744140142372436', slots: { side: '', more: '' } };
+const AD_READ_TABS = ['rank', 'goldrank', 'hogu', 'log'];
+let adsScriptLoaded = false;
+function loadAdsScript() {
+  if (adsScriptLoaded) return;
+  adsScriptLoaded = true;
+  const s = document.createElement('script');
+  s.async = true; s.crossOrigin = 'anonymous';
+  s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=' + ADS.client;
+  document.head.appendChild(s);
+}
+function fillAd(box, slot) {   // 칸이 화면에 보이는 상태에서 불러야 한다(숨긴 칸은 폭 0 이라 광고가 안 붙음)
+  const holder = box.querySelector('.ad-slot');
+  if (holder.dataset.filled) return;
+  holder.dataset.filled = '1';
+  loadAdsScript();
+  const ins = document.createElement('ins');
+  ins.className = 'adsbygoogle'; ins.style.display = 'block';
+  ins.dataset.adClient = ADS.client; ins.dataset.adSlot = slot;
+  ins.dataset.adFormat = 'auto'; ins.dataset.fullWidthResponsive = 'true';
+  holder.appendChild(ins);
+  try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (_) { /* 광고 차단기 등 — 게임엔 영향 없음 */ }
+}
+function showAd(id, slot, on) {
+  const box = el(id);
+  box.hidden = !(slot && on);
+  if (!box.hidden) fillAd(box, slot);
+}
+function updateAds() {
+  const inGame = !!me && !el('game').hidden;
+  showAd('adSide', ADS.slots.side, inGame && wideCol.matches);
+  showAd('adMore', ADS.slots.more, inGame && !wideCol.matches && AD_READ_TABS.includes(currentTab));
+}
 async function refreshSide() {
   if (!wideCol.matches || !me) return;
   sideAt = Date.now();
@@ -1716,7 +1757,7 @@ async function refreshSide() {
     if (lg && lg.list) el('sideLog').innerHTML = lg.list.slice(0, 8).map(x => `<div class="side-row">${esc(x.text)}</div>`).join('') || emptyMsg('아직 기록이 없어요');
   } catch (_) { /* 네트워크 순간 오류 무시 */ }
 }
-wideCol.addEventListener('change', () => { if (wideCol.matches) refreshSide(); });
+wideCol.addEventListener('change', () => { if (wideCol.matches) refreshSide(); updateAds(); });
 document.querySelector('.col-side').addEventListener('click', e => {
   if (e.target.closest('#sideMissionMore') || e.target.closest('[data-side-mission]')) return openMissions();
   const nm = e.target.closest('[data-nick]'); if (nm) return openProfile(nm.dataset.nick);
@@ -1940,6 +1981,7 @@ function selectTab(tab) {
   if (MORE_TABS.includes(tab)) moreTab = tab;
   // 본 적 있는 탭이면 캐시를 즉시 표시(로딩 없이), 처음이면 로딩 표시. 그다음 loadTab 이 갱신.
   if (cacheableTab(currentTab)) el('panel').innerHTML = tabHtmlCache[currentTab] || '<div class="empty">불러오는 중…</div>';
+  updateAds();
   withLoad(loadTab);
 }
 document.querySelectorAll('.tab').forEach(btn => { btn.onclick = () => selectTab(btn.dataset.tab); });
@@ -1956,7 +1998,7 @@ function setView(v) {
   document.querySelectorAll('.bb-btn').forEach(b => b.classList.toggle('on', b.dataset.view === v));
   const tab = v === 'more' ? moreTab : VIEW_TAB[v];
   if (tab) { if (tab !== currentTab || v === 'more') selectTab(tab); }
-  else { stopRaidLoop(); currentTab = 'forge'; }
+  else { stopRaidLoop(); currentTab = 'forge'; updateAds(); }
   window.scrollTo(0, 0);
 }
 function viewOfTab(t) { return t === 'raid' ? 'raid' : t === 'prism' ? 'prism' : t === 'fight' ? 'act' : MORE_TABS.includes(t) ? 'more' : 'forge'; }
@@ -2027,6 +2069,7 @@ function updateVibeBtn() {
   el('vibeLabel').textContent = (on ? '📳' : '📴') + ' 진동';
 }
 function closeMenu() { el('setModal').hidden = true; }
+el('privacyItem').addEventListener('click', closeMenu);
 function openSettings() {
   if (!me) return;
   el('setNick').textContent = me.nick;

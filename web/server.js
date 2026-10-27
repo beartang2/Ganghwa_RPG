@@ -378,6 +378,8 @@ function readBody(req) {
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.webmanifest': 'application/manifest+json; charset=utf-8' };
 function serveStatic(res, urlPath) {
   let rel = urlPath === '/' ? '/index.html' : urlPath;
+  if (rel.endsWith('/')) rel += 'index.html';                 // /privacy/ → /privacy/index.html
+  else if (!path.extname(rel) && fs.existsSync(path.join(PUBLIC_DIR, path.normalize(rel), 'index.html'))) rel += '/index.html';
   // 빌드된 난독화 파일이 있으면 app.js 대신 서빙 (npm run build 후)
   if (rel === '/app.js' && fs.existsSync(path.join(PUBLIC_DIR, 'app.min.js'))) rel = '/app.min.js';
   const filePath = path.join(PUBLIC_DIR, path.normalize(rel));

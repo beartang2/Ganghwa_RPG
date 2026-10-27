@@ -1019,6 +1019,18 @@ body.loading-on #globalLoading{opacity:1}
 .set-row i{font-style:normal;color:var(--muted);font-size:18px;line-height:1}
 .set-row.danger{color:#ff8f87}
 .set-row[hidden]{display:none}
+a.set-row{text-decoration:none;color:inherit}
+.login-foot{margin:14px 0 0;text-align:center;font-size:12px}
+.login-foot a{color:var(--muted)}
+/* 광고 칸 — 게임 버튼과 떨어진 읽는 화면에만. 못 채우면(unfilled) 칸째 숨김.
+   라벨은 애드센스가 허용하는 'Advertisements' 의 우리말 '광고' 만 쓴다 */
+.ad-box{padding:10px 12px 12px}
+.ad-label{font-size:11px;color:var(--muted);letter-spacing:.04em;margin:0 0 6px 2px}
+.ad-box:has(ins.adsbygoogle[data-ad-status="unfilled"]){display:none}
+@media (max-width:879px){
+  /* 한 단: 하단 탭바(내비게이션)와 붙지 않게 아래 여백을 넉넉히 */
+  #adMore{margin:6px 0 72px}
+}
 /* 효과음 스위치 */
 .set-row .sw{position:relative;flex:none;width:44px;height:26px;border-radius:999px;background:rgba(255,240,220,.14);transition:background .15s}
 .set-row .sw::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#e9e1d6;transition:transform .15s}

@@ -32,7 +32,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@600;800;900&display=swap">
-<link rel="stylesheet" href="/style.css?v=55">
+<link rel="stylesheet" href="/style.css?v=56">
 </head>
 <body>
 <!-- 화로 불씨 배경 (fx.js / React Bits Particles 이식) -->
@@ -57,6 +57,7 @@
       <button id="emailAuthBtn" class="btn ghost big">✉️ 이메일로 로그인 / 회원가입</button>
       <p class="hint" style="margin-top:6px">이메일 계정은 기기가 바뀌어도 캐릭터를 지켜줘요.</p>
     </div>
+    <p class="login-foot"><a href="/privacy/" target="_blank" rel="noopener">개인정보처리방침</a></p>
   </div>
 </div>
 
@@ -139,6 +140,8 @@
         <button class="tab" data-tab="log"><span class="ti">📜</span><span class="tl">로그</span></button>
       </nav>
       <section id="panel" class="card panel"></section>
+      <!-- 광고(애드센스) — 더보기의 읽는 화면(랭킹·부자·추모·로그) 아래에만. 칸은 app.js updateAds() 가 연다 -->
+      <section id="adMore" class="card ad-box" aria-label="광고" hidden><div class="ad-label">광고</div><div class="ad-slot"></div></section>
     </div>
 
     <!-- 넓은 데스크톱(1280px+) 오른쪽 단: 오늘 미션 · 강화 랭킹 · 실시간 로그 -->
@@ -155,6 +158,7 @@
         <div class="side-h">📜 실시간 로그</div>
         <div id="sideLog" class="side-list side-log"></div>
       </section>
+      <section id="adSide" class="card side-card ad-box" aria-label="광고" hidden><div class="ad-label">광고</div><div class="ad-slot"></div></section>
     </aside>
   </main>
 
@@ -313,6 +317,7 @@
       <div class="set-label">안내</div>
       <button class="set-row" id="noticeItem"><span>📢 공지사항<span id="noticeDot" class="dot" hidden></span></span><i>›</i></button>
       <button class="set-row" id="helpItem"><span>❔ 플레이 방법</span><i>›</i></button>
+      <a class="set-row" id="privacyItem" href="/privacy/" target="_blank" rel="noopener"><span>🔒 개인정보처리방침</span><i>›</i></a>
     </section>
     <section class="set-sec">
       <button class="set-row" id="logoutItem"><span>🚪 로그아웃</span></button>
@@ -344,8 +349,8 @@
 
 <!-- Supabase Realtime (선택) — 로드 실패해도 게임은 폴링으로 동작 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/fx.js?v=55"></script>
-<script src="/weapon-art.js?v=55"></script>
-<script src="/app.js?v=55"></script>
+<script src="/fx.js?v=56"></script>
+<script src="/weapon-art.js?v=56"></script>
+<script src="/app.js?v=56"></script>
 </body>
 </html>
