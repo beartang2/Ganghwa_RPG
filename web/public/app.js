@@ -532,131 +532,419 @@ function goPrismShop() {
 }
 
 /* ---------- 💎 프리즘 탭 — 📦 상자 · ⚗️ 연금술 · 🧸 캡슐 · 💎 상점 ----------
- * 확률표는 서버가 굴리는 표를 그대로 받아서 보여준다(확률 공개). */
+ * 확률표는 서버가 굴리는 표를 그대로 받아서 보여준다(확률 공개).
+ * 그림은 prism-art.js(SVG), 움직임은 style.css 키프레임 + 아래 연출 함수(Web Animations)가 맡는다.
+ * 연출 순서(셋 다 같음): 누름 → '기대감'(상자 덜컹·도가니 끓음·손잡이 돌림)과 서버 요청을 동시에 →
+ *   응답이 오면 '터뜨림'(불꽃·빛줄기·보상 튀어나옴) → 끝나면 결과 화면을 다시 그린다(연출 끝 모습과 똑같이 그려서 티 안 나게).
+ * 보상·잔액은 터지는 순간에 반영한다(미리 숫자가 바뀌어 결과가 스포일러되지 않게).
+ * 연출 중 화면을 한 번 더 누르면 건너뛴다(pskip). prefers-reduced-motion 이면 짧은 페이드만 남는다. */
 let prismSub = 'box', prismData = null, boxReveal = null, alchLast = null, capLast = null;
-const CHESTS = [
-  { name: '루비 상자',     body: '#6e2620', body2: '#8f3a2c', trim: '#e0aa45', gem: '#ff5d6c' },
-  { name: '사파이어 상자', body: '#1f3a63', body2: '#2c5288', trim: '#d6dee8', gem: '#4facfe' },
-  { name: '에메랄드 상자', body: '#1f4f34', body2: '#2c6b47', trim: '#d4a24c', gem: '#49d17a' },
+let alchTier = (() => { try { return localStorage.getItem('alchTier') || 'low'; } catch (_) { return 'low'; } })();
+let prismGlares = [];   // 이 화면에 붙인 광택(Fx.glare) — 다시 그릴 때 정리
+let pfx = null;         // 진행 중인 연출 { sub, skip, waits, anims }
+let boxEnter = false;   // '다시 열기' 직후 상자가 새로 놓이는 등장 연출
+const PA = window.PrismArt || null;
+const CHEST_NAMES = PA ? PA.CHESTS.map(c => c.name) : ['루비 상자', '사파이어 상자', '에메랄드 상자'];
+const CHEST_SPARK = [['#ffd6de', '#ff4d6d', '#ffd27a'], ['#e0f1ff', '#3aa0ff', '#ffffff'], ['#dcffe9', '#33d17a', '#ffd27a']];
+const PRISM_RAINBOW = ['#ff7ab6', '#ffe27a', '#7affc1', '#7ab8ff', '#b27aff'];
+// 연출 등급(0 꽝 ~ 5 대박)별 불꽃 색
+const TIER_SPARK = [
+  ['#c9c2ba', '#8a8580'],
+  ['#fff4d6', '#ffd27a', '#ff9a3c'],
+  ['#ffffff', '#bdf6ff', '#7df9ff'],
+  ['#e8d6ff', '#a66cff', '#7df9ff'],
+  ['#fff1c1', '#ffd27a', '#7df9ff', '#ffffff'],
+  PRISM_RAINBOW,
 ];
-function chestSVG(c, open) {
-  return `<svg class="chest-svg${open ? ' open' : ''}" viewBox="0 0 84 76" aria-hidden="true">
-    <ellipse cx="42" cy="70" rx="32" ry="5" fill="#000" opacity=".35"/>
-    <g class="chest-glow"><circle cx="42" cy="30" r="22" fill="${c.gem}" opacity=".45"/></g>
-    <rect x="9" y="32" width="66" height="34" rx="3" fill="${c.body}" stroke="#170f0a" stroke-width="2"/>
-    <rect x="9" y="32" width="66" height="10" fill="${c.body2}"/>
-    <path d="M9 47 H75 M9 57 H75" stroke="#170f0a" stroke-width="1" opacity=".35"/>
-    <rect x="9" y="32" width="66" height="5" fill="${c.trim}"/>
-    <rect x="35" y="32" width="14" height="34" fill="${c.trim}" stroke="#170f0a" stroke-width="1"/>
-    <g class="chest-lid">
-      <path d="M9 32 Q9 9 42 9 Q75 9 75 32 Z" fill="${c.body2}" stroke="#170f0a" stroke-width="2"/>
-      <path d="M12 30 Q13 13 42 12" fill="none" stroke="#fff" stroke-width="2" opacity=".18"/>
-      <path d="M9 32 Q9 9 42 9 Q75 9 75 32" fill="none" stroke="${c.trim}" stroke-width="3"/>
-      <rect x="35" y="10" width="14" height="22" fill="${c.trim}" stroke="#170f0a" stroke-width="1"/>
-    </g>
-    <circle cx="42" cy="45" r="5.5" fill="${c.gem}" stroke="#170f0a" stroke-width="1.5"/>
-    <circle cx="40.5" cy="43.5" r="1.6" fill="#fff" opacity=".8"/>
-  </svg>`;
+const tierOf = r => (PA ? PA.tierOf(r) : (r && r.kind === 'prism' ? 3 : 1));
+const prizeIcon = (r, cls) => (PA ? PA.icon(r, cls) : '<span class="picon-txt">🎁</span>');
+const manG = n => (n >= 10000 && n % 10000 === 0 ? (n / 10000) + '만' : n.toLocaleString()) + 'G';
+// 아이콘 옆에 붙일 보상 이름(아이콘과 겹치는 이모지는 뺀다)
+function rewardLabel(r) {
+  if (!r || r.kind === 'none') return '빈 캡슐';
+  if (r.kind === 'prism') return '프리즘 ' + r.n;
+  if (r.kind === 'gold') return r.n.toLocaleString() + 'G';
+  return String(r.text || '').replace(/^\S+\s/, '');
 }
-function capsuleMachineSVG() {
-  const balls = [['#ff5d6c', 34, 40], ['#4facfe', 50, 36], ['#ffd93d', 42, 50], ['#49d17a', 58, 50], ['#a770ef', 28, 54], ['#ff9f45', 46, 26], ['#7df9ff', 62, 30]];
-  return `<svg class="cap-svg" viewBox="0 0 92 120" aria-hidden="true">
-    <circle cx="46" cy="42" r="34" fill="rgba(200,230,255,.08)" stroke="#d6dee8" stroke-width="2.5"/>
-    ${balls.map(([c, x, y]) => `<g><circle cx="${x}" cy="${y}" r="7.5" fill="${c}" stroke="#170f0a" stroke-width="1.3"/><path d="M${x - 7.5} ${y} H${x + 7.5}" stroke="#fff" stroke-width="1.2" opacity=".7"/></g>`).join('')}
-    <path d="M22 26 Q30 14 44 12" fill="none" stroke="#fff" stroke-width="3" opacity=".3" stroke-linecap="round"/>
-    <path d="M14 74 H78 L72 112 H20 Z" fill="#b8420c" stroke="#170f0a" stroke-width="2"/>
-    <path d="M14 74 H78 V80 H14 Z" fill="#e0aa45" stroke="#170f0a" stroke-width="1.5"/>
-    <circle cx="46" cy="94" r="9" fill="#2b231d" stroke="#e0aa45" stroke-width="2.5"/>
-    <path d="M40 94 H52" stroke="#e0aa45" stroke-width="3" stroke-linecap="round"/>
-    <rect x="58" y="100" width="12" height="8" rx="2" fill="#100d0b"/>
-  </svg>`;
+// 캡슐 칸처럼 좁은 자리용 짧은 보상 글자
+function shortReward(r) {
+  if (!r || r.kind === 'none') return '꽝';
+  if (r.kind === 'prism') return '+' + r.n;
+  if (r.kind === 'gold') return manG(r.n);
+  if (r.kind === 'item') return (r.item === 'stone' ? '마석' : r.item === 'boost' ? '부스트' : r.item === 'protect' ? '방지권' : '아이템') + ' ×' + r.n;
+  return '';
 }
-const pct = p => { const v = p * 100; return (v >= 1 ? (Math.round(v * 10) / 10) : (Math.round(v * 100) / 100)) + '%'; };
-function oddsTable(title, table) {
-  return `<details class="odds-table"><summary>📊 ${title}</summary><table>${table.map(e => `<tr><td>${esc(e.text)}</td><td>${pct(e.p)}</td></tr>`).join('')}</table></details>`;
+
+/* ----- 연출 진행 도우미: 기다림·애니메이션을 한곳에 모아 두었다가 건너뛰기 때 한꺼번에 끝낸다 ----- */
+const pReduced = () => !!(window.Fx && window.Fx.reducedMotion && window.Fx.reducedMotion());
+function pfxStart(sub) { pfx = { sub, skip: false, waits: new Set(), anims: new Set() }; return pfx; }
+function pfxEnd(run) { if (pfx === run) pfx = null; }
+const pLive = run => pfx === run && !run.skip;
+function pwait(run, ms) {
+  return new Promise(res => {
+    if (!pLive(run)) return res();
+    const fin = () => { clearTimeout(t); run.waits.delete(fin); res(); };
+    const t = setTimeout(fin, pReduced() ? Math.min(ms, 120) : ms);
+    run.waits.add(fin);
+  });
 }
+function panim(run, node, keyframes, opts) {
+  if (!node || !node.animate) return Promise.resolve();
+  const a = node.animate(keyframes, Object.assign({ fill: 'forwards', easing: 'ease-out' }, opts));
+  if (run) { run.anims.add(a); if (!pLive(run)) a.finish(); }
+  return a.finished.then(() => {}, () => {});
+}
+function pskip() {
+  const run = pfx; if (!run || run.skip) return;
+  run.skip = true;
+  run.anims.forEach(a => { try { a.finish(); } catch (_) { /* 이미 끝남 */ } });
+  run.waits.forEach(f => f());
+}
+// 화면 좌표 도우미
+const pCenter = node => { const r = node.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, r }; };
+function pSpark(node, opts) { if (FX && FX.sparks && node) FX.sparks.burstAt(node, opts); }
+function pSparkXY(x, y, opts) { if (FX && FX.sparks) FX.sparks.burst(x, y, opts); }
+let prismBurstFx;   // 분광 폭발은 프리즘 탭에 처음 들어올 때 만든다(안 오는 사람은 WebGL 컨텍스트를 하나 덜 쓴다)
+function ensurePrismBurst() {
+  if (prismBurstFx !== undefined || !window.Fx || !window.Fx.prismBurst) return prismBurstFx || null;
+  try {
+    prismBurstFx = window.Fx.prismBurst({ colors: PRISM_RAINBOW, intensity: 2.2, quality: window.innerWidth < 600 ? 0.4 : 0.55, grain: 0.6, fade: 0.7 });
+    if (prismBurstFx.warm) prismBurstFx.warm();   // 셰이더를 미리 컴파일 — 첫 대박 때 멈칫하지 않게
+  } catch (e) { prismBurstFx = null; console.warn('[fx] prismBurst', e); }
+  return prismBurstFx;
+}
+function pPrismBurst(node, opts) {
+  const fx = node && ensurePrismBurst();
+  if (!fx) return;
+  const c = pCenter(node);
+  fx.play(c.x, c.y, opts);
+}
+function pShake(run, node, power) {
+  const p = power || 1;
+  return panim(run, node, [
+    { transform: 'translate(0,0)' }, { transform: `translate(${-5 * p}px,${2 * p}px)` }, { transform: `translate(${4 * p}px,${-3 * p}px)` },
+    { transform: `translate(${-3 * p}px,${1 * p}px)` }, { transform: `translate(${2 * p}px,0)` }, { transform: 'translate(0,0)' },
+  ], { duration: 360, easing: 'linear', fill: 'none' });
+}
+
 function syncPrismFromMe() {
   if (!prismData || !me) return;
   const cnt = id => { const it = me.inv.items.find(i => i.id === id); return it ? it.count : 0; };
   prismData.prism = me.prism || 0; prismData.gold = me.gold; prismData.keys = cnt('boxkey'); prismData.stones = cnt('stone');
 }
+const pct = p => { const v = p * 100; return (v >= 1 ? (Math.round(v * 10) / 10) : (Math.round(v * 100) / 100)) + '%'; };
+function oddsTable(title, table) {
+  return `<details class="odds-table"><summary>📊 ${title}</summary><table>${table.map(e => `<tr><td>${esc(e.text)}</td><td>${pct(e.p)}</td></tr>`).join('')}</table></details>`;
+}
 function paintPrism() {
   const d = prismData; if (!d || currentTab !== 'prism') return;
+  prismGlares.forEach(g => { try { g.destroy(); } catch (_) { /* 무시 */ } });
+  prismGlares = [];
   const subs = [['box', '📦', '상자'], ['alch', '⚗️', '연금술'], ['cap', '🧸', '캡슐'], ['shop', '💎', '상점']];
   let h = `<div class="prism-head"><span class="prism-bal">💎 <b>${d.prism.toLocaleString()}</b></span>
     <span class="prism-mats"><span title="상자 열쇠">🗝️ ${d.keys}</span><span title="마석">🔮 ${d.stones}</span><span title="골드">💰 ${d.gold.toLocaleString()}</span></span></div>`;
   h += `<div class="psub-tabs">${subs.map(([k, e, l]) => `<button class="psub${prismSub === k ? ' active' : ''}" data-psub="${k}"><span>${e}</span>${l}</button>`).join('')}</div>`;
   h += prismSub === 'box' ? boxHTML(d) : prismSub === 'alch' ? alchHTML(d) : prismSub === 'cap' ? capHTML(d) : pshopHTML(d);
   el('panel').innerHTML = h;
+  // 아직 안 연 상자 위를 광택이 번갈아 훑는다(React Bits GlareHover) — '눌러 보세요' 신호
+  if (prismSub === 'box' && !boxReveal && window.Fx && window.Fx.glare && !pReduced()) {
+    document.querySelectorAll('.chest[data-pick]:not(:disabled)').forEach((b, i) => {
+      try { prismGlares.push(window.Fx.glare(b, { mode: 'loop', interval: 3.4, delay: i * 0.35, glareOpacity: 0.3, glareSize: 34, glareAngle: -35, transitionDuration: 900 })); } catch (_) { /* 무시 */ }
+    });
+  }
+  boxEnter = false;
+  if (prismBurstFx === undefined && !pReduced()) setTimeout(() => { if (currentTab === 'prism' && !pfx) ensurePrismBurst(); }, 400);
 }
+
+/* ================= 📦 상자 ================= */
 function boxHTML(d) {
   const rv = boxReveal;
-  let h = `<p class="hint" style="margin:0 0 10px">🗝️ 열쇠 1개로 상자 3개 중 <b>하나</b>를 골라 열어요. 열고 나면 나머지 둘에 뭐가 들어 있었는지도 보여 줘요.</p>`;
-  h += '<div class="chests">' + CHESTS.map((c, i) => {
-    const mine = rv && rv.pick === i;
-    return `<button class="chest${rv ? (mine ? ' opened' : ' missed') : ''}" ${rv ? 'data-noop' : `data-pick="${i}"`} ${!rv && d.keys < 1 ? 'disabled' : ''}>
-      ${chestSVG(c, !!rv)}<span class="chest-name">${c.name}</span>${rv ? `<span class="chest-reward">${mine ? '' : '놓친 보상 · '}${esc(rv.boxes[i])}</span>` : ''}</button>`;
+  let h = `<p class="hint pz-hint">🗝️ 열쇠 1개로 상자 <b>하나</b>를 골라 열어요 · 나머지 둘에 뭐가 있었는지도 보여 줘요</p>`;
+  h += `<div class="chests${rv ? ' revealed' : ''}${rv && rv.fresh ? ' fresh' : ''}${boxEnter ? ' enter' : ''}">` + CHEST_NAMES.map((name, i) => {
+    const mine = rv && rv.pick === i, item = rv && rv.items ? rv.items[i] : null;
+    const state = rv ? (mine ? ' opened' : ' missed') : '';
+    const prize = rv ? `<span class="chest-prize t${tierOf(item)}">${prizeIcon(item)}</span>` : '';
+    return `<button class="chest c${i}${state}" ${rv ? 'data-noop tabindex="-1"' : `data-pick="${i}"`} ${!rv && d.keys < 1 ? 'disabled' : ''} aria-label="${name}${rv ? ' — ' + esc(rv.boxes[i]) : ' 열기'}">
+      <span class="chest-stage"><span class="chest-rays"></span>${PA ? PA.chest(i) : '📦'}${prize}</span>
+      <span class="chest-name">${name}</span>${rv ? `<span class="chest-reward">${mine ? '' : '<small>놓친 보상</small>'}${esc(rv.boxes[i])}</span>` : ''}</button>`;
   }).join('') + '</div>';
-  if (rv) h += `<div class="prism-result ok">🎉 ${esc(rv.got.text)} 획득!</div>
-    <button class="btn primary big" data-box-again ${d.keys < 1 ? 'disabled' : ''}>🗝️ 다시 열기 <small>(남은 열쇠 ${d.keys})</small></button>`;
+  if (rv) h += `<div class="pz-after${rv.fresh ? ' fresh' : ''}"><div class="prism-result ok">🎉 ${esc(rv.got.text)} 획득!</div>
+    <button class="btn primary big" data-box-again ${d.keys < 1 ? 'disabled' : ''}>🗝️ 다시 열기 <small>(남은 열쇠 ${d.keys})</small></button></div>`;
   else if (d.keys < 1) h += '<div class="prism-result">🗝️ 열쇠가 없어요 — 🗡️ 사냥에서 가끔 나와요(무한 사냥에서도 낮은 확률로)</div>';
   return h + oddsTable('상자 하나에 들어 있을 확률', d.info.box.table);
 }
+async function doOpenBox(i) {
+  const run = pfxStart('box');
+  const btn = document.querySelector(`.chest[data-pick="${i}"]`);
+  const wrap = btn && btn.closest('.chests');
+  // ① 기대감: 고른 상자가 덜컹거리고 틈새로 빛이 샌다(나머지는 어두워짐). 서버 응답과 동시에 진행
+  if (wrap) wrap.classList.add('picking');
+  if (btn) btn.classList.add('charging');
+  const stopRattle = (() => {
+    let n = 0;
+    const tick = () => { if (!pLive(run)) return; sfx('rattle'); vibe(5); if (++n === 3 && btn) btn.classList.add('charging2'); t = setTimeout(tick, n < 3 ? 210 : 140); };
+    let t = setTimeout(tick, 0);
+    return () => clearTimeout(t);
+  })();
+  const [r] = await Promise.all([api('box-open', 'POST', { pick: i }), pwait(run, 950)]);
+  stopRattle();
+  if (!r.ok) {
+    pfxEnd(run);
+    if (wrap) wrap.classList.remove('picking');
+    if (btn) btn.classList.remove('charging', 'charging2');
+    return toast(r.error, 'bad');
+  }
+  // ② 터뜨림: 결과 화면을 'fresh' 로 그리면 CSS 가 뚜껑 열림·보상 튀어나옴·나머지 상자 열림을 시간차로 재생한다
+  boxReveal = { pick: r.pick, boxes: r.boxes, items: r.items || null, got: r.got, fresh: !run.skip };
+  applyMe(r.me); render(); syncPrismFromMe();
+  paintPrism();
+  boxReveal.fresh = false;
+  const tier = tierOf(r.got);
+  const chest = document.querySelector(`.chest.c${r.pick}`);
+  const stage = chest && chest.querySelector('.chest-stage');
+  if (pLive(run) && stage) {
+    await pwait(run, 90);   // 뚜껑이 튀는 순간에 맞춘다
+    const c = pCenter(stage);
+    sfx('lid'); vibe(tier >= 4 ? [30, 40, 80] : 25);
+    pSparkXY(c.x, c.y - c.r.height * 0.1, { sparkColor: CHEST_SPARK[r.pick], sparkCount: 14, sparkRadius: 64, sparkSize: 11, shape: 'star', ring: true, gravity: 0.35, duration: 680, glow: 1 });
+    pSparkXY(c.x, c.y, { sparkColor: TIER_SPARK[tier], sparkCount: 10 + tier * 3, sparkRadius: 40 + tier * 12, shape: 'streak', spread: 160, gravity: 0.9, duration: 640, glow: 0.9 });
+    if (FX && FX.embers) FX.embers.burst(c.x, c.y);
+    pShake(run, el('panel'), tier >= 4 ? 1.6 : 0.8);
+    if (tier >= 4) { pPrismBurst(stage, { size: Math.min(420, window.innerWidth * 0.95), intensity: tier >= 5 ? 2.8 : 2.2 }); sfx('guaranteed'); }
+    else sfx(tier >= 2 ? 'pang' : 'coin');
+    await pwait(run, 520);
+    if (pLive(run)) sfx('creak');   // 나머지 두 상자가 열림(CSS)
+    await pwait(run, 700);
+  }
+  if (run.skip) paintPrism();   // 건너뛰었으면 마지막 모습으로 바로
+  pfxEnd(run);
+}
+
+/* ================= ⚗️ 연금술 ================= */
+const ALCH_BIG = 10;   // 이 이상이면 '대성공' 연출(분광 폭발)
 function alchHTML(d) {
-  let h = '<p class="hint" style="margin:0 0 10px">🔮 마석과 💰 골드를 도가니에 함께 넣고 돌려요. 불이 셀수록 <b>마석</b> 하나당 기대값은 높고, <b>골드</b> 하나당 기대값은 낮아요.</p>';
-  h += '<div class="alch-list">' + d.info.alchemy.map(a => {
-    const can = d.stones >= a.stone && d.gold >= a.gold;
-    return `<div class="alch-card t-${a.id}"><div class="alch-top"><span class="alch-fire">${a.emoji}</span><b>${a.name}</b>
-        <span class="alch-cost"><span class="${d.stones >= a.stone ? '' : 'short'}">🔮 ${a.stone}</span> + <span class="${d.gold >= a.gold ? '' : 'short'}">💰 ${a.gold.toLocaleString()}G</span></span></div>
-      <div class="alch-odds">${a.table.map(e => `<span>${e.text.replace('💎 프리즘 ', '💎')} <b>${pct(e.p)}</b></span>`).join('')}</div>
-      <button class="btn primary sm" data-alch="${a.id}" ${can ? '' : 'disabled'}>⚗️ 돌리기</button></div>`;
-  }).join('') + '</div>';
-  if (alchLast) h += `<div class="prism-result ${alchLast.prism > 0 ? 'ok' : ''}">${esc(alchLast.msg)}</div>`;
+  const tiers = d.info.alchemy;
+  const a = tiers.find(x => x.id === alchTier) || tiers[0];
+  const can = d.stones >= a.stone && d.gold >= a.gold;
+  const res = alchLast;
+  const resCls = res ? (res.prism >= ALCH_BIG ? ' res-ok res-big' : res.prism > 0 ? ' res-ok' : ' res-fail') : '';
+  let h = `<div class="pz-stage alch-stage fire-${a.id}${resCls}${res && res.fresh ? ' fresh' : ''}">
+    <div class="alch-pot">${PA ? PA.cauldron() : '⚗️'}</div><div class="pz-layer"></div>`;
+  if (res) h += `<div class="alch-prize t${res.prism >= ALCH_BIG ? 5 : res.prism > 0 ? 3 : 0}">${prizeIcon(res.prism > 0 ? { kind: 'prism' } : { kind: 'none' })}<b class="alch-n">${res.prism > 0 ? '+' + res.prism : '꽝'}</b></div>`;
+  h += '</div>';
+  h += `<div class="alch-tiers" role="radiogroup" aria-label="불 세기">${tiers.map(t => `<button class="alch-tier t-${t.id}${t.id === a.id ? ' on' : ''}" data-alch-tier="${t.id}" role="radio" aria-checked="${t.id === a.id}">
+      <span class="at-fire">${t.emoji}</span><b>${t.name}</b>
+      <span class="at-cost"><span class="${d.stones >= t.stone ? '' : 'short'}">🔮${t.stone}</span><span class="${d.gold >= t.gold ? '' : 'short'}">💰${manG(t.gold)}</span></span></button>`).join('')}</div>`;
+  h += `<div class="alch-odds">${a.table.map(e => `<span>${e.text.replace('💎 프리즘 ', '💎')} <b>${pct(e.p)}</b></span>`).join('')}</div>`;
+  h += `<button class="btn primary big alch-go" data-alch="${a.id}" ${can ? '' : 'disabled'}>⚗️ ${a.name}로 연성하기</button>`;
+  if (res) h += `<div class="prism-result${res.prism > 0 ? ' ok' : ''}${res.fresh ? ' pz-late' : ''}">${esc(res.msg)}</div>`;
+  else h += '<p class="hint pz-hint" style="margin-top:8px">🔮 마석과 💰 골드를 함께 넣고 끓여요. 불이 셀수록 <b>마석</b> 하나당 기대값은 높고 <b>골드</b> 하나당 기대값은 낮아요.</p>';
   return h;
 }
+// 도가니 그림 안의 한 점(viewBox 좌표) → 무대(.alch-stage) 기준 좌표
+function alchPoint(stage, vx, vy) {
+  const svg = stage.querySelector('.pcauldron'), sr = stage.getBoundingClientRect();
+  if (!svg) return { x: sr.width / 2, y: sr.height / 3 };
+  const r = svg.getBoundingClientRect();
+  return { x: r.left - sr.left + (vx / 220) * r.width, y: r.top - sr.top + (vy / 186) * r.height };
+}
+// 무대 위에 떠다니는 조각 하나(재료·결정·연기)
+function pPiece(layer, html, cls, x, y, size) {
+  const n = document.createElement('span');
+  n.className = 'pz-piece ' + (cls || '');
+  n.innerHTML = html;
+  Object.assign(n.style, { left: `${x - size / 2}px`, top: `${y - size / 2}px`, width: `${size}px`, height: `${size}px` });
+  layer.appendChild(n);
+  return n;
+}
+async function doAlchemy(tier) {
+  const d = prismData; if (!d) return;
+  const a = d.info.alchemy.find(x => x.id === tier); if (!a) return;
+  const run = pfxStart('alch');
+  const stage = document.querySelector('.alch-stage'), layer = stage && stage.querySelector('.pz-layer');
+  // ① 기대감: 재료가 도가니로 퐁당 → 불이 확 붙고 물약이 요동친다. 서버 응답과 동시에 진행
+  if (stage) {
+    stage.classList.remove('res-ok', 'res-big', 'res-fail', 'fresh');
+    const old = stage.querySelector('.alch-prize'); if (old) old.remove();
+    stage.classList.add('brewing');
+  }
+  const req = api('alchemy', 'POST', { tier });
+  const drops = [];
+  if (stage && layer && PA && !pReduced()) {
+    const liq = alchPoint(stage, 110, 58), W = stage.clientWidth;
+    const count = tier === 'high' ? 7 : tier === 'mid' ? 5 : 3;
+    for (let k = 0; k < count; k++) {
+      const isStone = k % 2 === 0, size = isStone ? 26 : 24;
+      const sx = W / 2 + (k % 2 ? 1 : -1) * (40 + Math.random() * Math.min(110, W / 2 - 30));
+      const node = pPiece(layer, PA.icon(isStone ? { kind: 'item', item: 'stone' } : { kind: 'gold' }), 'alch-ing', sx, -10, size);
+      const dx = liq.x - sx + (Math.random() - 0.5) * 50, dy = liq.y + 10;
+      drops.push(panim(run, node, [
+        { transform: 'translate(0,0) rotate(0) scale(.6)', opacity: 0 },
+        { transform: `translate(${dx * 0.45}px,${dy * 0.25 - 26}px) rotate(${(Math.random() - 0.5) * 200}deg) scale(1)`, opacity: 1, offset: 0.45, easing: 'ease-in' },
+        { transform: `translate(${dx}px,${dy}px) rotate(${(Math.random() - 0.5) * 360}deg) scale(.5)`, opacity: 1, offset: 0.92 },
+        { transform: `translate(${dx}px,${dy + 6}px) scale(.2)`, opacity: 0 },
+      ], { duration: 560, delay: k * 120, easing: 'ease-out' }).then(() => {
+        node.remove();
+        if (!pLive(run)) return;
+        sfx('plop');
+        const sr = stage.getBoundingClientRect();
+        pSparkXY(sr.left + liq.x + dx * 0.15, sr.top + liq.y, { sparkColor: ['#e6fffb', '#43e6c8'], sparkCount: 6, sparkRadius: 22, shape: 'dot', spread: 120, gravity: 1.2, duration: 420, glow: 0.4 });
+      }));
+    }
+    setTimeout(() => { if (pLive(run)) { sfx('boil'); vibe([8, 30, 8, 30, 8]); } }, count * 120 + 200);
+  }
+  const [r] = await Promise.all([req, pwait(run, 1300), Promise.all(drops)]);
+  if (!r.ok) {
+    pfxEnd(run);
+    if (stage) stage.classList.remove('brewing');
+    return toast(r.error, 'bad');
+  }
+  // ② 터뜨림
+  alchLast = { tier: r.tier, prism: r.prism, msg: r.msg, fresh: !run.skip };
+  applyMe(r.me); render(); syncPrismFromMe();
+  paintPrism();
+  alchLast.fresh = false;
+  const st = document.querySelector('.alch-stage'), ly = st && st.querySelector('.pz-layer');
+  if (pLive(run) && st && ly) {
+    const liq = alchPoint(st, 110, 58), sr = st.getBoundingClientRect();
+    const lx = sr.left + liq.x, lyy = sr.top + liq.y;
+    if (r.prism > 0) {
+      const big = r.prism >= ALCH_BIG;
+      sfx(big ? 'guaranteed' : 'pang'); vibe(big ? [30, 40, 90] : 25);
+      pSparkXY(lx, lyy, { sparkColor: big ? PRISM_RAINBOW : TIER_SPARK[3], sparkCount: big ? 22 : 14, sparkRadius: big ? 110 : 76, sparkSize: 12, shape: 'star', ring: true, gravity: 0.3, duration: 760, glow: 1 });
+      pShake(run, el('panel'), big ? 1.6 : 0.7);
+      if (big) pPrismBurst(st, { size: Math.min(440, window.innerWidth * 0.98), intensity: 2.6 });
+      // 결정이 분수처럼 솟았다가 흩어져 떨어진다(개수 = 받은 프리즘, 최대 16)
+      const n = Math.min(16, Math.max(3, r.prism));
+      for (let k = 0; k < n; k++) {
+        const node = pPiece(ly, PA ? PA.icon({ kind: 'prism' }) : '💎', 'alch-crystal', liq.x, liq.y, 18 + Math.random() * 10);
+        const dx = (Math.random() - 0.5) * Math.min(300, sr.width * 0.9), up = 60 + Math.random() * 70, fall = sr.height - liq.y + 20;
+        panim(run, node, [
+          { transform: 'translate(0,0) scale(.3) rotate(0)', opacity: 0 },
+          { transform: `translate(${dx * 0.5}px,${-up}px) scale(1) rotate(${dx > 0 ? 120 : -120}deg)`, opacity: 1, offset: 0.4, easing: 'ease-in' },
+          { transform: `translate(${dx}px,${fall}px) scale(.8) rotate(${dx > 0 ? 300 : -300}deg)`, opacity: 0 },
+        ], { duration: 1100 + Math.random() * 300, delay: k * 35, easing: 'ease-out' }).then(() => node.remove());
+      }
+      const nEl = st.querySelector('.alch-n');
+      if (nEl && window.Fx && window.Fx.counter && !pReduced()) {   // +0 → +N 숫자가 굴러 올라간다(Counter)
+        try {
+          nEl.textContent = '';
+          const plus = document.createElement('span'); plus.textContent = '+';
+          const num = document.createElement('span');
+          nEl.append(plus, num);
+          const ctr = window.Fx.counter(num, { duration: 0.9, bounce: 0.25, stagger: 0.06 });
+          ctr.set(0); setTimeout(() => ctr.set(r.prism), 180);
+        } catch (_) { nEl.textContent = '+' + r.prism; }
+      }
+    } else {
+      // 꽝: 연기가 펑 피어오르고 재가 떨어진다
+      sfx('poof'); vibe([12, 40, 12]);
+      pSparkXY(lx, lyy - 6, { sparkColor: ['#8a8580', '#c9c2ba', '#5b5651'], sparkCount: 12, sparkRadius: 54, shape: 'line', spread: 200, gravity: 1.4, duration: 620, glow: 0 });
+      for (let k = 0; k < 7; k++) {
+        const node = pPiece(ly, '', 'alch-smoke', liq.x + (k - 3) * 12, liq.y, 34 + Math.random() * 20);
+        panim(run, node, [
+          { transform: 'translate(0,0) scale(.3)', opacity: 0 },
+          { transform: `translate(${(k - 3) * 8}px,-30px) scale(1)`, opacity: 0.85, offset: 0.3 },
+          { transform: `translate(${(k - 3) * 16}px,-90px) scale(1.8)`, opacity: 0 },
+        ], { duration: 1200, delay: k * 50, easing: 'ease-out' }).then(() => node.remove());
+      }
+    }
+    await pwait(run, 1100);
+  }
+  if (run.skip) paintPrism();
+  pfxEnd(run);
+}
+
+/* ================= 🧸 캡슐 ================= */
 function capHTML(d) {
   const price = d.info.capsule.price, n10 = d.info.capsule.batchMax;
-  let h = `<div class="cap-machine">${capsuleMachineSVG()}<div class="cap-side">
+  const res = capLast ? capLast.results : [];
+  let h = `<div class="pz-stage cap-stage"><div class="cap-machine-wrap">${PA ? PA.machine() : '🧸'}</div><div class="cap-side">
       <div class="cap-price">한 번 <b>${price.toLocaleString()}G</b><br><small>골드만 있으면 몇 번이든</small></div>
       <button class="btn primary" data-cap="1" ${d.gold < price ? 'disabled' : ''}>🧸 1회</button>
       <button class="btn primary" data-cap="${n10}" ${d.gold < price ? 'disabled' : ''}>🧸 ${n10}회 <small>${(price * n10).toLocaleString()}G</small></button></div></div>`;
-  if (capLast) {
-    h += '<div class="cap-results">' + capLast.results.map(r => `<span class="cap-ball k-${r.kind}${r.kind === 'prism' && r.n >= 10 ? ' big' : ''}">${esc(r.text)}</span>`).join('') + '</div>';
-    h += `<div class="prism-result ${capLast.prism > 0 ? 'ok' : ''}">${esc(capLast.msg)}</div>`;
-  }
+  h += `<div class="cap-tray${res.length ? '' : ' empty'} n${res.length > 1 ? 'm' : res.length}">${res.map(capSlotHTML).join('')}</div>`;
+  if (capLast) h += `<div class="prism-result${capLast.prism > 0 ? ' ok' : ''}">${esc(capLast.msg)}</div>`;
   return h + oddsTable('캡슐 하나의 확률', d.info.capsule.table);
 }
+function capSlotHTML(r, k) {
+  const t = tierOf(r);
+  return `<div class="cap-slot t${t}" data-k="${k}"><span class="cap-prize" title="${esc(r.text)}">${prizeIcon(r)}<b>${esc(capLast && capLast.results.length === 1 ? rewardLabel(r) : shortReward(r))}</b></span></div>`;
+}
+async function doCapsule(times) {
+  const d = prismData; if (!d) return;
+  const run = pfxStart('cap');
+  const stage = document.querySelector('.cap-stage');
+  const svg = stage && stage.querySelector('.pmachine');
+  // ① 기대감: 손잡이가 드르륵 돌고 기계가 흔들리며 캡슐이 섞인다
+  if (svg) { svg.classList.remove('cranking', 'cranking10'); void svg.getBoundingClientRect(); svg.classList.add(times > 1 ? 'cranking10' : 'cranking'); }
+  sfx('crank'); vibe([6, 60, 6, 60, 6]);
+  const crankMore = setTimeout(() => { if (pLive(run)) sfx('crank'); }, 380);
+  const [r] = await Promise.all([api('capsule', 'POST', { times }), pwait(run, times > 1 ? 900 : 760)]);
+  clearTimeout(crankMore);
+  if (!r.ok) {
+    pfxEnd(run);
+    if (svg) svg.classList.remove('cranking', 'cranking10');
+    return toast(r.error, 'bad');
+  }
+  capLast = { results: r.results, prism: r.prism, gold: r.gold, msg: r.msg };
+  const finish = () => { applyMe(r.me); render(); syncPrismFromMe(); paintPrism(); pfxEnd(run); };
+  const tray = document.querySelector('.cap-tray');
+  if (!pLive(run) || !tray || !PA) return finish();
+  // 받침대에 칸을 만들고, 칸마다 캡슐이 배출구에서 튀어나와 굴러 들어온다
+  tray.className = 'cap-tray n' + (r.results.length > 1 ? 'm' : '1') + ' running';
+  tray.innerHTML = r.results.map((x, k) => capSlotHTML(x, k).replace('class="cap-slot', 'class="cap-slot pending')).join('');
+  const slots = [...tray.querySelectorAll('.cap-slot')];
+  const chute = stage.querySelector('.pm-chute');
+  const flap = stage.querySelector('.pm-flap');
+  const from = chute ? pCenter(chute) : null;
+  const gap = r.results.length > 1 ? 75 : 0;
+  const landed = slots.map((slot, k) => {
+    const t = tierOf(r.results[k]);
+    const cap = document.createElement('span');
+    cap.className = 'cap-ball-wrap';
+    cap.innerHTML = PA.capsule(t);
+    slot.appendChild(cap);
+    const to = pCenter(slot);
+    const dx = from ? from.x - to.x : 0, dy = from ? from.y - to.y : -60;
+    return panim(run, cap, [
+      { transform: `translate(${dx}px,${dy}px) scale(.5)`, opacity: 0 },
+      { transform: `translate(${dx}px,${dy + 6}px) scale(.8)`, opacity: 1, offset: 0.12 },
+      { transform: `translate(${dx * 0.4}px,${Math.min(dy, 0) * 0.3 - 34}px) scale(1) rotate(${dx > 0 ? -200 : 200}deg)`, offset: 0.5, easing: 'ease-in' },
+      { transform: 'translate(0,0) scale(1.18,.8) rotate(360deg)', offset: 0.78, easing: 'ease-out' },
+      { transform: 'translate(0,-9px) scale(.94,1.06) rotate(360deg)', offset: 0.9 },
+      { transform: 'translate(0,0) scale(1) rotate(360deg)' },
+    ], { duration: 580, delay: k * gap, easing: 'linear', fill: 'both' }).then(() => { if (pLive(run)) { sfx('drop'); slot.classList.remove('pending'); } });
+  });
+  if (flap) panim(run, flap, [{ transform: 'scaleY(1)' }, { transform: 'scaleY(.15)', offset: 0.2 }, { transform: 'scaleY(.15)', offset: 0.85 }, { transform: 'scaleY(1)' }], { duration: 400 + gap * slots.length, fill: 'none' });
+  await Promise.all(landed);
+  // ② 하나씩 뿅! 좋은 캡슐일수록 오래 꿈틀대다 크게 터진다
+  const order = slots.map((s, k) => k);
+  for (const k of order) {
+    if (!pLive(run)) break;
+    const slot = slots[k], t = tierOf(r.results[k]);
+    slot.classList.add('wiggle');
+    await pwait(run, t >= 4 ? 480 : t >= 3 ? 260 : r.results.length > 1 ? 80 : 260);
+    if (!pLive(run)) break;
+    slot.classList.remove('wiggle');
+    slot.classList.add('popped');
+    const c = pCenter(slot);
+    pSparkXY(c.x, c.y, { sparkColor: TIER_SPARK[t], sparkCount: 6 + t * 3, sparkRadius: 22 + t * 9, sparkSize: 8 + t, shape: t >= 2 ? 'star' : 'dot', ring: t >= 2, gravity: 0.4, duration: 480 + t * 60, glow: t >= 2 ? 1 : 0.4 });
+    sfx(t >= 3 ? 'popbig' : 'pop'); vibe(t >= 3 ? [20, 30, 40] : 10);
+    if (t >= 4) { pPrismBurst(slot, { size: Math.min(380, window.innerWidth * 0.9), intensity: t >= 5 ? 2.8 : 2.1 }); pShake(run, el('panel'), 1.3); }
+    await pwait(run, r.results.length > 1 ? 55 : 380);
+  }
+  await pwait(run, 350);
+  finish();
+}
+
+/* ================= 💎 상점 ================= */
 function pshopHTML(d) {
   return '<p class="hint" style="margin:0 0 10px">💎 프리즘으로만 살 수 있는 물건이에요.</p>' + d.shop.map(it =>
     `<div class="raid-boss"><span class="bemoji">${it.emoji}</span>
       <div class="binfo"><div class="bname">${it.nickPreview ? `<span class="nick-${it.nickPreview}">${esc(it.name)}</span>` : esc(it.name)} ${it.soldOut ? '<span class="shop-lim off">최대</span>' : `<small class="pprice">💎 ${it.price}</small>`}</div>
         ${it.locked ? `<div class="plock">🔒 ${esc(it.lockMsg)} 필요</div>` : ''}<div class="bstat">${esc(it.desc)}</div></div>
       <button class="btn sm primary" data-pbuy="${it.id}" ${it.soldOut || it.locked || d.prism < it.price ? 'disabled' : ''}>구매</button></div>`).join('');
-}
-async function doOpenBox(i) {
-  const r = await api('box-open', 'POST', { pick: i });
-  if (!r.ok) return toast(r.error, 'bad');
-  applyMe(r.me); render(); syncPrismFromMe();
-  boxReveal = { pick: r.pick, boxes: r.boxes, got: r.got };
-  paintPrism();
-  const big = r.got.kind === 'prism' && r.got.n >= 5;
-  sfx(big ? 'guaranteed' : 'pang'); vibe(big ? [20, 40, 60] : 15);
-}
-async function doAlchemy(tier) {
-  const r = await api('alchemy', 'POST', { tier });
-  if (!r.ok) return toast(r.error, 'bad');
-  applyMe(r.me); render(); syncPrismFromMe();
-  alchLast = { prism: r.prism, msg: r.msg };
-  paintPrism();
-  sfx(r.prism > 0 ? 'pang' : 'fail'); vibe(r.prism > 0 ? 20 : [10, 30, 10]);
-}
-async function doCapsule(times) {
-  const r = await api('capsule', 'POST', { times });
-  if (!r.ok) return toast(r.error, 'bad');
-  applyMe(r.me); render(); syncPrismFromMe();
-  capLast = { results: r.results, prism: r.prism, msg: r.msg };
-  paintPrism();
-  sfx(r.prism >= 10 ? 'guaranteed' : 'pang'); vibe(15);
 }
 async function doPrismBuy(item) {
   const r = await api('prism-buy', 'POST', { item });
@@ -822,6 +1110,17 @@ function sfx(name) {
     case 'charge':  tone(180, 0.42, 'sawtooth', 0.11, 900); tone(360, 0.42, 'sine', 0.06, 1400); break; // 슈우웅(상승)
     case 'pang':    tone(880, 0.1, 'triangle', 0.22, 1500); tone(1320, 0.12, 'square', 0.14, null, 0.03); tone(660, 0.18, 'triangle', 0.12, null, 0.05); break; // 팡!
     case 'clink':   [1400, 1000, 1700, 800].forEach((f, i) => tone(f, 0.07, 'square', 0.12, f * 0.7, i * 0.045)); break; // 쨍그랑
+    // 💎 프리즘 탭 연출
+    case 'rattle':  tone(110 + Math.random() * 40, 0.05, 'square', 0.07, 70); break;                       // 상자 덜컹
+    case 'lid':     tone(140, 0.09, 'triangle', 0.2, 60); tone(1200, 0.06, 'square', 0.08, 1800, 0.02); break; // 뚜껑 퍽
+    case 'creak':   tone(320, 0.16, 'sawtooth', 0.05, 180); break;                                        // 나머지 상자 끼익
+    case 'plop':    tone(520 + Math.random() * 200, 0.08, 'sine', 0.16, 160); break;                       // 재료 퐁당
+    case 'boil':    tone(90, 0.5, 'sawtooth', 0.06, 160); tone(240, 0.5, 'sine', 0.05, 520, 0.1); break;   // 부글부글(상승)
+    case 'poof':    tone(260, 0.3, 'sawtooth', 0.14, 50); tone(90, 0.35, 'triangle', 0.12, 40, 0.04); break; // 펑(꽝)
+    case 'crank':   [0, 0.12, 0.24].forEach(d => tone(700, 0.035, 'square', 0.08, 500, d)); break;        // 손잡이 드르륵
+    case 'drop':    tone(480 + Math.random() * 120, 0.05, 'triangle', 0.12, 240); break;                   // 캡슐 톡
+    case 'pop':     tone(900, 0.06, 'sine', 0.2, 1700); tone(1500, 0.05, 'triangle', 0.1, null, 0.03); break; // 뿅
+    case 'popbig':  tone(700, 0.08, 'triangle', 0.22, 1600); [1046, 1318, 1568].forEach((f, i) => tone(f, 0.12, 'triangle', 0.16, null, 0.05 + i * 0.06)); break;
   }
 }
 // 첫 사용자 제스처에서 오디오 unlock (iOS 자동재생 정책)
@@ -2217,14 +2516,16 @@ function doLogout() { stopRaidLoop(); closeEvents(); closeRealtime(); if (sbAuth
 // 버튼 연타 방지: 액션 사이 최소 간격
 const COOLDOWN = 450;
 let busy = false;
-async function act(fn, btn) {
+// opts.quiet: 상단 '로딩 중…' 표시를 띄우지 않는다 — 💎 프리즘 연출처럼 기다리는 동안 화면이 이미 움직이는 동작용
+async function act(fn, btn, opts) {
   if (busy) return;
   busy = true;
+  const quiet = !!(opts && opts.quiet);
   vibe(6); sfx('click');   // 버튼 누름 피드백(진동+효과음)
-  loadStart();
+  if (!quiet) loadStart();
   if (btn) btn.classList.add('acting');   // 클릭 즉시 버튼에 처리중 표시(서버 응답 지연 체감↓)
   try { await fn(); }
-  finally { loadEnd(); if (btn) btn.classList.remove('acting'); setTimeout(() => { busy = false; }, COOLDOWN); }
+  finally { if (!quiet) loadEnd(); if (btn) btn.classList.remove('acting'); setTimeout(() => { busy = false; }, COOLDOWN); }
 }
 el('enhanceBtn').onclick = () => act(doEnhance, el('enhanceBtn'));
 el('huntBtn').onclick = openHunt;   // 사냥터(연타 처치) 모달 열기
@@ -2234,6 +2535,7 @@ el('attendBtn').onclick = () => act(doAttend, el('attendBtn'));
 el('hNick').onclick = () => { if (me) openProfile(me.nick); };
 
 function selectTab(tab) {
+  if (pfx && tab !== 'prism') pskip();   // 💎 연출 도중 다른 탭으로 가면 바로 끝낸다(연출이 다른 버튼을 붙잡지 않게)
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   currentTab = tab;
   if (MORE_TABS.includes(tab)) moreTab = tab;
@@ -2256,7 +2558,7 @@ function setView(v) {
   document.querySelectorAll('.bb-btn').forEach(b => b.classList.toggle('on', b.dataset.view === v));
   const tab = v === 'more' ? moreTab : VIEW_TAB[v];
   if (tab) { if (tab !== currentTab || v === 'more') selectTab(tab); }
-  else { stopRaidLoop(); currentTab = 'forge'; updateAds(); }
+  else { stopRaidLoop(); if (pfx) pskip(); currentTab = 'forge'; updateAds(); }
   window.scrollTo(0, 0);
 }
 function viewOfTab(t) { return t === 'raid' ? 'raid' : t === 'prism' ? 'prism' : t === 'fight' ? 'act' : MORE_TABS.includes(t) ? 'more' : 'forge'; }
@@ -2269,6 +2571,8 @@ oneCol.addEventListener('change', () => {
 });
 
 el('panel').addEventListener('click', e => {
+  // 💎 프리즘 연출 중 화면을 누르면 건너뛴다(서브탭을 누른 경우엔 건너뛰고 그 탭으로 이동)
+  if (pfx) { pskip(); if (!e.target.closest('[data-psub]')) return; }
   const f = e.target.closest('[data-fight]'); if (f) return act(() => doFight(f.dataset.fight), f);
   const r = e.target.closest('[data-raid]'); if (r) return act(() => doRaid(r.dataset.raid), r);
   const j = e.target.closest('[data-join]'); if (j) return act(() => doPartyJoin(j.dataset.join), j);
@@ -2284,10 +2588,12 @@ el('panel').addEventListener('click', e => {
   const dl = e.target.closest('[data-dun-leave]'); if (dl) return act(doDunLeave, dl);
   const dw = e.target.closest('[data-dswap]'); if (dw) return act(() => doDunSwap(dw.dataset.dswap), dw);
   const dk = e.target.closest('[data-dskill]'); if (dk) return act(() => doDunSkill(dk.dataset.dskill), dk);
-  const pk = e.target.closest('[data-pick]'); if (pk) return act(() => doOpenBox(+pk.dataset.pick), pk);
-  if (e.target.closest('[data-box-again]')) { boxReveal = null; return paintPrism(); }
-  const al = e.target.closest('[data-alch]'); if (al) return act(() => doAlchemy(al.dataset.alch), al);
-  const ca = e.target.closest('[data-cap]'); if (ca) return act(() => doCapsule(+ca.dataset.cap), ca);
+  const pk = e.target.closest('[data-pick]'); if (pk) return act(() => doOpenBox(+pk.dataset.pick), pk, { quiet: true });
+  if (e.target.closest('[data-box-again]')) { boxReveal = null; boxEnter = true; return paintPrism(); }
+  const at = e.target.closest('[data-alch-tier]');
+  if (at) { alchTier = at.dataset.alchTier; try { localStorage.setItem('alchTier', alchTier); } catch (_) { /* 무시 */ } sfx('click'); return paintPrism(); }
+  const al = e.target.closest('[data-alch]'); if (al) return act(() => doAlchemy(al.dataset.alch), al, { quiet: true });
+  const ca = e.target.closest('[data-cap]'); if (ca) return act(() => doCapsule(+ca.dataset.cap), ca, { quiet: true });
   const pb = e.target.closest('[data-pbuy]'); if (pb) return act(() => doPrismBuy(pb.dataset.pbuy), pb);
   const cp = e.target.closest('#createPartyBtn'); if (cp) return act(doPartyCreate, cp);
   const lp = e.target.closest('#leavePartyBtn'); if (lp) return act(doPartyLeave, lp);

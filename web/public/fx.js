@@ -9,6 +9,8 @@
  *   TextAnimations/GradientText  → Fx.gradientText    (전설·초월 무기 이름)
  *   TextAnimations/ShinyText     → Fx.shinyText       (로그인 타이틀)
  *   Components/Counter           → Fx.counter         (골드 숫자 굴림)
+ *   Backgrounds/PrismaticBurst   → Fx.prismBurst      (💎 프리즘 대박 순간 한 번 터지는 분광 폭발)
+ *   Animations/GlareHover        → Fx.glare           (상자·보상 위를 훑는 광택)
  *
  * 이식 원칙: 알고리즘·셰이더·물리 상수는 원본 그대로 두고, React 훅(useRef/useEffect/useState)만
  * 클로저와 일반 객체로 바꿨다. 게임에 쓰지 않는 기능(Particles 연결선·라이트모드, Counter 모션블러,
@@ -2388,5 +2390,595 @@ void main() {
     return { set, destroy() { cancelAnimationFrame(e.raf); root.textContent = ''; root.classList.remove('counter'); } };
   }
 
-  window.Fx = { embers, clickSpark, starBorder, electricBorder, gradientText, shinyText, counter, reducedMotion };
+  /* ================ Backgrounds/PrismaticBurst → Fx.prismBurst ================ */
+  // 원본은 화면을 채우는 배경(상시 렌더)이다. 여기서는 💎 프리즘 보상이 터지는 '순간에만' 쓰는 오버레이로 바꿨다:
+  //  화면 고정 레이어에 정사각 캔버스 하나를 두고, play(x, y) 때 그 자리로 옮겨 원본의 intro(빛 앞머리가 바깥으로 퍼짐)와
+  //  클릭 펄스를 한 번 재생한 뒤 서서히 사라지고 렌더 루프를 멈춘다. WebGL 컨텍스트는 하나만 만들어 계속 재사용한다.
+  //  BURST 셰이더·intro·펄스·자동 해상도 조절(governor)은 원본 그대로. 블룸·라이트모드·마우스 반응·hover 회전은 덜어냈다.
+  const PB_VERTEX = `#version 300 es
+in vec2 aPosition;
+void main() {
+  gl_Position = vec4(aPosition, 0.0, 1.0);
+}`;
+  const PB_BURST = `#version 300 es
+precision highp float;
+precision highp int;
+
+uniform vec2 uResolution;
+uniform float uTime;
+uniform float uPhase;
+uniform float uIntensity;
+uniform mat3 uOrient;
+uniform int uColorCount;
+uniform float uDistort;
+uniform vec2 uOffset;
+uniform sampler2D uGradient;
+uniform float uNoiseAmount;
+uniform int uRayCount;
+uniform float uZoom;
+uniform float uRayWidth;
+uniform float uTwist;
+uniform float uFlow;
+uniform float uCenterFade;
+uniform vec4 uPointer;
+uniform vec4 uPulses[4];
+uniform vec3 uIntro;
+uniform float uEncode;
+out vec4 outColor;
+
+float hash21(vec2 p) {
+  p = floor(p);
+  float f = 52.9829189 * fract(dot(p, vec2(0.065, 0.005)));
+  return fract(f);
+}
+
+mat2 rot30() {
+  return mat2(0.8, -0.5, 0.5, 0.8);
+}
+
+float layeredNoise(vec2 fragPx) {
+  vec2 p = mod(fragPx + vec2(uTime * 30.0, -uTime * 21.0), 1024.0);
+  vec2 q = rot30() * p;
+  float n = 0.0;
+  n += 0.40 * hash21(q);
+  n += 0.25 * hash21(q * 2.0 + 17.0);
+  n += 0.20 * hash21(q * 4.0 + 47.0);
+  n += 0.10 * hash21(q * 8.0 + 113.0);
+  n += 0.05 * hash21(q * 16.0 + 191.0);
+  return n;
+}
+
+float edgeFade(vec2 frag, vec2 res, vec2 offset) {
+  vec2 toC = frag - 0.5 * res - offset;
+  float r = length(toC) / (0.5 * min(res.x, res.y) * uCenterFade);
+  float x = clamp(r, 0.0, 1.0);
+  float q = x * x * x * (x * (x * 6.0 - 15.0) + 10.0);
+  float s = q * 0.5;
+  s = pow(s, 1.5);
+  float tail = 1.0 - pow(1.0 - s, 2.0);
+  s = mix(s, tail, 0.2);
+  float dn = (layeredNoise(frag * 0.15) - 0.5) * 0.0015 * s;
+  return clamp(s + dn, 0.0, 1.0);
+}
+
+vec2 rot2(vec2 v, float a) {
+  float s = sin(a);
+  float c = cos(a);
+  return mat2(c, -s, s, c) * v;
+}
+
+float bendAngle(vec3 q, float t) {
+  return 0.8 * sin(q.x * 0.55 + t * 0.6) + 0.7 * sin(q.y * 0.50 - t * 0.5) + 0.6 * sin(q.z * 0.60 + t * 0.7);
+}
+
+void main() {
+  vec2 frag = gl_FragCoord.xy;
+  float t = uPhase;
+  float jitterAmp = 0.1 * clamp(uNoiseAmount, 0.0, 1.0);
+  vec2 centered = 2.0 * (frag - uOffset) - uResolution;
+  vec3 dir = normalize(vec3(centered, uResolution.y * max(uZoom, 1e-3)));
+  float marchT = 0.0;
+  vec3 col = vec3(0.0);
+  float n = layeredNoise(frag);
+  float amp = clamp(uDistort, 0.0, 50.0) * 0.15;
+  float edge = 0.5 - 0.35 * (uRayWidth - 1.0);
+  mat2 twist = mat2(1.0);
+  if (uTwist != 0.0) {
+    float a = uTwist * length(centered) / uResolution.y;
+    float c = cos(a);
+    float s = sin(a);
+    twist = mat2(c, s, -s, c);
+  }
+
+  for (int i = 0; i < 44; ++i) {
+    vec3 P = marchT * dir;
+    P.z -= 2.0;
+    float rad = length(P);
+    vec3 Pl = P * (10.0 / max(rad, 1e-6));
+    if (uTwist != 0.0) Pl.xy = twist * Pl.xy;
+    Pl = uOrient * Pl;
+
+    float stepLen = min(rad - 0.3, n * jitterAmp) + 0.1;
+
+    vec3 Pb = Pl;
+    if (amp > 0.0) {
+      float grow = smoothstep(0.35, 3.0, marchT);
+      float a1 = amp * grow * bendAngle(Pl * 0.6, t);
+      float a2 = 0.5 * amp * grow * bendAngle(Pl.zyx * 0.5 + 3.1, t * 0.9);
+      Pb.xz = rot2(Pb.xz, a1);
+      Pb.xy = rot2(Pb.xy, a2);
+    }
+
+    float rayPattern = smoothstep(
+      edge,
+      edge + 0.2,
+      sin(Pb.x + cos(Pb.y) * cos(Pb.z)) * sin(Pb.z + sin(Pb.y) * cos(Pb.x + t))
+    );
+
+    if (uRayCount > 0) {
+      float ang = atan(Pb.y, Pb.x);
+      float comb = 0.5 + 0.5 * cos(float(uRayCount) * ang);
+      comb = pow(comb, 3.0);
+      rayPattern *= smoothstep(0.15, 0.95, comb);
+    }
+
+    float depth = marchT - uFlow;
+    vec3 spectral;
+    if (uColorCount > 0) {
+      float saw = fract(depth * 0.25);
+      float tRay = saw * saw * (3.0 - 2.0 * saw);
+      spectral = 2.0 * texture(uGradient, vec2(clamp(tRay, 0.0, 1.0), 0.5)).rgb;
+    } else {
+      spectral = 1.0 + cos(depth * 3.0 + vec3(0.0, 1.0, 2.0));
+    }
+
+    col += (0.05 / (0.4 + stepLen)) * smoothstep(5.0, 0.0, rad) * spectral * rayPattern;
+    marchT += stepLen;
+  }
+
+  col *= edgeFade(frag, uResolution, uOffset);
+  col *= uIntensity;
+
+  float unit = 0.5 * min(uResolution.x, uResolution.y);
+  float radius = length(frag - 0.5 * uResolution - uOffset) / unit;
+  float lift = 1.0;
+  for (int k = 0; k < 4; k++) {
+    vec4 pulse = uPulses[k];
+    if (pulse.y <= 0.0) continue;
+    float d = (radius - pulse.x) / pulse.z;
+    lift += pulse.y * exp(-d * d) + pulse.w;
+  }
+  if (uPointer.z > 0.0) {
+    vec2 m = (frag - uPointer.xy) / unit;
+    lift += uPointer.z * exp(-dot(m, m) / max(uPointer.w * uPointer.w, 1e-4));
+  }
+  if (uIntro.z > 0.0) {
+    vec2 toC = frag - 0.5 * uResolution - uOffset;
+    float ang = atan(toC.y, toC.x);
+    float streak = 0.5 + 0.22 * sin(ang * 5.0 + 1.3) + 0.16 * sin(ang * 13.0 + 4.1) + 0.12 * sin(ang * 29.0 + 2.2);
+    float front = uIntro.x * (0.7 + 0.3 * streak);
+    float d = (radius - front) / 0.2;
+    lift += uIntro.y * exp(-d * d);
+    lift *= smoothstep(front, front - 0.5, radius);
+  }
+
+  outColor = vec4(col * lift * uEncode, 1.0);
+}`;
+  // 원본 COMPOSITE 에서 블룸·라이트모드를 덜어낸 판(바이큐빅 업스케일·가장자리 페이드는 그대로)
+  const PB_COMPOSITE = `#version 300 es
+precision highp float;
+uniform sampler2D uScene;
+uniform vec2 uSceneSize;
+uniform vec2 uView;
+uniform float uExact;
+uniform float uDecode;
+uniform float uFade;
+out vec4 outColor;
+
+vec3 tap(vec2 uv) {
+  return textureLod(uScene, uv, 0.0).rgb;
+}
+
+vec3 bicubic(vec2 uv) {
+  vec2 position = uv * uSceneSize;
+  vec2 center = floor(position - 0.5) + 0.5;
+  vec2 f = position - center;
+  vec2 w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
+  vec2 w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+  vec2 w2 = f * (0.5 + f * (2.0 - 1.5 * f));
+  vec2 w3 = f * f * (-0.5 + 0.5 * f);
+  vec2 w12 = w1 + w2;
+  vec2 t0 = (center - 1.0) / uSceneSize;
+  vec2 t3 = (center + 2.0) / uSceneSize;
+  vec2 t12 = (center + w2 / w12) / uSceneSize;
+  vec3 result = tap(vec2(t0.x, t0.y)) * w0.x * w0.y;
+  result += tap(vec2(t12.x, t0.y)) * w12.x * w0.y;
+  result += tap(vec2(t3.x, t0.y)) * w3.x * w0.y;
+  result += tap(vec2(t0.x, t12.y)) * w0.x * w12.y;
+  result += tap(vec2(t12.x, t12.y)) * w12.x * w12.y;
+  result += tap(vec2(t3.x, t12.y)) * w3.x * w12.y;
+  result += tap(vec2(t0.x, t3.y)) * w0.x * w3.y;
+  result += tap(vec2(t12.x, t3.y)) * w12.x * w3.y;
+  result += tap(vec2(t3.x, t3.y)) * w3.x * w3.y;
+  return max(result, 0.0);
+}
+
+float smootherstep01(float t) {
+  t = clamp(t, 0.0, 1.0);
+  return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+}
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / uView;
+  vec3 col = uExact > 0.5 ? texelFetch(uScene, ivec2(gl_FragCoord.xy), 0).rgb : bicubic(uv);
+  col = clamp(col * uDecode, 0.0, 1.0);
+  float mask = 1.0;
+  float edge = uFade * 0.5;
+  if (edge > 0.0) {
+    mask *= smootherstep01(uv.x / edge) * smootherstep01((1.0 - uv.x) / edge);
+    mask *= smootherstep01(uv.y / edge) * smootherstep01((1.0 - uv.y) / edge);
+  }
+  col *= mask;
+  outColor = vec4(col, max(col.r, max(col.g, col.b)));
+}`;
+  const PB_MIN_SCALE = 0.2;
+  const PB_PULSE_LIFE = 1.5;
+  const pbRot = {
+    x: a => { const c = Math.cos(a), s = Math.sin(a); return [1, 0, 0, 0, c, -s, 0, s, c]; },
+    y: a => { const c = Math.cos(a), s = Math.sin(a); return [c, 0, s, 0, 1, 0, -s, 0, c]; },
+    z: a => { const c = Math.cos(a), s = Math.sin(a); return [c, -s, 0, s, c, 0, 0, 0, 1]; },
+  };
+  const pbMultiply = (a, b) => {
+    const out = new Float32Array(9);
+    for (let col = 0; col < 3; col++) {
+      for (let row = 0; row < 3; row++) {
+        out[col * 3 + row] = a[row] * b[col * 3] + a[3 + row] * b[col * 3 + 1] + a[6 + row] * b[col * 3 + 2];
+      }
+    }
+    return out;
+  };
+
+  function prismBurst(defaults) {
+    const base = Object.assign({
+      colors: [], intensity: 2, speed: 0.5, distort: 0, rayCount: 0, rayWidth: 1, zoom: 1, twist: 0, flow: 0,
+      centerFade: 1, grain: 0.8, fade: 0.6, quality: 0.5, size: 340, introSeconds: 1.2, hold: 0.35, out: 0.55,
+    }, defaults);
+    const off = { play: noop, destroy: noop };
+    if (reducedMotion()) return off;
+    const layer = document.createElement('div');
+    layer.className = 'fx-prism';
+    layer.setAttribute('aria-hidden', 'true');
+    const canvas = document.createElement('canvas');
+    canvas.className = 'fx-prism__canvas';
+    layer.appendChild(canvas);
+    const gl = canvas.getContext('webgl2', { alpha: true, premultipliedAlpha: true, antialias: false, depth: false, stencil: false, powerPreference: 'high-performance' });
+    if (!gl) return off;
+    const floatTargets = !!gl.getExtension('EXT_color_buffer_float');
+    const burstProgram = linkProgram(gl, PB_VERTEX, PB_BURST);
+    const compositeProgram = linkProgram(gl, PB_VERTEX, PB_COMPOSITE);
+    if (!burstProgram || !compositeProgram) return off;
+    document.body.appendChild(layer);
+
+    const buffer = gl.createBuffer();
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    for (const p of [burstProgram, compositeProgram]) {
+      const loc = gl.getAttribLocation(p.program, 'aPosition');
+      if (loc >= 0) { gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0); }
+    }
+    const format = floatTargets ? gl.RGBA16F : gl.RGBA8;
+    const encode = floatTargets ? 1 : 0.25;
+    const scene = { texture: null, framebuffer: gl.createFramebuffer(), width: 0, height: 0 };
+    const allocate = (target, width, height) => {
+      if (target.texture && target.width === width && target.height === height) return;
+      if (target.texture) gl.deleteTexture(target.texture);
+      target.texture = gl.createTexture();
+      target.width = width;
+      target.height = height;
+      gl.bindTexture(gl.TEXTURE_2D, target.texture);
+      gl.texStorage2D(gl.TEXTURE_2D, 1, format, width, height);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, target.framebuffer);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, target.texture, 0);
+    };
+    const gradient = gl.createTexture();
+    let gradientKey = null;
+    const uploadGradient = list => {
+      const key = list.join('|');
+      if (key === gradientKey) return;
+      gradientKey = key;
+      const count = Math.max(1, list.length);
+      const data = new Uint8Array(count * 4).fill(255);
+      list.forEach((value, index) => data.set(toRgb255(value), index * 4));
+      gl.bindTexture(gl.TEXTURE_2D, gradient);
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, count, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    };
+
+    let s = Object.assign({}, base);
+    const state = { time: 0, phase: 0, flow: 0, kick: 0, intro: 1, governor: 1, slow: 0, quick: 0, age: 0, live: false };
+    const pulses = [];
+    const pulseData = new Float32Array(16);
+    let raf = 0, last = 0, hideTimer = 0;
+
+    const render = () => {
+      const width = canvas.width, height = canvas.height;
+      const scale = Math.max(PB_MIN_SCALE, clamp(s.quality, PB_MIN_SCALE, 1) * state.governor);
+      const sceneWidth = Math.max(1, Math.round(width * scale));
+      const sceneHeight = Math.max(1, Math.round(height * scale));
+      const exact = sceneWidth === width && sceneHeight === height;
+      gl.bindVertexArray(vao);
+      allocate(scene, sceneWidth, sceneHeight);
+      uploadGradient(s.colors);
+      const t = state.phase;
+      const orient = pbMultiply(pbMultiply(pbRot.z(t * 0.17), pbRot.y(t * 0.21)), pbRot.x(t * 0.31));   // 원본 rotate3d
+      pulseData.fill(0);
+      pulses.forEach((pulse, index) => {
+        const life = pulse.age / PB_PULSE_LIFE;
+        pulseData.set([pulse.age * 1.7, 1.6 * Math.pow(1 - life, 1.6), 0.2 + pulse.age * 0.16, 0.35 * Math.exp(-pulse.age * 7)], index * 4);
+      });
+      const unit = 0.5 * Math.min(sceneWidth, sceneHeight);
+      const reach = Math.hypot(sceneWidth * 0.5, sceneHeight * 0.5) / Math.max(unit, 1);
+      const rise = 1 - Math.pow(1 - state.intro, 3);
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, scene.framebuffer);
+      gl.viewport(0, 0, sceneWidth, sceneHeight);
+      gl.useProgram(burstProgram.program);
+      const b = burstProgram.uniforms;
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, gradient);
+      gl.uniform1i(b.uGradient, 0);
+      gl.uniform2f(b.uResolution, sceneWidth, sceneHeight);
+      gl.uniform1f(b.uTime, state.time);
+      gl.uniform1f(b.uPhase, t);
+      gl.uniform1f(b.uIntensity, s.intensity);
+      gl.uniformMatrix3fv(b.uOrient, false, orient);
+      gl.uniform1i(b.uColorCount, s.colors.length);
+      gl.uniform1f(b.uDistort, s.distort);
+      gl.uniform2f(b.uOffset, 0, 0);
+      gl.uniform1f(b.uNoiseAmount, clamp(s.grain, 0.3, 1));
+      gl.uniform1i(b.uRayCount, Math.max(0, Math.floor(s.rayCount)));
+      gl.uniform1f(b.uZoom, Math.max(0.05, s.zoom));
+      gl.uniform1f(b.uRayWidth, clamp(s.rayWidth, 0.2, 2.5));
+      gl.uniform1f(b.uTwist, s.twist);
+      gl.uniform1f(b.uFlow, state.flow);
+      gl.uniform1f(b.uCenterFade, clamp(s.centerFade, 0.5, 3) * Math.max(1, s.zoom));
+      gl.uniform4f(b.uPointer, 0, 0, 0, 0.45);
+      gl.uniform4fv(b.uPulses, pulseData);
+      gl.uniform3f(b.uIntro, (rise * (reach + 0.6)) / 0.7, 1.6 * (1 - state.intro), state.intro < 1 ? 1 : 0);
+      gl.uniform1f(b.uEncode, encode);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, width, height);
+      gl.useProgram(compositeProgram.program);
+      const c = compositeProgram.uniforms;
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, scene.texture);
+      gl.uniform1i(c.uScene, 0);
+      gl.uniform2f(c.uSceneSize, sceneWidth, sceneHeight);
+      gl.uniform2f(c.uView, width, height);
+      gl.uniform1f(c.uExact, exact ? 1 : 0);
+      gl.uniform1f(c.uDecode, 1 / encode);
+      gl.uniform1f(c.uFade, clamp(s.fade, 0, 1));
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.bindTexture(gl.TEXTURE_2D, null);
+    };
+    const tune = interval => {   // 원본 governor: 프레임이 밀리면 내부 해상도를 낮춘다
+      if (interval > 1 / 40) { state.slow += 1; state.quick = 0; }
+      else if (interval < 1 / 55) { state.quick += 1; state.slow = 0; }
+      if (state.slow > 20) { state.governor = Math.max(0.5, state.governor * 0.85); state.slow = 0; }
+      else if (state.quick > 180 && state.governor < 1) { state.governor = Math.min(1, state.governor * 1.1); state.quick = 0; }
+    };
+    const frame = now => {
+      raf = 0;
+      if (!state.live || document.hidden) return;
+      const dt = last ? Math.min(0.05, (now - last) / 1000) : 1 / 60;
+      if (last) tune((now - last) / 1000);
+      last = now;
+      state.age += dt;
+      if (state.intro < 1) state.intro = Math.min(1, state.intro + dt / Math.max(0.2, s.introSeconds));
+      const rush = 3 * Math.pow(1 - state.intro, 2);
+      state.time += dt;
+      state.phase += dt * s.speed * (1 + rush) + state.kick * dt;
+      state.flow += dt * s.flow * 1.2;
+      state.kick *= Math.exp(-dt * 3.5);
+      if (state.kick < 1e-3) state.kick = 0;
+      for (let i = pulses.length - 1; i >= 0; i--) {
+        pulses[i].age += dt;
+        if (pulses[i].age > PB_PULSE_LIFE) pulses.splice(i, 1);
+      }
+      render();
+      if (state.age < s.introSeconds + s.hold + s.out + 0.1) raf = requestAnimationFrame(frame);
+      else stop();
+    };
+    const stop = () => {
+      state.live = false;
+      cancelAnimationFrame(raf); raf = 0; last = 0;
+      layer.classList.remove('on', 'out');
+    };
+    return {
+      // (x, y) = 화면 좌표(중심). overrides 로 색·크기·세기 등을 이번 한 번만 바꾼다.
+      play(x, y, overrides) {
+        s = Object.assign({}, base, overrides);
+        const size = Math.max(40, s.size);
+        const ratio = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.round(size * ratio);
+        canvas.height = Math.round(size * ratio);
+        Object.assign(layer.style, { left: `${x - size / 2}px`, top: `${y - size / 2}px`, width: `${size}px`, height: `${size}px` });
+        Object.assign(state, { time: 0, phase: Math.random() * 10, flow: 0, kick: 2.4, intro: 0, age: 0, live: true });
+        pulses.length = 0;
+        pulses.push({ age: 0 });
+        clearTimeout(hideTimer);
+        layer.style.setProperty('--pb-out', `${s.out}s`);
+        layer.classList.remove('out');
+        layer.classList.add('on');
+        hideTimer = setTimeout(() => layer.classList.add('out'), (s.introSeconds + s.hold) * 1000);
+        if (!raf) { last = 0; raf = requestAnimationFrame(frame); }
+      },
+      // 셰이더 컴파일·첫 그리기를 미리 해 둔다(첫 대박 순간에 멈칫하지 않게). 화면엔 아무것도 안 보인다
+      warm() {
+        if (state.live) return;
+        canvas.width = 8; canvas.height = 8;
+        state.intro = 1;
+        try { render(); } catch (e) { /* 무시 */ }
+      },
+      destroy() {
+        stop();
+        clearTimeout(hideTimer);
+        if (scene.texture) gl.deleteTexture(scene.texture);
+        gl.deleteFramebuffer(scene.framebuffer);
+        gl.deleteTexture(gradient);
+        gl.deleteProgram(burstProgram.program);
+        gl.deleteProgram(compositeProgram.program);
+        gl.deleteBuffer(buffer);
+        gl.deleteVertexArray(vao);
+        if (!gl.isContextLost()) { const lose = gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext(); }
+        layer.remove();
+      },
+    };
+  }
+
+  /* ===================== Animations/GlareHover → Fx.glare ===================== */
+  // 요소 위를 비스듬히 훑고 지나가는 광택 띠. mode: 'hover'(올리면 훑음) · 'loop'(interval 초마다 저절로) · 'click' · 'manual'(sweep() 으로만).
+  // 원본의 광택 프로필(streak·twin·sheen)·가장자리 반짝임(rim)·이징은 그대로. 'follow'(포인터 추적) 모드는 덜어냈다.
+  const smootherstep = t => t * t * t * (t * (t * 6 - 15) + 10);
+  const ghBump = (t, center, half) => {
+    const distance = Math.abs(t - center);
+    return distance >= half ? 0 : smootherstep(1 - distance / half);
+  };
+  const GH_PROFILES = {
+    streak: (t, softness) => ghBump(t, 0.5, 0.06 + 0.16 * softness) + 0.32 * ghBump(t, 0.5, 0.5),
+    twin: (t, softness) => ghBump(t, 0.36, 0.08 + 0.18 * softness) + 0.85 * ghBump(t, 0.7, 0.03 + 0.06 * softness) + 0.26 * ghBump(t, 0.5, 0.5),
+    sheen: (t, softness) => 0.55 * ghBump(t, 0.5, 0.25 + 0.25 * softness) + 0.3 * ghBump(t, 0.5, 0.5),
+  };
+  const ghGradient = (color, opacity, variant, softness) => {
+    const profile = GH_PROFILES[variant] || GH_PROFILES.streak;
+    const stops = Array.from({ length: 33 }, (_, index) => {
+      const t = index / 32;
+      const alpha = Math.round(Math.min(1, profile(t, softness) * opacity) * 1000) / 10;
+      return `color-mix(in srgb, ${color} ${alpha}%, transparent) ${(t * 100).toFixed(1)}%`;
+    });
+    return `linear-gradient(90deg, ${stops.join(', ')})`;
+  };
+  const ghEase = t => (1 - Math.cos(Math.PI * t)) / 2;
+
+  function glare(root, options) {
+    const o = Object.assign({ glareColor: '#ffffff', glareOpacity: 0.5, glareAngle: -45, glareSize: 30, softness: 0.6, variant: 'streak',
+      blendMode: 'screen', rimGlint: true, mode: 'hover', transitionDuration: 650, interval: 3, delay: 0, playOnce: false }, options);
+    root.classList.add('glare-hover');
+    root.style.setProperty('--gh-glare', ghGradient(o.glareColor, o.glareOpacity, o.variant, o.softness));
+    root.style.setProperty('--gh-rim', ghGradient(o.glareColor, Math.min(1, o.glareOpacity * 1.8), o.variant, o.softness));
+    root.style.setProperty('--gh-blend', o.blendMode);
+    const glareEl = document.createElement('span');
+    glareEl.className = 'glare-hover__glare';
+    glareEl.setAttribute('aria-hidden', 'true');
+    const band = document.createElement('span');
+    band.className = 'glare-hover__band';
+    glareEl.appendChild(band);
+    let rim = null;
+    if (o.rimGlint) {
+      const rimWrap = document.createElement('span');
+      rimWrap.className = 'glare-hover__rim';
+      rim = document.createElement('span');
+      rim.className = 'glare-hover__band glare-hover__band--rim';
+      rimWrap.appendChild(rim);
+      glareEl.appendChild(rimWrap);
+    }
+    root.appendChild(glareEl);
+
+    const reduced = reducedMotion();
+    const geometry = { band: 0, reach: 0, ux: 0, uy: -1, angle: 0 };
+    const state = { pos: -1e4, sweep: null, visible: true };
+    let raf = 0, timer = 0;
+    const bands = () => [band, rim].filter(Boolean);
+    const write = () => {
+      const transform = `translate(-50%, -50%) rotate(${geometry.angle - 90}deg) translateX(${state.pos.toFixed(2)}px)`;
+      for (const el of bands()) el.style.transform = transform;
+      glareEl.style.opacity = '1';
+    };
+    const measure = () => {
+      const width = root.clientWidth, height = root.clientHeight;
+      const radians = (o.glareAngle * Math.PI) / 180;
+      const ux = Math.sin(radians), uy = -Math.cos(radians);
+      const diagonal = Math.hypot(width, height);
+      const size = Math.max(8, (diagonal * o.glareSize) / 100);
+      const reach = (Math.abs(width * ux) + Math.abs(height * uy)) / 2 + size / 2 + 2;
+      Object.assign(geometry, { band: size, reach, ux, uy, angle: o.glareAngle });
+      for (const el of bands()) { el.style.width = `${size}px`; el.style.height = `${diagonal + size}px`; }
+      if (!state.sweep) state.pos = state.pos > 0 ? reach : -reach;
+      write();
+    };
+    const frame = now => {
+      let moving = false;
+      if (state.sweep) {
+        const sweep = state.sweep;
+        const t = Math.min(1, (now - sweep.start) / sweep.duration);
+        state.pos = sweep.from + (sweep.to - sweep.from) * ghEase(t);
+        if (t < 1) moving = true;
+        else state.sweep = null;
+      }
+      write();
+      raf = moving ? requestAnimationFrame(frame) : 0;
+    };
+    const sweep = sign => {
+      if (reduced || !geometry.reach) return;
+      const end = sign * geometry.reach;
+      const from = state.sweep || Math.abs(state.pos) < geometry.reach ? state.pos : -end;
+      if (from === end) return;
+      const share = Math.abs(end - from) / (2 * geometry.reach);
+      state.sweep = { from, to: end, start: performance.now(), duration: Math.max(120, o.transitionDuration * share) };
+      if (!raf) raf = requestAnimationFrame(frame);
+    };
+    const along = event => {
+      const rect = root.getBoundingClientRect();
+      return (event.clientX - (rect.left + rect.width / 2)) * geometry.ux + (event.clientY - (rect.top + rect.height / 2)) * geometry.uy;
+    };
+    const onEnter = event => { if (o.mode === 'hover' && event.pointerType === 'mouse') sweep(along(event) > 0 ? -1 : 1); };
+    const onLeave = event => { if (o.mode === 'hover' && event.pointerType === 'mouse' && !o.playOnce) sweep(along(event) > 0 ? 1 : -1); };
+    const onDown = event => { if (o.mode === 'click') sweep(along(event) > 0 ? -1 : 1); };
+    const schedule = first => {
+      clearTimeout(timer);
+      if (o.mode !== 'loop' || reduced) return;
+      timer = setTimeout(() => {
+        if (state.visible && !document.hidden) sweep(1);
+        state.pos = -geometry.reach;   // 다음 바퀴도 같은 방향(왼→오)으로
+        schedule(false);
+      }, (first ? o.delay : 0) * 1000 + Math.max(0.5, o.interval) * 1000);
+    };
+    root.addEventListener('pointerenter', onEnter);
+    root.addEventListener('pointerleave', onLeave);
+    root.addEventListener('pointerdown', onDown);
+    const resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(root);
+    const visibilityObserver = new IntersectionObserver(([entry]) => { state.visible = entry.isIntersecting; }, { threshold: 0.4 });
+    visibilityObserver.observe(root);
+    measure();
+    schedule(true);
+    return {
+      sweep() { state.pos = -geometry.reach; state.sweep = null; sweep(1); },
+      destroy() {
+        cancelAnimationFrame(raf);
+        clearTimeout(timer);
+        resizeObserver.disconnect();
+        visibilityObserver.disconnect();
+        root.removeEventListener('pointerenter', onEnter);
+        root.removeEventListener('pointerleave', onLeave);
+        root.removeEventListener('pointerdown', onDown);
+        glareEl.remove();
+        root.classList.remove('glare-hover');
+      },
+    };
+  }
+
+  window.Fx = { embers, clickSpark, starBorder, electricBorder, gradientText, shinyText, counter, prismBurst, glare, reducedMotion };
 })();
