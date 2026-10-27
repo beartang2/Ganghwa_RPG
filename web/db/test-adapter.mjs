@@ -13,6 +13,8 @@ import path from 'node:path';
 const require = createRequire(import.meta.url);
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const { handle } = require('../api/_lib/router.js');
+const GAME = require('../game.js');
+GAME.CONFIG.huntMinGapMs = 0;   // 기능 테스트는 연달아 사냥한다 — 간격 하한은 전용 테스트에서 켠다
 
 const pg = new PGlite();
 const q = async (text, params) => (await pg.query(text, params || [])).rows;
@@ -150,7 +152,8 @@ async function main() {
   // 연타 제출 → 딜 적용(보스 살아있음)
   let hr = await req('POST', '/api/raid-hit', { token: tok, body: { hits: 40 } });
   ok(hr.body.ok && hr.body.dmg > 0, '타격 딜 적용(dmg=' + hr.body.dmg + ')');
-  // ⚡ 레이드 강공격 — 서버가 위력(연타 n회분)·쿨타임을 판정
+  // ⚡ 레이드 강공격 — 서버가 위력(연타 n회분)·쿨타임을 판정. 연타와 같은 예산이라 시작 직후엔 여유가 없으니 3초 전 시작으로 당긴다
+  await q("UPDATE parties SET data = jsonb_set(data, '{raid,startTs}', to_jsonb(((data->'raid'->>'startTs')::bigint) - 3000)) WHERE id=$1", [pid2]);
   let st = await req('POST', '/api/raid-strong', { token: tok, body: { power: 1 } });
   ok(st.body.ok && st.body.units === 6 && st.body.dmg > 0 && /베어 가르기/.test(st.body.strongText), '검 강공격 = 연타 6회분(dmg=' + st.body.dmg + ')');
   st = await req('POST', '/api/raid-strong', { token: tok, body: { power: 1 } });
@@ -158,6 +161,10 @@ async function main() {
   st = await req('POST', '/api/raid-strong', { token: tok2, body: { power: 0.2 } });
   ok(st.body.ok && st.body.units === 3, '활은 당긴 만큼 — power 0.2 는 최소 40% 로(8×0.4≈3회분)');
   ok(st.body.raid.events.some(e => /관통 사격/.test(e.text)), '파티 전투 기록에 강공격 표시');
+  await new Promise(res => setTimeout(res, 400));                                   // 강공격 쿨타임은 지나게
+  await req('POST', '/api/raid-hit', { token: tok, body: { hits: 40 } });            // 경과시간 예산을 연타로 꽉 채움
+  st = await req('POST', '/api/raid-strong', { token: tok, body: { power: 1 } });
+  ok(!st.body.ok && /숨 고르는/.test(st.body.error), '연타로 예산을 다 쓰면 강공격도 거절(매크로가 둘 다 얹지 못함)');
   // 스킬(궁수 난사) → 큰 피해로 처치
   const sk = await req('POST', '/api/raid-skill', { token: tok2 });
   ok(sk.body.ok && sk.body.skillText, '스킬 발동(' + (sk.body.skillText || '') + ')');
@@ -300,7 +307,8 @@ async function main() {
   await q("UPDATE players SET data = jsonb_set(data, '{dun}', (data->'dun') || '{\"fl\":14,\"fight\":null}'::jsonb) WHERE nick='던전러'");
   r = await req('POST', '/api/dun-start', { token: tok3 });
   ok(r.body.ok && r.body.fight.floor === 15, '15층 전투 시작');
-  // ⚡ 던전 강공격 — 지금 단계 상성 배율이 곱해진다
+  // ⚡ 던전 강공격 — 지금 단계 상성 배율이 곱해진다(연타와 같은 예산이라 3초 전 시작으로 당긴다)
+  await q("UPDATE players SET data = jsonb_set(data, '{dun,fight,startTs}', to_jsonb(((data->'dun'->'fight'->>'startTs')::bigint) - 3000)) WHERE nick='던전러'");
   r = await req('POST', '/api/dun-strong', { token: tok3, body: { power: 1 } });
   ok(r.body.ok && r.body.dmg > 0 && typeof r.body.mult === 'number', '던전 강공격(dmg=' + r.body.dmg + ' · 상성 ×' + r.body.mult + ')');
   ok(!(await req('POST', '/api/dun-strong', { token: tok3 })).body.ok, '던전 강공격 쿨타임');
@@ -420,6 +428,17 @@ async function main() {
   const tc = (await req('GET', '/api/me', { token: tokX })).body.me.titles.map(t => t.id);
   ok(r.status === 418 && r.body.found === 'teapot' && tc.includes('egg_teapot'), '로그인한 채 커피 → 418 + 「찻주전자」');
   ok((await req('POST', '/api/coffee', { token: tokX })).body.found === null, '두 번째 커피는 칭호 없음(1회)');
+
+  // 🛡️ 매크로 방지 — 사람 최고 속도보다 빠른 연속 사냥·연타+강공격 초과는 거절
+  console.log('\n[매크로 방지]');
+  GAME.CONFIG.huntMinGapMs = 750;
+  await q("UPDATE players SET data = jsonb_set(data, '{huntTs}', '0') WHERE nick='이스터'");   // 직전 사냥은 오래전
+  r = await req('POST', '/api/hunt', { token: tokX });
+  const r2 = await req('POST', '/api/hunt', { token: tokX });
+  ok(r.body.ok && !r2.body.ok && r2.body.tooFast, '0.75초 안에 다시 사냥 → 거절(보상 없음)');
+  await q("UPDATE players SET data = jsonb_set(data, '{huntTs}', to_jsonb(((data->>'huntTs')::bigint) - 800)) WHERE nick='이스터'");
+  ok((await req('POST', '/api/hunt', { token: tokX })).body.ok, '0.8초 뒤엔 정상');
+  GAME.CONFIG.huntMinGapMs = 0;
 
   // 🔒 남의 프로필(로그인 없이) — 화면에 필요한 것만, 이메일·가방·칭호 얻는 법은 안 나간다
   console.log('\n[공개 프로필]');

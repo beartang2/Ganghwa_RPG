@@ -47,6 +47,7 @@ const CONFIG = {
   atkReportMaxS: 4,         //            〃               강공격 수
   atkMsPerTap: 70,          // 보고 사이 흐른 시간으로 본 일반 공격 최소 간격(사냥 연타 간격과 같음)
   atkMsPerStrong: 300,      //            〃          강공격 최소 간격(커맨드를 그리는 시간)
+  huntMinGapMs: 750,        // 사냥 요청 사이 최소 간격 — 사람이 가장 빨리 잡는 주기(한 방 처치 ~0.15초 + 다음 몬스터 대기 0.65초 + 통신)보다 아주 조금 짧게
   huntOvertimeMult: 0.15,   // 일일 사냥 소진 후 '무한 사냥' 골드 배율(채굴이 주 수급이라 낮게)
   huntPotionChance: 0.06,   // 무한 사냥 시 '채광 물약' 드랍 확률 → 채굴 기력 회복
   huntPotionStamina: 20,    // 채광 물약 1개가 채워주는 채굴 기력
@@ -1233,7 +1234,8 @@ function dunHit(db, id, hits) {
   hits = Math.max(0, Math.min(parseInt(hits, 10) || 0, CONFIG.raidHitBatchMax));
   const t = Date.now() - f.startTs;
   const maxTotal = Math.floor(t / CONFIG.raidHitMsPerTap) + 12;   // 경과시간으로 물리적 최대치를 넘는 타수는 버린다
-  if (f.hits + hits > maxTotal) hits = Math.max(0, maxTotal - f.hits);
+  const usedD = f.hits + (f.sUnits || 0);                          // 강공격(연타 n회분)도 같은 예산
+  if (usedD + hits > maxTotal) hits = Math.max(0, maxTotal - usedD);
   const haste = dunBuff(f, 'haste', t).reduce((m, b) => Math.max(m, b.v), 1);
   const mult = elemMult(p.element, dunPhaseEl(f, t));
   const dmg = hits * memberStats(p).atk * CONFIG.raidHitDmgMult * mult * haste;
@@ -1263,8 +1265,9 @@ function dunStrong(db, id, power) {
   if (f.status !== 'active') return { ok: true, silent: true, ended: true, fight: dunFightView(p) };
   const c = STRONG_ATTACKS[p.class] || STRONG_ATTACKS.warrior, now = Date.now(), t = now - f.startTs;
   if (now - (f.strongAt || 0) < c.gapMs) return { ok: false, silent: true, error: '강공격 준비 중…' };
-  f.strongAt = now;
   const units = strongUnits(p.class, power), mult = elemMult(p.element, dunPhaseEl(f, t));
+  if (f.hits + (f.sUnits || 0) + units > Math.floor(t / CONFIG.raidHitMsPerTap) + 12) return { ok: false, silent: true, error: '숨 고르는 중…' };
+  f.strongAt = now; f.sUnits = (f.sUnits || 0) + units;
   const dmg = units * memberStats(p).atk * CONFIG.raidHitDmgMult * mult;
   f.bossHP = Math.max(0, f.bossHP - dmg); f.dmg += dmg;
   let text = c.emoji + ' ' + c.name + '! 보스 -' + Math.round(dmg).toLocaleString() + (mult > 1 ? ' (효과 굉장!)' : mult < 1 ? ' (효과 별로…)' : '');
@@ -1850,8 +1853,10 @@ function mineSwing(db, id) {
 }
 function hunt(db, id, atk) {
   const p = norm(db.players[id]);
+  // 🛡️ 매크로 방지 — 직전 사냥 요청과의 간격이 사람이 낼 수 있는 최소 주기보다 짧으면 거절(보상·횟수 변화 없음)
+  if (Date.now() - (p.huntTs || 0) < CONFIG.huntMinGapMs) return { ok: false, silent: true, tooFast: true, error: '숨 고르는 중…' };
   reportAtk(p, atk);   // 직전 몬스터를 잡을 때의 일반·강공격 횟수(칭호용)
-  p.huntTs = Date.now();   // 사냥터 이스터에그 인정 창
+  p.huntTs = Date.now();   // 사냥 간격 기준 + 사냥터 이스터에그 인정 창
   if (today().slice(5) === '10-31') setEgg(p, 'halloween');   // 🎃 KST 기준 할로윈
   if (p.huntDay !== today()) { p.huntDay = today(); p.huntsUsed = 0; }
   // 일일 사냥(20회)은 풀보상 + 희귀 드랍. 소진 후엔 '무한 사냥'(보상↓·가끔 채광 물약)으로 계속 가능
@@ -2215,8 +2220,10 @@ function raidHit(db, id, hits) {
   if (!(p.nick in raid.contrib)) return { ok: false, error: '이 레이드 참가자가 아니에요.' };
   hits = Math.max(0, Math.min(parseInt(hits, 10) || 0, CONFIG.raidHitBatchMax));
   // 누적 타수 상한: 경과시간으로 물리적 최대치 초과분은 버림(오토클리커 방지)
+  // 연타와 강공격(연타 n회분)을 한 예산으로 센다 — 매크로가 연타 상한을 채우면서 강공격까지 얹지 못하게
   const maxTotal = Math.floor((Date.now() - raid.startTs) / CONFIG.raidHitMsPerTap) + 12;
-  if ((raid.hits[p.nick] || 0) + hits > maxTotal) hits = Math.max(0, maxTotal - (raid.hits[p.nick] || 0));
+  const usedR = (raid.hits[p.nick] || 0) + ((raid.sUnits && raid.sUnits[p.nick]) || 0);
+  if (usedR + hits > maxTotal) hits = Math.max(0, maxTotal - usedR);
   const res = raid.res && raid.res[p.nick] > Date.now() ? STRONG_ATTACKS.healer.buff.mult : 1;   // ✨ 마력 공명
   const dmg = Math.round(hits * memberStats(p).atk * CONFIG.raidHitDmgMult * res);
   raid.bossHP = Math.max(0, raid.bossHP - dmg);
@@ -2236,8 +2243,12 @@ function raidStrong(db, id, power) {
   const c = STRONG_ATTACKS[p.class] || STRONG_ATTACKS.warrior, now = Date.now();
   if (!raid.strongAt) raid.strongAt = {};
   if (now - (raid.strongAt[p.nick] || 0) < c.gapMs) return { ok: false, silent: true, error: '강공격 준비 중…' };
-  raid.strongAt[p.nick] = now;
   const units = strongUnits(p.class, power);
+  if (!raid.sUnits) raid.sUnits = {};
+  const budget = Math.floor((now - raid.startTs) / CONFIG.raidHitMsPerTap) + 12;   // raidHit 과 같은 예산
+  if ((raid.hits[p.nick] || 0) + (raid.sUnits[p.nick] || 0) + units > budget) return { ok: false, silent: true, error: '숨 고르는 중…' };
+  raid.strongAt[p.nick] = now;
+  raid.sUnits[p.nick] = (raid.sUnits[p.nick] || 0) + units;
   const dmg = Math.round(units * memberStats(p).atk * CONFIG.raidHitDmgMult);
   raid.bossHP = Math.max(0, raid.bossHP - dmg);
   raid.contrib[p.nick] = (raid.contrib[p.nick] || 0) + dmg;
