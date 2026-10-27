@@ -146,6 +146,7 @@ async function main() {
   ok(r.body.ok && r.body.raid.status === 'active', '레이드 시작(active)');
   ok(r.body.raid.bossHP === r.body.raid.bossMax && r.body.raid.partyHP === 100, '보스 풀피·파티 HP 100 시작');
   ok(r.body.raid.participants.length === 2, '참가자 2명');
+  ok(r.body.raid.duration === GAME.CONFIG.raidDuration && r.body.raid.atkBuff === 0, '2인 파티는 기본 전투 시간 · 힐러가 없으면 공격력 업 없음');
   // 폴링(GET 투영) 조회 가능
   const watch = await req('GET', '/api/party-raid', { token: tok2 });
   ok(watch.body.raid && typeof watch.body.raid.bossHP === 'number', '파티원 폴링(투영) 조회');
@@ -480,6 +481,28 @@ async function main() {
   ok(!(await req('GET', '/api/rank')).body.list.some(x => x.nick === '탈퇴러'), '랭킹에서 사라짐');
   r = await req('POST', '/api/login', { body: { nick: '탈퇴러', pin: '97531975' } });
   ok(r.body.ok && r.body.isNew, '탈퇴한 닉네임은 다시 쓸 수 있음');
+
+  // 혼자 레이드 — 전투 시간 +5초, 힐러의 파티 공격력 업(자신 포함) — game.js 를 직접 돌린다
+  console.log('[혼자 레이드 · 힐러 공격력 업]');
+  {
+    const sdb = { players: {}, parties: {}, log: [] };
+    const sp = GAME.makePlayer('솔로힐러'); GAME.norm(sp);
+    Object.assign(sp, { class: 'healer', level: 99 });
+    sdb.players.s = sp;
+    GAME.partyCreate(sdb, 's');
+    const sr = GAME.raidStart(sdb, 's', 'dragon');
+    ok(sr.ok && sr.raid.duration === GAME.CONFIG.raidSoloDuration && sr.raid.duration > GAME.CONFIG.raidDuration, '혼자 도전 → 전투 시간이 더 길다(' + sr.raid.duration / 1000 + '초)');
+    ok(sr.raid.atkBuff === Math.round(GAME.CONFIG.raidAtkBuffCap * 100), '힐러 +99 → 파티 공격력 업은 상한(+' + sr.raid.atkBuff + '%)');
+    ok(sdb.parties[sp.party].raid.attacks.every(a => a.t <= sr.raid.duration - 600), '보스 반격도 늘어난 시간 안에 나뉜다');
+    ok(sr.raid.events.some(e => /혼자 도전/.test(e.text)) && sr.raid.events.some(e => /힐러의 축복/.test(e.text)), '전투 기록에 혼자 도전·공격력 업 표시');
+    const h = GAME.raidHit(sdb, 's', 10);
+    const plain = (12 + 99 * 8) * 0.5 * GAME.CONFIG.raidHitDmgMult * 10;
+    ok(h.dmg === Math.round(plain * (1 + GAME.CONFIG.raidAtkBuffCap)), '연타 피해에 공격력 업 반영(' + h.dmg + ')');
+    sdb.parties[sp.party].raid.startTs -= 3000;   // 경과시간 예산(연타+강공격)을 채워 둔다
+    const before = h.raid.bossHP;
+    const sk = GAME.raidStrong(sdb, 's', 1);
+    ok(sk.ok && before - sk.raid.bossHP === Math.round((12 + 99 * 8) * 0.5 * GAME.CONFIG.raidHitDmgMult * 22 * (1 + GAME.CONFIG.raidAtkBuffCap)), '별빛 폭발 피해에도 공격력 업 반영(' + (sk.dmg || 0) + ')');
+  }
 
   console.log('\n결과: ' + pass + ' pass, ' + fail + ' fail');
   process.exit(fail ? 1 : 0);
