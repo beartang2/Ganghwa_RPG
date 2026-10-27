@@ -150,6 +150,14 @@ async function main() {
   // 연타 제출 → 딜 적용(보스 살아있음)
   let hr = await req('POST', '/api/raid-hit', { token: tok, body: { hits: 40 } });
   ok(hr.body.ok && hr.body.dmg > 0, '타격 딜 적용(dmg=' + hr.body.dmg + ')');
+  // ⚡ 레이드 강공격 — 서버가 위력(연타 n회분)·쿨타임을 판정
+  let st = await req('POST', '/api/raid-strong', { token: tok, body: { power: 1 } });
+  ok(st.body.ok && st.body.units === 6 && st.body.dmg > 0 && /베어 가르기/.test(st.body.strongText), '검 강공격 = 연타 6회분(dmg=' + st.body.dmg + ')');
+  st = await req('POST', '/api/raid-strong', { token: tok, body: { power: 1 } });
+  ok(!st.body.ok && /준비/.test(st.body.error), '바로 또 쓰면 쿨타임으로 거부(0.35초)');
+  st = await req('POST', '/api/raid-strong', { token: tok2, body: { power: 0.2 } });
+  ok(st.body.ok && st.body.units === 3, '활은 당긴 만큼 — power 0.2 는 최소 40% 로(8×0.4≈3회분)');
+  ok(st.body.raid.events.some(e => /관통 사격/.test(e.text)), '파티 전투 기록에 강공격 표시');
   // 스킬(궁수 난사) → 큰 피해로 처치
   const sk = await req('POST', '/api/raid-skill', { token: tok2 });
   ok(sk.body.ok && sk.body.skillText, '스킬 발동(' + (sk.body.skillText || '') + ')');
@@ -292,6 +300,10 @@ async function main() {
   await q("UPDATE players SET data = jsonb_set(data, '{dun}', (data->'dun') || '{\"fl\":14,\"fight\":null}'::jsonb) WHERE nick='던전러'");
   r = await req('POST', '/api/dun-start', { token: tok3 });
   ok(r.body.ok && r.body.fight.floor === 15, '15층 전투 시작');
+  // ⚡ 던전 강공격 — 지금 단계 상성 배율이 곱해진다
+  r = await req('POST', '/api/dun-strong', { token: tok3, body: { power: 1 } });
+  ok(r.body.ok && r.body.dmg > 0 && typeof r.body.mult === 'number', '던전 강공격(dmg=' + r.body.dmg + ' · 상성 ×' + r.body.mult + ')');
+  ok(!(await req('POST', '/api/dun-strong', { token: tok3 })).body.ok, '던전 강공격 쿨타임');
   await req('POST', '/api/dun-skill', { token: tok3, body: { kind: 'class' } });
   r = await req('POST', '/api/dun-skill', { token: tok3, body: { kind: 'class' } });
   ok(!r.body.ok && /이미/.test(r.body.error), '같은 무기 직업 스킬 두 번 거부');
@@ -331,18 +343,19 @@ async function main() {
   let gd = await dataOf('검사');
   ok(gd.atk && gd.atk.n > 0, '레이드 연타(서버가 시간으로 깎은 실제 타수)가 일반 공격으로 쌓임(' + (gd.atk && gd.atk.n) + ')');
   ok(gd.gs && gd.gs.box === 1 && gd.gs.alch === 1 && gd.gs.cap === 10, '상자 1 · 연금 1 · 캡슐 10회 기록');
-  const nPre = gd.atk.n;
+  const nPre = gd.atk.n, sPre = gd.atk.s || 0, wPre = (gd.atk.w && gd.atk.w.warrior) || 0;
+  ok(sPre >= 1 && wPre >= 1, '레이드 강공격도 강공격 기록에 쌓임(서버 판정)');
   await q("UPDATE players SET data = jsonb_set(data, '{atk,ts}', '0') WHERE nick='검사'");   // 마지막 보고가 오래전인 상태
   r = await req('POST', '/api/hunt', { token: tok, body: { atk: { n: 6, s: 1 } } });
   gd = await dataOf('검사');
-  ok(r.body.ok && gd.atk.n === nPre + 6 && gd.atk.s === 1 && gd.atk.w.warrior === 1, '사냥에 얹은 보고: 일반 6 · 강공격 1(검)');
+  ok(r.body.ok && gd.atk.n === nPre + 6 && gd.atk.s === sPre + 1 && gd.atk.w.warrior === wPre + 1, '사냥에 얹은 보고: 일반 6 · 강공격 1(검)');
   r = await req('POST', '/api/atk-report', { token: tok, body: { atk: { n: 500, s: 50 } } });
   gd = await dataOf('검사');
-  ok(r.body.ok && gd.atk.n - (nPre + 6) <= 1 && gd.atk.s - 1 <= 1, '바로 이어 부풀린 보고(500·50)는 흐른 시간만큼만 인정');
+  ok(r.body.ok && gd.atk.n - (nPre + 6) <= 1 && gd.atk.s - (sPre + 1) <= 1, '바로 이어 부풀린 보고(500·50)는 흐른 시간만큼만 인정');
   await q("UPDATE players SET data = jsonb_set(data, '{atk,ts}', '0') WHERE nick='검사'");
   r = await req('POST', '/api/atk-report', { token: tok, body: { atk: { n: 500, s: 50 } } });
   gd = await dataOf('검사');
-  ok(gd.atk.n - (nPre + 6) <= 21 && gd.atk.s <= 6, '한 번에 최대 일반 20 · 강공격 4까지만');
+  ok(gd.atk.n - (nPre + 6) <= 21 && gd.atk.s - sPre <= 6, '한 번에 최대 일반 20 · 강공격 4까지만');
   // 던전 기록 — 앞 테스트에서 던전러가 1·2·15층… 돌파·교체·스킬을 했다
   const dd = await dataOf('던전러');
   ok(dd.ds && dd.ds.clear >= 1 && dd.ds.elem >= 1 && dd.atk.n > 0, '던전 돌파 ' + (dd.ds && dd.ds.clear) + ' · 속성 스킬 ' + (dd.ds && dd.ds.elem) + ' · 연타 기록');

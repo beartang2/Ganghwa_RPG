@@ -564,6 +564,7 @@ const server = http.createServer(async (req, res) => {
       else if (p === '/api/dun-start') r = game.dunStart(db, id);
       else if (p === '/api/dun-hit') { const b = await readBody(req); r = game.dunHit(db, id, b.hits); }
       else if (p === '/api/dun-skill') { const b = await readBody(req); r = game.dunSkill(db, id, b.kind); }
+      else if (p === '/api/dun-strong') { const b = await readBody(req); r = game.dunStrong(db, id, b.power); }
       else if (p === '/api/dun-swap') { const b = await readBody(req); r = game.dunSwap(db, id, b.class); }
       else if (p === '/api/dun-finish') r = game.dunFinish(db, id);
       else if (p === '/api/dun-leave') r = game.dunLeave(db, id);
@@ -598,6 +599,7 @@ const server = http.createServer(async (req, res) => {
       else if (p === '/api/raid') { const b = await readBody(req); r = game.raidStart(db, id, b.boss); }
       else if (p === '/api/raid-hit') { const b = await readBody(req); r = game.raidHit(db, id, b.hits); }
       else if (p === '/api/raid-skill') r = game.raidSkill(db, id);
+      else if (p === '/api/raid-strong') { const b = await readBody(req); r = game.raidStrong(db, id, b.power); }
       else if (p === '/api/raid-finish') r = game.raidFinish(db, id);
       else return sendJson(res, 404, { ok: false, error: 'unknown action' });
 

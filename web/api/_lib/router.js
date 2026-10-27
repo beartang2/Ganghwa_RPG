@@ -216,7 +216,7 @@ async function handle(method, pathname, ctx) {
       return { status: r.ok ? 200 : 400, body: Object.assign(r, { me: game.publicView(db, id) }) };
     }
     // 레이드(시작·타격·스킬·종료): 종료 시 전원 골드/방지권 변경 → 파티원 전원 + 파티 행을 함께 잠근다.
-    if (pathname === '/api/raid' || pathname === '/api/raid-hit' || pathname === '/api/raid-skill' || pathname === '/api/raid-finish') {
+    if (pathname === '/api/raid' || pathname === '/api/raid-hit' || pathname === '/api/raid-skill' || pathname === '/api/raid-strong' || pathname === '/api/raid-finish') {
       const prow = await q("SELECT data->>'party' AS pid FROM players WHERE id = $1", [id]);
       const pid = prow.length ? prow[0].pid : null;
       let memberIds = [];
@@ -228,6 +228,7 @@ async function handle(method, pathname, ctx) {
       if (pathname === '/api/raid') rfn = (db) => game.raidStart(db, id, b.boss);
       else if (pathname === '/api/raid-hit') rfn = (db) => game.raidHit(db, id, b.hits);
       else if (pathname === '/api/raid-skill') rfn = (db) => game.raidSkill(db, id);
+      else if (pathname === '/api/raid-strong') rfn = (db) => game.raidStrong(db, id, b.power);
       else rfn = (db) => game.raidFinish(db, id);
       const { r, db } = await store.runGame(q, { lockId: id, lockPlayerIds: memberIds, lockPartyIds: [pid], withLogs: false }, rfn);
       return { status: r.ok ? 200 : 400, body: Object.assign(r, { me: game.publicView(db, id) }) };
@@ -248,6 +249,7 @@ async function handle(method, pathname, ctx) {
     else if (pathname === '/api/dun-start') fn = (db) => game.dunStart(db, id);
     else if (pathname === '/api/dun-hit') fn = (db) => game.dunHit(db, id, b.hits);
     else if (pathname === '/api/dun-skill') fn = (db) => game.dunSkill(db, id, b.kind);
+    else if (pathname === '/api/dun-strong') fn = (db) => game.dunStrong(db, id, b.power);
     else if (pathname === '/api/dun-swap') fn = (db) => game.dunSwap(db, id, b.class);
     else if (pathname === '/api/dun-finish') fn = (db) => game.dunFinish(db, id);
     else if (pathname === '/api/dun-leave') fn = (db) => game.dunLeave(db, id);

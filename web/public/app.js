@@ -10,6 +10,7 @@ const PATCH = {
   version: '6',
   title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
+    '⚔️ <b>보스에게도 강공격!</b> — 파티 레이드·초월 던전에서도 무기별 커맨드(검 호 · 활 당기기 · 지팡이 별 · 방패 꾹)를 그릴 수 있어요',
     '🌈 <b>숨겨진 칭호</b> — 새 등급 <b>프리즘</b>! 어딘가에 숨어 있는 걸 찾으면 열려요. 무엇을 하면 열리는지는… 비밀 🤫',
     '🏷️ <b>새 칭호 23종</b> — ⚡ 일반 공격·강공격 횟수(무기별 강공격 칭호도!) · 🌌 초월 던전(약점 저격·무기 교체·무피격 돌파 등) · 💎 프리즘 도박(상자·연금술·캡슐 대박과 꽝). 프로필의 칭호는 이제 <b>접었다 펼 수 있어요</b>',
     '⚡ <b>강공격 커맨드 (시험판 · 사냥터)</b> — 몬스터 근처에 무기별 커맨드를 그리면 강공격! ⚔️ 검은 원의 호 · 🏹 활은 몬스터 반대쪽으로 당겼다 놓기 · ✨ 지팡이는 별 한 붓(가장 강하고 5초간 연타 ×1.5) · 🛡️ 방패는 꾹 눌렀다 떼기',
@@ -1312,27 +1313,27 @@ function tapMonster(e) {
   const dmgEl = spawnHuntDmg(Math.round((isCrit ? 2 : 1) * c.dmgPerTap * amt), isCrit);
   el('huntHpFill').style.width = Math.max(0, 100 - c.taps / c.need * 100) + '%';
   // 이 탭이 곧 드래그·홀딩(강공격)으로 이어지면 refundTap() 이 되돌린다 — 일반 공격과 강공격이 같이 나가지 않게
-  huntPendingTap = last || !e ? null : { ev: e, amt, dmgEl, mon: c };
+  pendingTap = last || !e ? null : { ev: e, undo() {
+    if (huntCur !== c || c.dead) return;
+    huntAtk.n = Math.max(0, huntAtk.n - 1); c.taps = Math.max(0, c.taps - amt);
+    if (dmgEl) dmgEl.remove();
+    el('huntHpFill').style.width = Math.max(0, 100 - c.taps / c.need * 100) + '%';
+  } };
   if (last) killMonster();
 }
-// 몬스터를 누른 그 손가락이 커맨드(끌기·꾹 누르기)가 되면 누르는 순간 들어간 일반 공격 1회를 취소한다.
-// (처치한 탭은 되돌리지 않는다 — 그때는 몬스터가 이미 쓰러져 커맨드도 시작되지 않는다)
+// 몬스터·보스를 누른 그 손가락이 커맨드(끌기·꾹 누르기)가 되면 누르는 순간 들어간 일반 공격 1회를 취소한다.
+// (사냥에서 처치한 탭은 되돌리지 않는다 — 그때는 몬스터가 이미 쓰러져 커맨드도 시작되지 않는다)
 // 같은 누름인지는 pointerdown 이벤트 객체가 같은지로 본다(마우스는 pointerId 가 늘 같아서 id 로는 못 가린다).
-let huntPendingTap = null;
-function refundTap(p) {
-  if (!p || p.done || huntCur !== p.mon || p.mon.dead) return;
-  p.done = true; huntAtk.n = Math.max(0, huntAtk.n - 1);
-  p.mon.taps = Math.max(0, p.mon.taps - p.amt);
-  if (p.dmgEl) p.dmgEl.remove();
-  el('huntHpFill').style.width = Math.max(0, 100 - p.mon.taps / p.mon.need * 100) + '%';
-}
+// 레이드·던전은 연타를 모아 0.7초마다 보내므로, 아직 안 보낸 1타를 빼는 것으로 취소한다.
+let pendingTap = null;
+function refundTap(p) { if (!p || p.done) return; p.done = true; p.undo(); }
 
-/* ---------- ⚡ 강공격 커맨드 (시험판: 사냥) ----------
+/* ---------- ⚡ 강공격 커맨드 (사냥터 · 레이드 · 초월 던전) ----------
  * 지금 장착한 무기(me.class)마다 그리는 커맨드가 다르다 — 인식은 gesture.js.
  *   ⚔️ 검 = 원의 호 긋기 · 🏹 활 = 몬스터 반대쪽으로 당겼다 놓기(당긴 길이 = 위력)
  *   ✨ 지팡이 = 별 한 붓(가장 셈 + 미니버프) · 🛡️ 방패 = 꾹 눌렀다 떼기
- * 위력은 '연타 n회분'. 사냥 몬스터는 결과를 서버가 미리 정하고 연타 4~7회로 쓰러지므로
- * 여기서는 클라이언트만 바뀐다. 레이드·던전에 붙일 땐 같은 표를 서버로 옮겨 쿨타임·횟수를 서버가 막는다.
+ * 위력은 '연타 n회분'. 사냥 몬스터는 결과를 서버가 미리 정하고 연타 4~7회로 쓰러지므로 클라이언트에서만 센다.
+ * 레이드·던전은 서버(game.js STRONG_ATTACKS — 이 표와 같은 값)가 위력·쿨타임·마력 공명을 판정한다.
  * 강공격 뒤에는 일반 공격 간격의 2배 동안 다음 공격이 안 나간다(STRONG_DELAY). */
 const STRONG = {
   warrior: { cmd: 'arc',  style: 'blade',  wpn: '⚔️ 검은',     name: '베어 가르기', taps: 6,  how: '원의 <b>호</b>를 그어요' },
@@ -1344,7 +1345,27 @@ const CMD_NAME = { arc: '⚔️ 검 커맨드', line: '🏹 활 커맨드', star
 const STRONG_DELAY = HUNT_TAP_MS * 2;
 let huntLockUntil = 0, huntBuff = null, huntBuffT = null;
 function huntBuffMult(now) { return huntBuff && now < huntBuff.until ? huntBuff.mult : 1; }
-function strongCfg() { return STRONG[(me && me.class) || 'warrior'] || STRONG.warrior; }
+/* 커맨드를 쓰는 전투 무대 — 사냥터·파티 레이드·초월 던전. 무대마다 '지금 칠 수 있나 / 과녁 / 무기 / 강공격' 을 정한다.
+ * 이스터에그·코나미는 사냥터 전용. 레이드·던전 강공격은 서버(raid-strong · dun-strong)가 위력·쿨타임을 판정한다. */
+const ARENA = {
+  hunt: { boss: () => el('huntMon'), live: () => !!(huntOpen && huntCur && !huntCur.dead), cls: () => me && me.class, strong: (c, pw) => huntStrong(c, pw) },
+  raid: { boss: () => el('rBoss'), live: () => !!(curRaid && curRaid.status === 'active' && curRaid.startTs + curRaid.duration > Date.now()),
+    cls: () => me && me.class, strong: (c, pw, t) => raidStrongHit(c, pw, t) },
+  dun:  { boss: () => el('dBoss'), live: () => !!(dunF && dunF.status === 'active' && dunNow() - dunF.startTs < dunF.duration),
+    cls: () => { const w = dunF && dunF.weapons.find(x => x.equipped); return w ? w.cls : me && me.class; }, strong: (c, pw, t) => dunStrongHit(c, pw, t) },
+};
+function arenaOf(stage) { return stage.classList.contains('hunt-stage') ? 'hunt' : stage.querySelector('#dBoss') ? 'dun' : stage.querySelector('#rBoss') ? 'raid' : null; }
+function bossCenter(a) { const b = ARENA[a] && ARENA[a].boss(); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }
+function strongCfg(a) { const cls = ARENA[a || 'hunt'].cls(); return STRONG[cls || 'warrior'] || STRONG.warrior; }
+// 전투 화면 아래 한 줄 안내(레이드·던전) — 무기가 바뀌거나 마력 공명이 켜지고 꺼질 때만 다시 쓴다
+let battleBuffUntil = 0;
+function updateBattleCmd(a) {
+  const box = document.querySelector('.battle-cmd'); if (!box || !window.Gesture) return;
+  const c = strongCfg(a), on = performance.now() < battleBuffUntil;
+  const h = `⚡ 강공격 <b>${c.name}</b> — ${c.how}` + (on ? ` · <span class="bf">✨ 마력 공명 연타 ×${STRONG.healer.buff.mult}</span>` : '');
+  if (box.dataset.h !== h) { box.innerHTML = h; box.dataset.h = h; }
+  const st = document.querySelector('.raid-stage'); if (st) st.classList.toggle('buffed', on);
+}
 function updateHuntCmd() {
   const box = el('huntCmd'); if (!box) return;
   if (!window.Gesture) { box.textContent = ''; return; }
@@ -1359,7 +1380,47 @@ function gestTip(text, x, y, ok) {
   t.style.left = Math.max(70, Math.min(window.innerWidth - 70, x)) + 'px'; t.style.top = y + 'px';
   document.body.appendChild(t); setTimeout(() => t.remove(), 900);
 }
-function monCenter() { const r = el('huntMon').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }
+function monCenter() { return bossCenter('hunt'); }
+// 강공격 연출(무대 공통) — 보스가 움찔 · 불꽃 · 이름 · 소리
+function strongFx(bossEl, cfg, power, at) {
+  vibe([14, 26, 24]); sfx('kill');
+  if (bossEl) { bossEl.classList.remove('hit'); void bossEl.offsetWidth; bossEl.classList.add('hit'); }
+  if (at && FX && FX.sparks) FX.sparks.burst(at.x, at.y, { sparkCount: 16, sparkRadius: 70, duration: 520, sparkSize: 12 });
+  if (at) gestTip('⚡ ' + cfg.name + (power && power < 1 ? ' ' + Math.round(power * 100) + '%' : ''), at.x, at.y - 70, true);
+}
+// ⚡ 레이드·던전 강공격 — 연출은 바로, 위력은 서버가 정한다(먼저 쌓인 연타를 보낸 뒤 강공격을 보내 순서를 지킨다)
+let raidLockUntil = 0, dunLockUntil = 0;
+function raidStrongHit(cfg, power, at) {
+  const now = performance.now(); if (now < raidLockUntil) return false;
+  raidLockUntil = now + STRONG_DELAY; raidLastTap = now;
+  strongFx(el('rBoss'), cfg, power, at);
+  (async () => {
+    if (raidLocalHits > 0) { if (raidFlushT) { clearTimeout(raidFlushT); raidFlushT = null; } await flushRaidHits(); }
+    const r = await api('raid-strong', 'POST', { power });
+    if (r && r.ok && r.raid) {
+      curRaid = r.raid; if (r.me) applyMe(r.me);
+      if (raidBuiltFor === curRaid.startTs) updateBattleUI();
+      if (r.dmg) spawnDmgAt(el('rBoss'), r.dmg, true);
+      if (cfg.buff) { battleBuffUntil = performance.now() + cfg.buff.ms; updateBattleCmd('raid'); setTimeout(() => updateBattleCmd('raid'), cfg.buff.ms + 30); }
+    } else if (r && !r.ok && r.error && at) gestTip(r.error, at.x, at.y - 40);
+  })();
+  return true;
+}
+function dunStrongHit(cfg, power, at) {
+  const now = performance.now(); if (now < dunLockUntil) return false;
+  dunLockUntil = now + STRONG_DELAY; dunLastTap = now;
+  strongFx(el('dBoss'), cfg, power, at);
+  (async () => {
+    if (dunLocalHits) { if (dunFlushT) { clearTimeout(dunFlushT); dunFlushT = null; } await flushDunHits(); }
+    const r = await api('dun-strong', 'POST', { power });
+    if (r && r.ok && r.fight) {
+      setDunFight(r.fight); updateDunUI();
+      if (r.dmg) spawnDmgAt(el('dBoss'), r.dmg, true);
+      if (cfg.buff) { battleBuffUntil = performance.now() + cfg.buff.ms; updateBattleCmd('dun'); setTimeout(() => updateBattleCmd('dun'), cfg.buff.ms + 30); }
+    } else if (r && !r.ok && r.error && at) gestTip(r.error, at.x, at.y - 40);
+  })();
+  return true;
+}
 function huntStrong(cfg, power) {
   const c = huntCur; if (!huntOpen || !c || c.dead) return false;
   const now = performance.now();
@@ -1390,11 +1451,13 @@ const GTRAIL = window.Gesture ? (() => { try { return window.Gesture.createTrail
 let gst = null, gLastEnd = -1e9;
 function gPoint(e) { return { x: e.clientX, y: e.clientY, t: performance.now() }; }
 function gDown(e) {
-  if (gst || !window.Gesture || !huntOpen || !huntCur || huntCur.dead) return;
+  if (gst || !window.Gesture || !(e.target instanceof Element)) return;
   if (e.pointerType === 'mouse' && e.button !== 0) return;
-  const cfg = strongCfg();
-  gst = { id: e.pointerId, cfg, pts: [gPoint(e)], drawing: false, holdRaf: 0,
-    tap: huntPendingTap && huntPendingTap.ev === e ? huntPendingTap : null };   // 이 누름이 몬스터 위 일반 공격이었나
+  const stage = e.target.closest('.hunt-stage, .raid-stage'); if (!stage) return;
+  const arena = arenaOf(stage); if (!arena || !ARENA[arena].live()) return;
+  const cfg = strongCfg(arena);
+  gst = { id: e.pointerId, arena, cfg, pts: [gPoint(e)], drawing: false, holdRaf: 0,
+    tap: pendingTap && pendingTap.ev === e ? pendingTap : null };   // 이 누름이 몬스터·보스 위 일반 공격이었나
   window.addEventListener('pointermove', gMove);
   window.addEventListener('pointerup', gUp);
   window.addEventListener('pointercancel', gCancel);
@@ -1429,40 +1492,42 @@ function gEnd() {
   window.removeEventListener('pointercancel', gCancel);
   if (gst && gst.holdRaf) cancelAnimationFrame(gst.holdRaf);
   if (gst && gst.drawing) gLastEnd = performance.now();
-  huntPendingTap = null;
+  pendingTap = null;
   if (GTRAIL) GTRAIL.ring(0, 0, -1);
   gst = null;
 }
 function gCancel(e) { if (!gst || e.pointerId !== gst.id) return; if (GTRAIL) GTRAIL.cancel(); gEnd(); }
 function gUp(e) {
   if (!gst || e.pointerId !== gst.id) return;
-  const g = gst, cfg = g.cfg, last = gPoint(e);
+  const g = gst, cfg = g.cfg, last = gPoint(e), A = ARENA[g.arena];
   g.pts.push(last);
   const heldMs = last.t - g.pts[0].t;
-  const tgt = monCenter();
+  const tgt = bossCenter(g.arena) || last;
   const r = window.Gesture.judge(cfg.cmd, g.pts, { target: tgt, heldMs });
   window.__lastGesture = { cmd: cfg.cmd, ms: Math.round(heldMs), n: g.pts.length, ...r };   // 디버그·테스트용(콘솔에서 확인)
   gEnd();
   // 🥚 이스터에그 커맨드(무기와 상관없이) — 하트·∞·소용돌이면 평소대로 일반 공격 1회 + 연출 + 1회성 숨은 칭호
-  if (g.drawing && !(cfg.cmd !== 'hold' && r.ok)) {
+  if (g.arena === 'hunt' && g.drawing && !(cfg.cmd !== 'hold' && r.ok)) {
     const eg = window.Gesture.egg(g.pts);
     if (eg && !eggDone(eg)) { if (GTRAIL) GTRAIL.end(true); huntEgg(eg); return; }   // 찾은 뒤엔 그냥 '커맨드 아님'
   }
-  const kon = g.drawing ? konamiStep(window.Gesture.swipeDir(g.pts)) : false;   // 코나미 입력 중이면 안내를 숨긴다
+  const kon = g.arena === 'hunt' && g.drawing ? konamiStep(window.Gesture.swipeDir(g.pts)) : false;   // 코나미 입력 중이면 안내를 숨긴다
+  if (!A.live()) { if (GTRAIL) GTRAIL.cancel(); return; }   // 그리는 사이 전투가 끝났다
   if (cfg.cmd === 'hold') {
-    if (r.ok) { if (GTRAIL) GTRAIL.shock(tgt.x, tgt.y); huntStrong(cfg, 1); }
+    if (r.ok) { if (A.strong(cfg, 1, tgt) && GTRAIL) GTRAIL.shock(tgt.x, tgt.y); }
     else if (g.drawing) { if (GTRAIL) GTRAIL.end(false); if (!kon) gestTip('🛡️ 방패는 움직이지 말고 꾹 눌러요', last.x, last.y - 40); }
     return;
   }
   if (!g.drawing) return;                       // 그냥 탭(일반 공격은 몬스터 pointerdown 에서 이미 처리)
-  if (r.ok && huntStrong(cfg, r.power)) { if (GTRAIL) GTRAIL.end(true, { target: tgt }); return; }
+  if (r.ok && A.strong(cfg, r.power, tgt)) { if (GTRAIL) GTRAIL.end(true, { target: tgt }); return; }
   if (GTRAIL) GTRAIL.end(false);
   if (kon || r.why === 'short') return;         // 짧게 슥 — 실수일 수 있어 조용히
   const tip = r.looks ? `그건 ${CMD_NAME[r.looks]}예요 · ${cfg.wpn} ${cfg.how.replace(/<[^>]+>/g, '')}`
     : r.why === 'direction' ? '🏹 몬스터 반대쪽으로 당겨요' : '궤적이 흐트러졌어요';
   gestTip(tip, last.x, last.y - 40);
 }
-document.querySelector('.hunt-stage').addEventListener('pointerdown', gDown);
+// 무대는 레이드·던전에서 매번 새로 그려지므로 문서 전체에서 받는다(몬스터·보스의 탭 처리가 먼저 돈 뒤)
+document.addEventListener('pointerdown', gDown);
 
 /* ---------- 🥚 이스터에그 ----------
  * 찾으면 서버에 한 번만 알리고(1회 bool) 🌈 프리즘 등급 숨은 칭호가 열린다. 보상은 칭호·연출뿐(경제 영향 없음).
@@ -1562,8 +1627,9 @@ function killMonster() {
   setTimeout(() => { if (huntOpen) spawnHuntMonster(); }, HUNT_SPAWN_DELAY);
 }
 // 떠오르는 데미지 숫자 (fixed — 모달 위에 표시)
-function spawnHuntDmg(n, crit) {
-  const mon = el('huntMon'); if (!mon) return;
+function spawnHuntDmg(n, crit) { return spawnDmgAt(el('huntMon'), n, crit); }
+function spawnDmgAt(mon, n, crit) {
+  if (!mon) return;
   const rc = mon.getBoundingClientRect();
   const t = document.createElement('div');
   t.className = 'hunt-dmg' + (crit ? ' crit' : '');
@@ -1781,6 +1847,7 @@ function renderBattle(raid) {
        <div class="raid-timerrow"><span class="raid-boss-name">${raid.boss.emoji} ${esc(raid.boss.name)}</span>
          <span class="raid-timer">⏱ <b id="rTimer">--</b></span>${battleXBtn()}</div>
        <div class="raid-stage"><div id="rBoss" class="raid-mon${active ? '' : ' dead'}" role="button" aria-label="보스 공격"><span class="rmon-emoji">${raid.boss.emoji}</span></div></div>
+       <div class="hunt-cmd battle-cmd"></div>
        <div class="rbar-label">보스 HP <span id="rBossTxt"></span></div>
        <div class="rbar"><div id="rBossHp" class="rbar-fill boss"></div></div>
        <div class="rbar-label">파티 HP <span id="rPartyTxt"></span> <small id="rDr"></small></div>
@@ -1792,6 +1859,7 @@ function renderBattle(raid) {
      </div>`;
   const boss = el('rBoss');
   if (boss) boss.addEventListener('pointerdown', tapRaidBoss);
+  updateBattleCmd('raid');
   const sk = document.getElementById('rSkillBtn');
   if (sk) sk.onclick = doRaidSkill;
   raidBuiltFor = raid.startTs;
@@ -1847,8 +1915,9 @@ function tapRaidBoss(e) {
   if (!curRaid || curRaid.status !== 'active') return;
   if (curRaid.startTs + curRaid.duration <= Date.now()) return;   // 타임아웃
   const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-  if (now - raidLastTap < RAID_TAP_MS) return;
+  if (now - raidLastTap < RAID_TAP_MS || now < raidLockUntil) return;
   raidLastTap = now; raidLocalHits++;
+  pendingTap = e ? { ev: e, undo() { if (raidLocalHits > 0) raidLocalHits--; } } : null;
   vibe(6); sfx('hit');
   const boss = document.getElementById('rBoss');
   if (boss) { boss.classList.remove('hit'); void boss.offsetWidth; boss.classList.add('hit'); }
@@ -2103,6 +2172,7 @@ function renderDunBattle() {
        <div class="raid-timerrow"><span class="raid-boss-name">🌌 ${f.floor}층 · ${f.emoji} ${esc(f.name)}</span><span class="raid-timer">⏱ <b id="dTimer">--</b></span>${battleXBtn()}</div>
        <div id="dPhases" class="dph-row dun-bphases"></div>
        <div class="raid-stage"><div id="dBoss" class="raid-mon" role="button" aria-label="보스 공격"><span class="rmon-emoji">${f.emoji}</span><span id="dBossEl" class="dun-boss-el"></span></div></div>
+       <div class="hunt-cmd battle-cmd"></div>
        <div class="rbar-label">보스 HP <span id="dBossTxt"></span></div>
        <div class="rbar"><div id="dBossHp" class="rbar-fill boss"></div></div>
        <div class="rbar-label">내 HP <span id="dHpTxt"></span> <small id="dBuffs"></small></div>
@@ -2113,6 +2183,7 @@ function renderDunBattle() {
        <div id="dResult" class="raid-resultwrap"></div>
      </div>`;
   el('dBoss').addEventListener('pointerdown', tapDunBoss);
+  updateBattleCmd('dun');
   dunBuiltFor = f.startTs;
   updateDunUI();
 }
@@ -2150,6 +2221,7 @@ function updateDunUI() {
     if (sw.dataset.h !== html) { sw.innerHTML = html; sw.dataset.h = html; }
   }
   const wq = f.weapons.find(w => w.equipped) || {};
+  updateBattleCmd('dun');   // 무기를 바꿔 끼면 커맨드도 바뀐다
   const sc = el('dSkC'), se = el('dSkE');
   // 글자가 바뀔 때만 다시 쓴다 — 매 프레임 textContent 를 쓰면 아이폰 햅틱 오버레이가 계속 지워져 탭이 버튼에 바로 닿는다
   const setTxt = (b, t) => { if (b.dataset.t !== t) { b.textContent = t; b.dataset.t = t; } };
@@ -2178,8 +2250,9 @@ function tapDunBoss(e) {
   if (e) e.preventDefault();
   if (!dunF || dunF.status !== 'active' || dunNow() - dunF.startTs >= dunF.duration) return;
   const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-  if (now - dunLastTap < RAID_TAP_MS) return;
+  if (now - dunLastTap < RAID_TAP_MS || now < dunLockUntil) return;
   dunLastTap = now; dunLocalHits++;
+  pendingTap = e ? { ev: e, undo() { if (dunLocalHits > 0) dunLocalHits--; } } : null;
   vibe(6); sfx('hit');
   const boss = el('dBoss');
   if (boss) { boss.classList.remove('hit'); void boss.offsetWidth; boss.classList.add('hit'); }
