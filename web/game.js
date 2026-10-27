@@ -973,7 +973,7 @@ const ELEMENT_SKILLS = {
 const STRONG_ATTACKS = {
   warrior: { name: '베어 가르기', emoji: '⚔️', taps: 6,  gapMs: 350 },
   archer:  { name: '관통 사격',   emoji: '🏹', taps: 8,  gapMs: 350 },
-  tanker:  { name: '방패 강타',   emoji: '🛡️', taps: 5,  gapMs: 750 },
+  tanker:  { name: '방패 강타',   emoji: '🛡️', taps: 8,  gapMs: 750 },
   healer:  { name: '별빛 폭발',   emoji: '✨', taps: 22, gapMs: 900, buff: { mult: 1.5, ms: 5000 } },
 };
 function strongUnits(cls, power) {
