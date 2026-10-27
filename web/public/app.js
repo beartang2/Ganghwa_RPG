@@ -202,7 +202,7 @@ function show(which) {
 // 안내창은 한 번 닫으면 다시 안 뜬다(기기에 영구 저장). ❔ 버튼으로 다시 열 수 있음.
 // 신규 유저는 가이드를 보여주고(패치노트는 건너뜀), 기존 유저는 새 버전이면 패치노트를 띄운다.
 function maybeShowGuide() {
-  if (!localStorage.getItem('guideSeen')) { el('guide').hidden = false; localStorage.setItem('patchSeen', PATCH.version); return true; }
+  if (!localStorage.getItem('guideSeen')) { openGuide(); localStorage.setItem('patchSeen', PATCH.version); return true; }
   return false;
 }
 function patchUnread() { return localStorage.getItem('patchSeen') !== PATCH.version; }
@@ -993,16 +993,29 @@ function tapMonster(e) {
   const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
   if (now - huntLastTap < HUNT_TAP_MS || now < huntLockUntil) return;
   huntLastTap = now;
-  const c = huntCur; c.taps += huntBuffMult(now);
+  const c = huntCur, amt = huntBuffMult(now); c.taps += amt;
   const last = c.taps >= c.need;
   const isCrit = last && c.r.crit;                 // 실제 치명타는 마지막 타격에 표시
   vibe(isCrit ? [12, 28, 22] : last ? 18 : 7);     // 타격 햅틱(처치·치명타는 강하게)
   sfx(isCrit ? 'crit' : last ? 'kill' : 'hit');
   const monEl = el('huntMon');
   if (monEl) { monEl.classList.remove('hit'); void monEl.offsetWidth; monEl.classList.add('hit'); }
-  spawnHuntDmg(Math.round((isCrit ? 2 : 1) * c.dmgPerTap * huntBuffMult(now)), isCrit);
+  const dmgEl = spawnHuntDmg(Math.round((isCrit ? 2 : 1) * c.dmgPerTap * amt), isCrit);
   el('huntHpFill').style.width = Math.max(0, 100 - c.taps / c.need * 100) + '%';
+  // 이 탭이 곧 드래그·홀딩(강공격)으로 이어지면 refundTap() 이 되돌린다 — 일반 공격과 강공격이 같이 나가지 않게
+  huntPendingTap = last || !e ? null : { ev: e, amt, dmgEl, mon: c };
   if (last) killMonster();
+}
+// 몬스터를 누른 그 손가락이 커맨드(끌기·꾹 누르기)가 되면 누르는 순간 들어간 일반 공격 1회를 취소한다.
+// (처치한 탭은 되돌리지 않는다 — 그때는 몬스터가 이미 쓰러져 커맨드도 시작되지 않는다)
+// 같은 누름인지는 pointerdown 이벤트 객체가 같은지로 본다(마우스는 pointerId 가 늘 같아서 id 로는 못 가린다).
+let huntPendingTap = null;
+function refundTap(p) {
+  if (!p || p.done || huntCur !== p.mon || p.mon.dead) return;
+  p.done = true;
+  p.mon.taps = Math.max(0, p.mon.taps - p.amt);
+  if (p.dmgEl) p.dmgEl.remove();
+  el('huntHpFill').style.width = Math.max(0, 100 - p.mon.taps / p.mon.need * 100) + '%';
 }
 
 /* ---------- ⚡ 강공격 커맨드 (시험판: 사냥) ----------
@@ -1071,7 +1084,8 @@ function gDown(e) {
   if (gst || !window.Gesture || !huntOpen || !huntCur || huntCur.dead) return;
   if (e.pointerType === 'mouse' && e.button !== 0) return;
   const cfg = strongCfg();
-  gst = { id: e.pointerId, cfg, pts: [gPoint(e)], drawing: false, holdRaf: 0 };
+  gst = { id: e.pointerId, cfg, pts: [gPoint(e)], drawing: false, holdRaf: 0,
+    tap: huntPendingTap && huntPendingTap.ev === e ? huntPendingTap : null };   // 이 누름이 몬스터 위 일반 공격이었나
   window.addEventListener('pointermove', gMove);
   window.addEventListener('pointerup', gUp);
   window.addEventListener('pointercancel', gCancel);
@@ -1083,6 +1097,7 @@ function holdTick() {
   const moved = window.Gesture.maxDisplacement(gst.pts) > G.holdSlop;
   if (moved) { if (GTRAIL) GTRAIL.ring(0, 0, -1); return; }
   const p = (held - 150) / (G.holdMs - 150);
+  if (held >= 200) refundTap(gst.tap);   // 연타의 짧은 탭(<0.2초)은 그대로 일반 공격
   if (p > 0 && GTRAIL) GTRAIL.ring(gst.pts[0].x, gst.pts[0].y, Math.min(1, p));
   if (p >= 1 && !gst.full) { gst.full = true; vibe(10); sfx('charge'); }
   gst.holdRaf = requestAnimationFrame(holdTick);
@@ -1095,6 +1110,7 @@ function gMove(e) {
   for (const p of pts) gst.pts.push(p);
   if (!gst.drawing && window.Gesture.maxDisplacement(gst.pts) >= window.Gesture.CFG.tapSlop) {
     gst.drawing = true;
+    refundTap(gst.tap);
     if (GTRAIL) GTRAIL.begin(gst.cfg.style || 'plain', gst.pts);   // 방패는 끌면 '커맨드 아님' 회색 선
   } else if (gst.drawing && GTRAIL) for (const p of pts) GTRAIL.add(p);
 }
@@ -1104,6 +1120,7 @@ function gEnd() {
   window.removeEventListener('pointercancel', gCancel);
   if (gst && gst.holdRaf) cancelAnimationFrame(gst.holdRaf);
   if (gst && gst.drawing) gLastEnd = performance.now();
+  huntPendingTap = null;
   if (GTRAIL) GTRAIL.ring(0, 0, -1);
   gst = null;
 }
@@ -1156,6 +1173,7 @@ function spawnHuntDmg(n, crit) {
   t.style.top = (rc.top + rc.height * 0.3) + 'px';
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 650);
+  return t;
 }
 function spawnHuntReward(text, crit) {
   const mon = el('huntMon'); if (!mon) return;
@@ -2179,6 +2197,34 @@ el('mineClose').onclick = closeMine;
 el('mineModal').addEventListener('click', e => { if (e.target === el('mineModal')) closeMine(); });
 el('modal').addEventListener('click', e => { if (e.target === el('modal')) el('modal').hidden = true; });
 el('guideClose').onclick = () => { el('guide').hidden = true; localStorage.setItem('guideSeen', '1'); };
+/* 플레이 방법 — 카테고리 탭 + 사냥 탭의 직업별 강공격(STRONG 표에서 그대로 만들어 수치가 어긋나지 않게) */
+function setGuideTab(g) {
+  document.querySelectorAll('.gtab').forEach(b => { const on = b.dataset.g === g; b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); });
+  document.querySelectorAll('.guide-pane').forEach(p => { p.hidden = p.dataset.g !== g; });
+  el('guide').querySelector('.guide-card').scrollTop = 0;
+}
+document.querySelectorAll('.gtab').forEach(b => { b.onclick = () => setGuideTab(b.dataset.g); });
+// 커맨드 모양 미니 그림(44px) — 선 색은 사냥터 트레일과 같은 계열
+const GS_GLYPH = {
+  arc: '<path d="M10 32 A16 16 0 0 1 34 14" fill="none" stroke="#ffd66b" stroke-width="3.2" stroke-linecap="round"/><path d="M30 10 l5 4 -6 2" fill="none" stroke="#ffd66b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>',
+  line: '<circle cx="22" cy="9" r="4" fill="#ff8a2a"/><path d="M22 15 V35" stroke="#7fd4ff" stroke-width="3" stroke-linecap="round" stroke-dasharray="4 3"/><path d="M17 31 l5 5 5 -5" fill="none" stroke="#7fd4ff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>',
+  star: '<path d="M22 7 L31 35 L8 17.5 H36 L13 35 Z" fill="none" stroke="#d6b0ff" stroke-width="2.6" stroke-linejoin="round"/>',
+  hold: '<circle cx="22" cy="22" r="13" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="4"/><path d="M22 9 A13 13 0 1 1 9.6 26" fill="none" stroke="#ffd66b" stroke-width="4" stroke-linecap="round"/><circle cx="22" cy="22" r="4" fill="#7fb4d6"/>',
+};
+const GS_ORDER = [['warrior', '⚔️ 검 · 근거리 딜러'], ['archer', '🏹 활 · 원거리 딜러'], ['tanker', '🛡️ 방패 · 탱커'], ['healer', '✨ 지팡이 · 힐러']];
+function renderGuideStrong() {
+  const box = el('guideStrong'); if (!box) return;
+  const mine = me && me.class;
+  box.innerHTML = GS_ORDER.map(([cls, who]) => {
+    const c = STRONG[cls];
+    const extra = cls === 'archer' ? ' · 길게 당길수록 셈(40~100%)' : '';
+    const buff = c.buff ? ` · <b>${c.buff.name}</b> ${c.buff.ms / 1000}초간 연타 ×${c.buff.mult}` : '';
+    return `<div class="gs-row${cls === mine ? ' me' : ''}"><svg class="gs-glyph" viewBox="0 0 44 44" aria-hidden="true">${GS_GLYPH[c.cmd]}</svg>
+      <div class="gs-txt"><b>${who}${cls === mine ? '<span class="gs-me">내 무기</span>' : ''}</b>
+      <span>${c.how} → ⚡${c.name} (연타 ${c.taps}회분${extra})${buff}</span></div></div>`;
+  }).join('');
+}
+function openGuide(tab) { renderGuideStrong(); setGuideTab(tab || 'forge'); el('guide').hidden = false; }
 el('patchClose').onclick = closePatch;
 el('noticeItem').onclick = () => { closeMenu(); openPatch(false); };
 /* ---------- ⚙️ 설정 (상단 오른쪽) ----------
@@ -2222,7 +2268,7 @@ el('vibeItem').onclick = () => {
   if (vibeOn) vibe([18, 40, 18]);   // 켰을 때 바로 한 번 느껴보게(아이폰은 이 줄 위의 탭 오버레이가 톡)
 };
 el('soundItem').onclick = () => { soundOn = !soundOn; localStorage.setItem('soundOff', soundOn ? '0' : '1'); updateSoundBtn(); if (soundOn) { ensureAudio(); sfx('click'); } };
-el('helpItem').onclick = () => { closeMenu(); el('guide').hidden = false; };
+el('helpItem').onclick = () => { closeMenu(); openGuide(); };
 el('accountItem').onclick = () => {
   closeMenu();
   if (me && me.linked) { toast('✉️ ' + (me.email || '') + ' 계정에 연결돼 있어요', 'ok'); return; }

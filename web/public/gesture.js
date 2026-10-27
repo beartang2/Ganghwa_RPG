@@ -134,7 +134,7 @@
     tapSlop: 10,            // 이 안에서만 움직이면 '탭'(일반 공격)
     arcMinLen: 75, arcMinTurn: 50, arcMaxTurn: 400, arcConsistency: 0.65, arcMaxStep: 62, arcMaxPeak: 0.6, arcMaxDur: 3000,
     lineMinLen: 55, lineStraight: 0.9, lineMaxDev: 0.2, lineAway: 0.55, lineFullLen: 180,
-    starMinLen: 220, starMinScore: 0.78, starMaxDur: 8000,
+    starMinLen: 220, starMinScore: 0.78, starMaxDur: 8000, starTrimHead: [0, 0.07, 0.14, 0.2], starTrimTail: [0, 0.1],
     holdMs: 800, holdGuardMs: 400, holdSlop: 14,
   };
   // 휘는 정도: 매끄럽게 다듬어 21점으로 다시 찍은 경로에서 이웃한 마디끼리의 방향 변화(부호 있음)를 더한다
@@ -184,9 +184,27 @@
   }
   function judgeStar(s) {
     if (pathLength(s) < CFG.starMinLen) return { ok: false, why: 'short' };
-    const r = recognize(s);
-    const ok = r.name === 'star' && r.score >= CFG.starMinScore && dur(s) <= CFG.starMaxDur;
-    return { ok, power: 1, why: ok ? null : 'shape', match: r.name, score: +r.score.toFixed(3) };
+    // 몬스터를 누르고 꼭짓점까지 '들어가는 선', 다 그리고 살짝 삐친 '나가는 선' 이 붙으면 별 모양이 흐트러진다.
+    // 그래서 시작 쪽 최대 20%, 끝 쪽 최대 10% 를 잘라 본 경우들 중 가장 별다운 것을 쓴다.
+    let best = null;
+    for (const a of CFG.starTrimHead) for (const b of CFG.starTrimTail) {
+      const sub = a || b ? trimPath(s, a, b) : s;
+      if (sub.length < 8) continue;
+      const r = recognize(sub);
+      if (!best || (r.name === 'star') > (best.name === 'star') || ((r.name === 'star') === (best.name === 'star') && r.score > best.score)) best = r;
+    }
+    const ok = best.name === 'star' && best.score >= CFG.starMinScore && dur(s) <= CFG.starMaxDur;
+    return { ok, power: 1, why: ok ? null : 'shape', match: best.name, score: +best.score.toFixed(3) };
+  }
+  // 경로 길이 기준으로 앞 a, 뒤 b 비율만큼 잘라 낸 부분 경로
+  function trimPath(s, a, b) {
+    const L = pathLength(s), from = L * a, to = L * (1 - b), out = [];
+    let acc = 0;
+    for (let i = 0; i < s.length; i++) {
+      if (i) acc += dist(s[i - 1], s[i]);
+      if (acc >= from && acc <= to) out.push(s[i]);
+    }
+    return out;
   }
   function judgeHold(s, ctx) {
     const held = ctx && ctx.heldMs != null ? ctx.heldMs : dur(s);

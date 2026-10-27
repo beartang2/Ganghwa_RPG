@@ -50,6 +50,11 @@ function expect(label, v, cmp, th) {
 }
 console.log('[✨ 별]');
 expect('흔들린 별 인식', rate(star, isStar), '>=', 0.9);
+// 몬스터(별 안쪽 아무 데)를 누르고 꼭짓점까지 들어간 뒤 그린 별 · 다 그리고 살짝 삐친 별
+function starLeadIn() { const s = star(); const c = { x: R(170, 230), y: R(270, 330), t: s[0].t - 60 }; return stroke([c, s[0]], { noise: 1 }).map(p => ({ ...p, t: p.t - 200 })).concat(s); }
+function starTail() { const s = star(); const z = s[s.length - 1]; return s.concat(stroke([z, { x: z.x + R(-25, 25), y: z.y + R(10, 35) }]).map(p => ({ ...p, t: p.t + z.t }))); }
+expect('들어가는 선이 붙은 별', rate(starLeadIn, isStar), '>=', 0.85);
+expect('끝이 삐친 별', rate(starTail, isStar), '>=', 0.85);
 expect('원 → 별 오인', rate(() => polygon(40), isStar), '<=', 0.02);
 expect('삼각형 → 별 오인', rate(() => polygon(3), isStar), '<=', 0.02);
 expect('사각형 → 별 오인', rate(() => polygon(4), isStar), '<=', 0.02);
