@@ -504,6 +504,14 @@ async function main() {
     ok(sk.ok && before - sk.raid.bossHP === Math.round((12 + 99 * 8) * 0.5 * GAME.CONFIG.raidHitDmgMult * 22 * (1 + GAME.CONFIG.raidAtkBuffCap)), '별빛 폭발 피해에도 공격력 업 반영(' + (sk.dmg || 0) + ')');
   }
 
+  // 정수 페이스 — ★3 까지는 그 ★ 로 들어갈 수 있는 가장 정수 많은 보스를 하루 레이드 횟수만큼 깨면 다음 ★ 정수가 모인다
+  console.log('[정수 페이스]');
+  for (let n = 0; n < 3; n++) {
+    const best = Math.max(...GAME.BOSSES.filter(b => b.reqAscend <= n).map(b => b.essence));
+    const need = GAME.ascendReq(n + 1).essence;
+    ok(best * GAME.CONFIG.dailyRaids >= need, '★' + n + ' → ★' + (n + 1) + ': 하루 ' + GAME.CONFIG.dailyRaids + '회 × 🌟' + best + ' = ' + best * GAME.CONFIG.dailyRaids + ' ≥ ' + need);
+  }
+
   console.log('\n결과: ' + pass + ' pass, ' + fail + ' fail');
   process.exit(fail ? 1 : 0);
 }

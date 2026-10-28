@@ -1362,14 +1362,17 @@ function huntSpawn(level) {
 // reqLevel/reqAscend 를 모든 참가자가 만족해야 입장할 수 있다.
 // hp 는 각 보스의 reqLevel 근처 플레이어가 15초(혼자면 20초) 안에 '쉬지 않고 연타 + 스킬' 로
 // 겨우 넘기는 선에 맞춰져 있다 — 대충 두들기면 못 깬다.
+// essence(🌟 정수, 참가자 전원 확정) — ★3 까지는 '하루 레이드(dailyRaids 3회)로 다음 ★ 정수(20·40·60)' 가 모이게:
+//   ★0 → 드래곤 7×3=21 ≥ 20 · ★1 → 거인 20×3=60 ≥ 40 · ★2 → 거인 60 ≥ 60 (공허는 ★3 부터라 ★2 땐 못 들어감).
+//   ★3 이후(80·100…)는 공허 30×3=90 으로 하루~이틀. 테스트가 이 규칙을 지킨다(test-adapter '정수 페이스').
 const BOSSES = [
-  { id: 'goblin', name: '고블린 군주', emoji: '👺', tier: '입문',   hp: 2000,  atk: 130,  reward: 5000,   dropChance: 0.10, danger: 60,  essence: 1, reqLevel: 0,  reqAscend: 0 },
-  { id: 'golem',  name: '스톤 골렘',   emoji: '🗿', tier: '보통',   hp: 20000, atk: 340,  reward: 15000,  dropChance: 0.18, danger: 80,  essence: 1, reqLevel: 30, reqAscend: 0 },
-  { id: 'dragon', name: '고대 드래곤', emoji: '🐲', tier: '어려움', hp: 38000, atk: 600,  reward: 40000,  dropChance: 0.28, danger: 100, essence: 2, reqLevel: 60, reqAscend: 0 },
-  { id: 'demon',  name: '마계 군주',   emoji: '😈', tier: '지옥',   hp: 60000, atk: 780,  reward: 90000,  dropChance: 0.40, danger: 115, essence: 2, reqLevel: 85, reqAscend: 0 },
+  { id: 'goblin', name: '고블린 군주', emoji: '👺', tier: '입문',   hp: 2000,  atk: 130,  reward: 5000,   dropChance: 0.10, danger: 60,  essence: 1,  reqLevel: 0,  reqAscend: 0 },
+  { id: 'golem',  name: '스톤 골렘',   emoji: '🗿', tier: '보통',   hp: 20000, atk: 340,  reward: 15000,  dropChance: 0.18, danger: 80,  essence: 3,  reqLevel: 30, reqAscend: 0 },
+  { id: 'dragon', name: '고대 드래곤', emoji: '🐲', tier: '어려움', hp: 38000, atk: 600,  reward: 40000,  dropChance: 0.28, danger: 100, essence: 7,  reqLevel: 60, reqAscend: 0 },
+  { id: 'demon',  name: '마계 군주',   emoji: '😈', tier: '지옥',   hp: 60000, atk: 780,  reward: 90000,  dropChance: 0.40, danger: 115, essence: 10, reqLevel: 85, reqAscend: 0 },
   // 초월 전용 — ★ 가 있어야 입장 가능
-  { id: 'titan',  name: '초월의 거인', emoji: '🌋', tier: '초월',   hp: 43000, atk: 900,  reward: 150000, dropChance: 0.45, danger: 110, essence: 3, reqLevel: 50, reqAscend: 1 },
-  { id: 'void',   name: '공허의 군주', emoji: '🌌', tier: '초월',   hp: 76000, atk: 1200, reward: 300000, dropChance: 0.60, danger: 125, essence: 4, reqLevel: 80, reqAscend: 3 },
+  { id: 'titan',  name: '초월의 거인', emoji: '🌋', tier: '초월',   hp: 43000, atk: 900,  reward: 150000, dropChance: 0.45, danger: 110, essence: 20, reqLevel: 50, reqAscend: 1 },
+  { id: 'void',   name: '공허의 군주', emoji: '🌌', tier: '초월',   hp: 76000, atk: 1200, reward: 300000, dropChance: 0.60, danger: 125, essence: 30, reqLevel: 80, reqAscend: 3 },
 ];
 function bossById(id) { return BOSSES.find(b => b.id === id); }
 // 참여 인원에 맞춘 난이도 스케일. 체력은 인원수보다 가파르게, 화력은 완만하게 올라간다
