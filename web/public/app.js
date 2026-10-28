@@ -10,6 +10,7 @@ const PATCH = {
   version: '6',
   title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
+    '🎯 <b>미션·시즌 패스 보상 대폭 상향</b> — 골드는 내 최고 강화 기록에 맞춰 <b>강화 n회분</b>으로 커지고, 💎프리즘 · 💠파편 · 🌟정수 · 🗝️열쇠 · 🔮마석 · 🔨망치까지 줘요. 패스 무료 트랙만으로 한 시즌 💠300 · 🌟45 · 💎45',
     '🌟 <b>레이드 정수 상향</b> — 👺1 · 🗿3 · 🐲7 · 😈10 · 🌋20 · 🌌30. <b>★3까지는 하루 레이드 3번이면 다음 ★에 필요한 정수가 모여요</b>',
     '📱 <b>휴대폰 전투 화면 넓게</b> — 레이드·초월 던전에서 보스 판이 화면 가운데를 크게 차지해요. 별·호·당기기 커맨드를 넉넉하게 그리고, 보스도 더 크게 눌러요',
     '⏱ <b>혼자 레이드 +5초</b> — 혼자 도전하면 전투 시간이 <b>20초</b>로 늘어나요 · ✨ 힐러의 <b>파티 공격력 업</b>(최대 +15%, 힐러 자신 포함)이 이제 레이드에서 제대로 들어가요 · 🛡️ <b>방패 강타</b>가 연타 5회분 → <b>8회분</b>으로 세졌어요',
@@ -3017,7 +3018,7 @@ async function renderMissions() {
   if (!r.ok) { el('missionList').innerHTML = '<div class="empty">불러오기 실패</div>'; return; }
   const list = missionScope === 'daily' ? r.daily : r.weekly;
   document.querySelectorAll('.mission-tab').forEach(b => b.classList.toggle('active', b.dataset.scope === missionScope));
-  el('missionList').innerHTML = list.map(m => {
+  el('missionList').innerHTML = '<div class="mission-hint">💰 골드는 내 최고 강화 기록(★ 포함)의 강화 비용에 맞춰 커져요</div>' + list.map(m => {
     const pct = Math.min(100, Math.round(m.progress / m.target * 100));
     const btn = m.claimed
       ? '<button class="btn sm mission-claim" disabled>완료 ✓</button>'
@@ -3027,7 +3028,7 @@ async function renderMissions() {
     return '<div class="mission-row' + (m.done && !m.claimed ? ' ready' : '') + (m.claimed ? ' claimed' : '') + '">'
       + '<div class="mission-info"><div class="mission-desc">' + esc(m.desc) + '</div>'
       + '<div class="mission-bar"><div class="mission-fill" style="width:' + pct + '%"></div></div>'
-      + '<div class="mission-reward">💰' + m.gold.toLocaleString() + ' · 🎟️ XP ' + m.xp + '</div></div>'
+      + '<div class="mission-reward">' + rewardText(m.reward || { gold: m.gold }) + ' <span class="mr-xp">🎟️ XP ' + m.xp + '</span></div></div>'
       + btn + '</div>';
   }).join('');
   const bp = r.bp;
@@ -3042,13 +3043,17 @@ async function claimMission(id) {
   await renderMissions();
 }
 
-function bpRewardText(r) {
+// 미션·패스 보상 꾸러미 한 줄 — 서버 bundleFor 와 같은 키(골드는 서버가 내 기준으로 계산해서 보낸다)
+const REWARD_ICON = [['prism', '💎'], ['shard', '💠'], ['essence', '🌟'], ['boxkey', '🗝️'], ['stone', '🔮'],
+  ['protect', '🛡️'], ['boost', '🍀'], ['hammer', '🔨'], ['prismdye', '🫧'], ['slots', '🎒']];
+function rewardText(r) {
+  if (!r) return '-';
   const parts = [];
-  if (r.gold) parts.push('💰' + r.gold.toLocaleString());
-  if (r.protect) parts.push('🛡️×' + r.protect);
-  if (r.boost) parts.push('🍀×' + r.boost);
-  return parts.join(' ') || '-';
+  if (r.gold) parts.push('<span class="rw">💰' + r.gold.toLocaleString() + '</span>');
+  for (const [k, ic] of REWARD_ICON) if (r[k]) parts.push('<span class="rw">' + ic + r[k] + (k === 'slots' ? '칸' : '') + '</span>');
+  return parts.length ? '<span class="rws">' + parts.join('') + '</span>' : '-';
 }
+const bpRewardText = rewardText;
 async function openPass() { el('passModal').hidden = false; await renderPass(); }
 function closePass() { el('passModal').hidden = true; }
 async function renderPass() {

@@ -225,6 +225,27 @@ async function main() {
   ok(!(await req('POST', '/api/bp-claim', { token: tok, body: { level: 5, track: 'free' } })).body.ok, '중복 수령 거부');
   ok(!(await req('POST', '/api/bp-claim', { token: tok, body: { level: 5, track: 'paid' } })).body.ok, '프리미엄 없이 유료 트랙 거부');
   ok(!(await req('POST', '/api/bp-premium', { token: tok })).body.ok, '시즌 패스 구매 준비중');
+  const t10 = bpv.track.find(t => t.level === 10).free;
+  ok(t10.essence > 0 && t10.hammer > 0 && t10.prism > 0 && t10.gold > 0, '패스 Lv10 무료 보상에 🌟·🔨·💎·골드');
+
+  // 미션 보상 꾸러미 — 새 재화 지급·골드는 최고 기록 기준 '강화 n회분'·가방이 모자라면 수령 막기
+  {
+    const mdb = { players: {}, parties: {}, log: [] };
+    const mp = GAME.makePlayer('미션러'); GAME.norm(mp); Object.assign(mp, { level: 0, best: 99 }); mdb.players.m = mp;
+    const v0 = GAME.missionView(mdb, 'm');
+    for (const k of Object.keys(mp.mstat.d)) { mp.mstat.d[k] = 999; mp.mstat.w[k] = 999; }
+    const m0 = v0.daily[0];
+    ok(m0.reward.gold > 5000, '초월 직후(+0)여도 최고 기록(+99) 기준 골드(+0 기준이면 ~2천) (' + m0.reward.gold.toLocaleString() + ')');
+    const before = Object.assign({}, mp.inv.items), prBefore = mp.prism || 0;
+    const r0 = GAME.missionClaim(mdb, 'm', m0.id);
+    const itemsOk = Object.keys(m0.reward).filter(k => k !== 'gold').every(k => k === 'prism'
+      ? (mp.prism || 0) - prBefore === m0.reward.prism : (mp.inv.items[k] || 0) - (before[k] || 0) === m0.reward[k]);
+    ok(r0.ok && itemsOk, '일일 미션 보상 꾸러미 지급 (' + r0.msg + ')');
+    for (const k of ['protect', 'boost', 'dye', 'eltkt', 'shard', 'essence', 'boxkey', 'stone', 'hammer', 'prismdye']) mp.inv.items[k] = 999;
+    const m1 = v0.daily[1];
+    const r1 = GAME.missionClaim(mdb, 'm', m1.id);
+    ok(!r1.ok && /가방/.test(r1.error) && !GAME.missionView(mdb, 'm').daily[1].claimed, '가방이 모자라면 수령을 막고 미수령으로 남긴다');
+  }
 
   // 장비 칸(무기 여러 자루) + 💎 프리즘 — 저장 왕복(보관 무기의 레벨이 저장 때 사라지지 않는지)
   console.log('\n[장비 칸/프리즘]');

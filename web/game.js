@@ -2383,21 +2383,64 @@ function ensureMstat(p) {
 // 액션 함수들이 호출 — 일일·주간 버킷 동시 증가
 function bumpMstat(p, key, n) { const m = ensureMstat(p); n = n || 1; m.d[key] = (m.d[key] || 0) + n; m.w[key] = (m.w[key] || 0) + n; }
 
+/* 미션·패스 보상 꾸러미 — { gold, enh, prism, shard, essence, boxkey, stone, protect, boost, hammer, prismdye, slots }
+ *  gold + enh × (최고 레벨·최고 ★ 기준 강화 1회 비용) 을 골드로 준다 → +0 이든 ★2 +99 든 '강화 n회분' 이라 체감이 같다.
+ *  (고정 골드만 주면 +70 의 하루 사냥 4.8만G 앞에서 1,200G 가 의미가 없었다.) 나머지는 새 재화(💎·초월 재료·프리즘 재료). */
 const DAILY_POOL = [
-  { id: 'd_hunt',   stat: 'hunt',   target: 15, gold: 1200, xp: 30, desc: '몬스터 15마리 사냥' },
-  { id: 'd_enh',    stat: 'enh',    target: 20, gold: 1000, xp: 30, desc: '강화 20회 시도' },
-  { id: 'd_mine',   stat: 'mine',   target: 12, gold: 1000, xp: 30, desc: '곡괭이질 12회' },
-  { id: 'd_attend', stat: 'attend', target: 1,  gold: 800,  xp: 20, desc: '출석하기' },
-  { id: 'd_fight',  stat: 'fight',  target: 1,  gold: 800,  xp: 20, desc: '싸움 1회 도전' },
-  { id: 'd_raid',   stat: 'raid',   target: 1,  gold: 1500, xp: 40, desc: '레이드 1회 참여' },
+  { id: 'd_hunt',   stat: 'hunt',   target: 15, xp: 30, desc: '몬스터 15마리 사냥',
+    reward: { gold: 1500, enh: 10, shard: 15, stone: 2 } },
+  { id: 'd_enh',    stat: 'enh',    target: 20, xp: 30, desc: '강화 20회 시도',
+    reward: { gold: 1500, enh: 10, boost: 2, boxkey: 1 } },
+  { id: 'd_mine',   stat: 'mine',   target: 12, xp: 30, desc: '곡괭이질 12회',
+    reward: { gold: 1500, enh: 10, stone: 3, boxkey: 1 } },
+  { id: 'd_attend', stat: 'attend', target: 1,  xp: 20, desc: '출석하기',
+    reward: { gold: 1000, enh: 6, boxkey: 1, prism: 1 } },
+  { id: 'd_fight',  stat: 'fight',  target: 1,  xp: 20, desc: '싸움 1회 도전',
+    reward: { gold: 1000, enh: 6, protect: 1, shard: 10 } },
+  { id: 'd_raid',   stat: 'raid',   target: 1,  xp: 40, desc: '레이드 1회 참여',
+    reward: { gold: 2000, enh: 15, essence: 3, shard: 10 } },
 ];
 const WEEKLY_POOL = [
-  { id: 'w_enh',      stat: 'enh',      target: 100, gold: 6000, xp: 120, desc: '강화 100회 시도' },
-  { id: 'w_hunt',     stat: 'hunt',     target: 150, gold: 6000, xp: 120, desc: '몬스터 150마리 처치' },
-  { id: 'w_fightwin', stat: 'fightWin', target: 10,  gold: 6000, xp: 120, desc: '싸움 10승' },
-  { id: 'w_raid',     stat: 'raid',     target: 5,   gold: 8000, xp: 150, desc: '레이드 5회 참여' },
-  { id: 'w_mine',     stat: 'mine',     target: 80,  gold: 6000, xp: 120, desc: '곡괭이질 80회' },
+  { id: 'w_enh',      stat: 'enh',      target: 100, xp: 120, desc: '강화 100회 시도',
+    reward: { gold: 8000, enh: 60, prism: 6, hammer: 1, boost: 5 } },
+  { id: 'w_hunt',     stat: 'hunt',     target: 150, xp: 120, desc: '몬스터 150마리 처치',
+    reward: { gold: 8000, enh: 60, shard: 80, boxkey: 3 } },
+  { id: 'w_fightwin', stat: 'fightWin', target: 10,  xp: 120, desc: '싸움 10승',
+    reward: { gold: 8000, enh: 60, prism: 6, protect: 3 } },
+  { id: 'w_raid',     stat: 'raid',     target: 5,   xp: 150, desc: '레이드 5회 참여',
+    reward: { gold: 10000, enh: 80, essence: 20, prism: 6 } },
+  { id: 'w_mine',     stat: 'mine',     target: 80,  xp: 120, desc: '곡괭이질 80회',
+    reward: { gold: 8000, enh: 60, stone: 20, boxkey: 3 } },
 ];
+const REWARD_ITEMS = ['shard', 'essence', 'boxkey', 'stone', 'protect', 'boost', 'hammer', 'prismdye'];
+// 기준은 '지금까지 오른 최고 레벨 · 최고 ★' 의 강화 비용 — 초월 직후(+0)에 받아도 손해가 없고, 받는 때를 미룰 이유도 없다.
+function rewardGold(p, r) { return Math.round((r.gold || 0) + (r.enh || 0) * enhanceCost(Math.max(p.level || 0, p.best || 0), ascendMax(p))); }
+// 이 플레이어가 받게 될 꾸러미(골드는 지금 무기 기준으로 계산된 값) — 화면 표시용
+function bundleFor(p, r) {
+  const out = {}, g = rewardGold(p, r);
+  if (g) out.gold = g;
+  if (r.prism) out.prism = r.prism;
+  for (const k of REWARD_ITEMS) if (r[k]) out[k] = r[k];
+  if (r.slots) out.slots = r.slots;
+  return out;
+}
+// 가방에 다 들어가는지(받다가 일부를 버리지 않게, 안 들어가면 수령 자체를 막는다)
+function bundleFits(p, r) {
+  const counts = Object.assign({}, ensureInv(p).items);
+  for (const k of REWARD_ITEMS) if (r[k]) counts[k] = (counts[k] || 0) + r[k];
+  let used = 0;
+  for (const k in counts) if (counts[k] > 0) used += slotsFor(counts[k]);
+  return used <= invSlots(p) + (r.slots || 0);
+}
+function bundleText(out) {
+  const parts = [];
+  if (out.gold) parts.push('💰+' + out.gold.toLocaleString());
+  if (out.prism) parts.push('💎+' + out.prism);
+  for (const k of REWARD_ITEMS) if (out[k]) parts.push(ITEMS[k].emoji + '+' + out[k]);
+  if (out.slots) parts.push('🎒+' + out.slots + '칸');
+  return parts.join(' ');
+}
+const BAG_FULL = '🎒 가방에 자리가 모자라요 — 칸을 비우고 다시 받아요.';
 const DAILY_COUNT = 4, WEEKLY_COUNT = 4;
 function seedNum(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
 // 날짜/주 시드로 결정적 선택 → 모든 유저가 같은 '오늘의 미션'을 본다(재현 가능·소셜).
@@ -2420,7 +2463,7 @@ function missionRow(p, m, scope) {
   const st = ensureMstat(p), cl = ensureMclaim(p);
   const prog = Math.min(m.target, (scope === 'daily' ? st.d : st.w)[m.stat] || 0);
   const claimed = (scope === 'daily' ? cl.d : cl.w).includes(m.id);
-  return { id: m.id, desc: m.desc, target: m.target, progress: prog, done: prog >= m.target, claimed, gold: m.gold, xp: m.xp };
+  return { id: m.id, desc: m.desc, target: m.target, progress: prog, done: prog >= m.target, claimed, reward: bundleFor(p, m.reward), xp: m.xp };
 }
 function missionAlert(p) { // 받을 수 있는 보상 개수(빨간점 배지용)
   let n = 0;
@@ -2449,24 +2492,33 @@ function missionClaim(db, id, missionId) {
   const row = missionRow(p, m, scope);
   if (row.claimed) return { ok: false, error: '이미 받은 보상이에요.' };
   if (!row.done) return { ok: false, error: '아직 완료하지 않았어요.' };
+  if (!bundleFits(p, m.reward)) return { ok: false, error: BAG_FULL };
   const cl = ensureMclaim(p);
   (scope === 'daily' ? cl.d : cl.w).push(m.id);
-  const gold = gainGold(p, m.gold);
+  const got = grantBundle(p, m.reward);
   addBpXp(p, m.xp);
-  return { ok: true, gold, xp: m.xp, msg: '미션 완료! +' + gold + 'G · 패스 XP +' + m.xp };
+  return { ok: true, reward: got, gold: got.gold || 0, xp: m.xp, msg: '미션 완료! ' + bundleText(got) + ' · 패스 XP +' + m.xp };
 }
 
 // ----- 배틀패스 -----
 const BP_XP_PER_LEVEL = 100, BP_MAX_LEVEL = 30;
+// 무료 트랙 30레벨 합계: 💠300 · 🔮60 · 🗝️20 · 🛡️6 · 💎45 · 🌟45 · 🔨3 + 골드(예전 고정분 6.2만 + 강화 615회분)
 function buildBpTrack() {
   const t = [];
   for (let lv = 1; lv <= BP_MAX_LEVEL; lv++) {
-    const free = { gold: 500 + lv * 100 };
-    if (lv % 5 === 0) free.protect = 1;                 // 5레벨마다 방지권
-    const paid = { gold: 1500 + lv * 200 };
-    if (lv % 3 === 0) paid.boost = 5;                   // 3레벨마다 부스트 5회
-    if (lv % 5 === 0) paid.protect = 2;
+    const free = { gold: 500 + lv * 100, enh: 5 + lv };  // 예전 고정 골드 + 강화 6~35회분(레벨이 오를수록 커진다)
+    if (lv % 2) free.shard = 20; else free.stone = 4;    // 홀수 💠 · 짝수 🔮
+    if (lv % 3 === 0) free.boxkey = 2;
+    if (lv % 5 === 0) { free.protect = 1; free.prism = 5; }
+    if (lv % 10 === 0) { free.essence = 15; free.hammer = 1; }
+    if (lv === BP_MAX_LEVEL) free.prism = (free.prism || 0) + 15;   // 마지막 칸 💎20
+    const paid = { gold: 1500 + lv * 200, enh: 10 + lv * 2 };
+    if (lv % 2) paid.shard = 40; else paid.stone = 8;
+    if (lv % 3 === 0) { paid.boost = 5; paid.boxkey = 3; }
+    if (lv % 5 === 0) { paid.protect = 2; paid.prism = 10; }
+    if (lv % 10 === 0) { paid.essence = 30; paid.hammer = 2; }
     if (lv === CONFIG.invBpLevel) paid.slots = CONFIG.invBpSlots;   // 중간 보상: 가방 칸 +4
+    if (lv === BP_MAX_LEVEL) paid.prismdye = 1;
     t.push({ level: lv, free, paid });
   }
   return t;
@@ -2500,7 +2552,7 @@ function bpView(db, id) {
   return {
     ok: true, ...bpSummary(p),
     track: BP_TRACK.map(t => ({
-      level: t.level, free: t.free, paid: t.paid,
+      level: t.level, free: bundleFor(p, t.free), paid: bundleFor(p, t.paid),
       unlocked: t.level <= lv,
       freeClaimed: bp.free.includes(t.level),
       paidClaimed: bp.paid.includes(t.level),
@@ -2511,11 +2563,11 @@ function bpView(db, id) {
 }
 // 배틀패스 보상 지급. 초월 배수가 붙을 수 있어 '실제로 준 것' 을 돌려준다.
 function grantBundle(p, r) {
-  const out = {};
-  if (r.gold) out.gold = gainGold(p, r.gold);
-  if (r.protect) out.protect = addItem(p, 'protect', r.protect);
-  if (r.boost) out.boost = addItem(p, 'boost', r.boost);
-  if (r.slots) out.slots = addSlots(p, r.slots);
+  const out = {}, g = rewardGold(p, r);
+  if (r.slots) out.slots = addSlots(p, r.slots);          // 칸부터 늘려야 같은 꾸러미의 아이템이 들어간다
+  if (g) out.gold = gainGold(p, g);
+  if (r.prism) out.prism = gainPrism(p, r.prism);
+  for (const k of REWARD_ITEMS) if (r[k]) out[k] = addItem(p, k, r[k]);
   return out;
 }
 function bpClaim(db, id, level, track) {
@@ -2527,12 +2579,16 @@ function bpClaim(db, id, level, track) {
   if (track === 'paid') {
     if (!bp.premium) return { ok: false, error: '시즌 패스(유료 트랙)가 필요해요.' };
     if (bp.paid.includes(level)) return { ok: false, error: '이미 받았어요.' };
+    if (!bundleFits(p, t.paid)) return { ok: false, error: BAG_FULL };
     bp.paid.push(level);
-    return { ok: true, reward: grantBundle(p, t.paid), msg: '패스 보상 수령! (Lv.' + level + ' 프리미엄)' };
+    const got = grantBundle(p, t.paid);
+    return { ok: true, reward: got, msg: '패스 보상 (Lv.' + level + ' 프리미엄) ' + bundleText(got) };
   }
   if (bp.free.includes(level)) return { ok: false, error: '이미 받았어요.' };
+  if (!bundleFits(p, t.free)) return { ok: false, error: BAG_FULL };
   bp.free.push(level);
-  return { ok: true, reward: grantBundle(p, t.free), msg: '패스 보상 수령! (Lv.' + level + ')' };
+  const got = grantBundle(p, t.free);
+  return { ok: true, reward: got, msg: '패스 보상 (Lv.' + level + ') ' + bundleText(got) };
 }
 // 시즌 패스(유료) 구매 — 결제 연동 전까지 '준비중'. 결제 붙으면 여기서 bp.premium=true 로.
 function bpBuyPremium(db, id) {
