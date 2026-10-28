@@ -146,7 +146,7 @@ async function main() {
   ok(r.body.ok && r.body.raid.status === 'active', '레이드 시작(active)');
   ok(r.body.raid.bossHP === r.body.raid.bossMax && r.body.raid.partyHP === 100, '보스 풀피·파티 HP 100 시작');
   ok(r.body.raid.participants.length === 2, '참가자 2명');
-  ok(r.body.raid.duration === GAME.CONFIG.raidDuration && r.body.raid.atkBuff === 0, '2인 파티는 기본 전투 시간 · 힐러가 없으면 공격력 업 없음');
+  ok(r.body.raid.duration === GAME.CONFIG.raidDuration && r.body.raid.atkBuff === 0 && r.body.raid.soloMult === 1, '2인 파티는 기본 전투 시간 · 힐러 없으면 공격력 업 없음 · 솔로 보정 없음');
   // 폴링(GET 투영) 조회 가능
   const watch = await req('GET', '/api/party-raid', { token: tok2 });
   ok(watch.body.raid && typeof watch.body.raid.bossHP === 'number', '파티원 폴링(투영) 조회');
@@ -514,15 +514,16 @@ async function main() {
     const sr = GAME.raidStart(sdb, 's', 'dragon');
     ok(sr.ok && sr.raid.duration === GAME.CONFIG.raidSoloDuration && sr.raid.duration > GAME.CONFIG.raidDuration, '혼자 도전 → 전투 시간이 더 길다(' + sr.raid.duration / 1000 + '초)');
     ok(sr.raid.atkBuff === Math.round(GAME.CONFIG.raidAtkBuffCap * 100), '힐러 +99 → 파티 공격력 업은 상한(+' + sr.raid.atkBuff + '%)');
+    ok(sr.raid.soloMult === 2, '혼자 싸우는 힐러는 공격에 전념(×' + sr.raid.soloMult + ')');
     ok(sdb.parties[sp.party].raid.attacks.every(a => a.t <= sr.raid.duration - 600), '보스 반격도 늘어난 시간 안에 나뉜다');
     ok(sr.raid.events.some(e => /혼자 도전/.test(e.text)) && sr.raid.events.some(e => /힐러의 축복/.test(e.text)), '전투 기록에 혼자 도전·공격력 업 표시');
     const h = GAME.raidHit(sdb, 's', 10);
-    const plain = (12 + 99 * 8) * 0.5 * GAME.CONFIG.raidHitDmgMult * 10;
+    const plain = (12 + 99 * 8) * 0.5 * 2 * GAME.CONFIG.raidHitDmgMult * 10;   // 힐러 계수 0.5 → 혼자면 1.0
     ok(h.dmg === Math.round(plain * (1 + GAME.CONFIG.raidAtkBuffCap)), '연타 피해에 공격력 업 반영(' + h.dmg + ')');
     sdb.parties[sp.party].raid.startTs -= 3000;   // 경과시간 예산(연타+강공격)을 채워 둔다
     const before = h.raid.bossHP;
     const sk = GAME.raidStrong(sdb, 's', 1);
-    ok(sk.ok && before - sk.raid.bossHP === Math.round((12 + 99 * 8) * 0.5 * GAME.CONFIG.raidHitDmgMult * 22 * (1 + GAME.CONFIG.raidAtkBuffCap)), '별빛 폭발 피해에도 공격력 업 반영(' + (sk.dmg || 0) + ')');
+    ok(sk.ok && before - sk.raid.bossHP === Math.round((12 + 99 * 8) * 0.5 * 2 * GAME.CONFIG.raidHitDmgMult * 22 * (1 + GAME.CONFIG.raidAtkBuffCap)), '별빛 폭발 피해에도 공격력 업 반영(' + (sk.dmg || 0) + ')');
   }
 
   // 정수 페이스 — ★3 까지는 그 ★ 로 들어갈 수 있는 가장 정수 많은 보스를 하루 레이드 횟수만큼 깨면 다음 ★ 정수가 모인다

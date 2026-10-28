@@ -7,7 +7,8 @@
  *   tap    — 연타만
  *   strong — 강공격만 계속(그리는 시간: 검 0.5초 · 활 0.7초 · 방패 0.85초 · 별 1.8초)
  *   mix    — 힐러: 별 → 공명(5초) 동안 연타 → 공명이 끝날 즈음 다시 별 / 그 외: 강공격 1번 + 연타 1초 반복
- * 딜 스킬(전사·궁수)은 시작하자마자 쓴다. 보스 반격으로 인한 패배는 보지 않는다(처치 시간만 잰다). */
+ * 딜 스킬(전사·궁수)은 시작하자마자 쓴다. 보스 반격으로 인한 패배는 보지 않는다(처치 시간만 잰다).
+ *   REAL=200 node tools/sim-raid.js 7 99 0 → 실제 전투 시간·보스 반격까지 넣어 mix 방식 200판 승률(힐러는 HP 50% 아래에서 치유 스킬). */
 const path = require('path');
 let NOW = Date.UTC(2026, 0, 5, 3);
 Date.now = () => NOW;
@@ -17,6 +18,7 @@ const TPS = +process.argv[2] || 7;
 const LV_ARG = process.argv[3], ASC_ARG = process.argv[4];
 const DRAW = { warrior: 500, archer: 700, tanker: 850, healer: 1800 };
 const LIMIT = 60000;   // 처치 시간 측정용 상한(실제 전투 시간과 무관)
+const REAL = +process.env.REAL || 0;
 
 function ttk(cls, level, ascend, bossId, mode) {
   const db = { players: {}, parties: {}, log: [] };
@@ -24,7 +26,7 @@ function ttk(cls, level, ascend, bossId, mode) {
   Object.assign(p, { class: cls, level, ascend, ascendMax: ascend });
   db.players.x = p;
   const real = [C.raidDuration, C.raidSoloDuration];
-  C.raidDuration = C.raidSoloDuration = LIMIT;
+  if (!REAL) C.raidDuration = C.raidSoloDuration = LIMIT;
   G.partyCreate(db, 'x');
   const st = G.raidStart(db, 'x', bossId);
   [C.raidDuration, C.raidSoloDuration] = real;
@@ -36,6 +38,8 @@ function ttk(cls, level, ascend, bossId, mode) {
   let next = 0, phase = 'strong', phaseEnd = 0, resUntil = 0;
   while (raid.status === 'active' && NOW - t0 < LIMIT) {
     const t = NOW - t0;
+    if (REAL) { G.raidFinish(db, 'x'); if (raid.status !== 'active') break;
+      if (cls === 'tanker' || (cls === 'healer' && raid.partyHP < 50)) { if (!raid.skillUsed[p.nick]) G.raidSkill(db, 'x'); } }
     if (mode === 'tap') { G.raidHit(db, 'x', 1); NOW += tapGap; continue; }
     if (mode === 'strong') {
       NOW += Math.max(DRAW[cls], G.STRONG_ATTACKS[cls].gapMs);
@@ -51,10 +55,21 @@ function ttk(cls, level, ascend, bossId, mode) {
       else { G.raidHit(db, 'x', 1); NOW += tapGap; if (NOW - t0 >= phaseEnd) phase = 'strong'; }
     }
   }
+  if (REAL) { G.raidFinish(db, 'x'); return { win: !!raid.win }; }
   return { sec: raid.status === 'done' && raid.bossHP <= 0 ? (NOW - t0) / 1000 : null, hp: raid.boss.hp };
 }
 
 const CLS = ['warrior', 'archer', 'tanker', 'healer'];
+if (REAL) {
+  console.log('실제 전투(혼자 ' + C.raidSoloDuration / 1000 + '초 · 보스 반격 포함) mix 방식 ' + REAL + '판 승률 · 초당 연타 ' + TPS);
+  for (const b of G.BOSSES) {
+    const lv = LV_ARG ? +LV_ARG : b.reqLevel, asc = ASC_ARG != null ? +ASC_ARG : b.reqAscend;
+    const row = CLS.map(c => { let w = 0, err = null; for (let i = 0; i < REAL; i++) { const r = ttk(c, lv, asc, b.id, 'mix'); if (r.err) { err = r.err; break; } if (r.win) w++; }
+      return c.padEnd(7) + (err ? ' 입장 불가' : String(Math.round(w / REAL * 100)).padStart(4) + '%'); });
+    console.log(b.emoji + ' ' + b.name.padEnd(6) + ' +' + lv + (asc ? '★' + asc : '') + '  ' + row.join('  '));
+  }
+  process.exit(0);
+}
 const SOLO = C.raidSoloDuration / 1000;
 console.log('초당 연타 ' + TPS + ' · 혼자 전투 시간 ' + SOLO + '초 · 혼자(1인) 기준 처치 시간(초) — tap / strong / mix  (✗ = 시간 안에 못 잡음)');
 for (const b of G.BOSSES) {

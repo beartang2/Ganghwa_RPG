@@ -24,6 +24,7 @@ const CONFIG = {
                              //  '뭉칠수록 유리' 가 유지된다. 1.35 로 잡으면 5인이 솔로보다 어려워진다)
   raidPartyDangerScale: 0.12,// 인원 1명 늘 때마다 보스 화력 +12%(탱커·힐러가 필요해지는 이유)
   raidDuration: 15000,       // 전투 지속(ms) — 2명 이상
+  raidSoloSupportAtk: 1.0,  // 혼자 레이드면 탱커·힐러의 공격 계수(0.6·0.5)를 이 값으로 — 지킬 동료가 없어 공격에 전념
   raidSoloDuration: 20000,   // 혼자 도전하면 전투 시간 +5초(체력을 나눠 줄 동료도, 탱커·힐러 도움도 없어서)
   raidHitDmgMult: 0.55,      // 탭 1회 데미지 = memberStats.atk * 이 배율
   raidHitBatchMax: 40,       // raidHit 한 번에 인정하는 최대 타수(치트 방지)
@@ -170,15 +171,16 @@ function classOf(p) { return CLASSES[p && p.class] || CLASSES.warrior; }
 //  - 딜러(근/원): 높은 공격, 낮은 체력
 //  - 탱커: 낮은 공격, 높은 체력 + 방어(flat armor) + 아군 피해감소(dr)
 //  - 힐러: 낮은 공격, 아군 회복(heal) + 아군 공격버프(atkBuff)
+const CLASS_ATK = { archer: 1.35, warrior: 1.2, tanker: 0.6, healer: 0.5 };   // 직업 공격 계수
 function memberStats(p) {
   const L = p.level || 0;
   const base = (12 + L * 8) * (1 + starsOf(p) * CONFIG.ascendAtkBonus);   // 초월 ★당 공격력 +8%
   switch (p.class) {
-    case 'archer': return { atk: base * 1.35, hp: 80 + L * 10,  heal: 0, armor: 0, dr: 0, atkBuff: 0 };
-    case 'tanker': return { atk: base * 0.6,  hp: 300 + L * 30, heal: 0, armor: 60 + L * 7, dr: 0.05 + L * 0.004, atkBuff: 0 };
-    case 'healer': return { atk: base * 0.5,  hp: 150 + L * 15, heal: 45 + L * 9, armor: 0, dr: 0, atkBuff: 0.01 + L * 0.002 };
+    case 'archer': return { atk: base * CLASS_ATK.archer, hp: 80 + L * 10,  heal: 0, armor: 0, dr: 0, atkBuff: 0 };
+    case 'tanker': return { atk: base * CLASS_ATK.tanker, hp: 300 + L * 30, heal: 0, armor: 60 + L * 7, dr: 0.05 + L * 0.004, atkBuff: 0 };
+    case 'healer': return { atk: base * CLASS_ATK.healer, hp: 150 + L * 15, heal: 45 + L * 9, armor: 0, dr: 0, atkBuff: 0.01 + L * 0.002 };
     case 'warrior':
-    default:       return { atk: base * 1.2,  hp: 120 + L * 12, heal: 0, armor: 0, dr: 0, atkBuff: 0 };
+    default:       return { atk: base * CLASS_ATK.warrior, hp: 120 + L * 12, heal: 0, armor: 0, dr: 0, atkBuff: 0 };
   }
 }
 
@@ -1384,7 +1386,9 @@ function raidScale(n) {
 // 전투 시간 — 혼자면 조금 더 길게(1인당 보스 체력이 파티보다 많다: 2명 0.85 · 3명 0.8 · 혼자 1.0)
 function raidDurationFor(n) { return n <= 1 ? CONFIG.raidSoloDuration : CONFIG.raidDuration; }
 // 레이드에서 실제로 들어가는 1타 공격력 — 힐러의 '아군 공격력 업'(raid.atkBuff)까지 곱한다
-function raidAtk(p, raid) { return memberStats(p).atk * (1 + ((raid && raid.atkBuff) || 0)); }
+// + 혼자 싸우는 탱커·힐러는 공격 계수를 raidSoloSupportAtk 로 올려 준다(raid.soloMult — 시작할 때 정해 둔다).
+function raidAtk(p, raid) { return memberStats(p).atk * (1 + ((raid && raid.atkBuff) || 0)) * ((raid && raid.soloMult) || 1); }
+function soloSupportMult(cls) { const c = CLASS_ATK[cls]; return c && c < CONFIG.raidSoloSupportAtk ? CONFIG.raidSoloSupportAtk / c : 1; }
 // 입장 조건 미달 사유. 만족하면 null.
 function bossLock(p, boss) {
   if ((p.level || 0) < boss.reqLevel) return '무기 +' + boss.reqLevel + ' 이상 필요';
@@ -2134,6 +2138,7 @@ function raidStart(db, id, bossId) {
   dr = Math.min(CONFIG.raidDRCap, dr);
   atkBuff = Math.min(CONFIG.raidAtkBuffCap, atkBuff);
   const duration = raidDurationFor(participants.length);
+  const soloMult = participants.length === 1 ? soloSupportMult(db.players[participants[0]].class) : 1;
   // 인원 스케일 — 체력·화력·보상을 참여 인원에 맞춰 키운다
   const sc = raidScale(participants.length);
   const bossHp = Math.round(boss.hp * sc.hp);
@@ -2154,11 +2159,12 @@ function raidStart(db, id, bossId) {
     status: 'active', startTs: now, lastTick: now, duration,
     boss: { id: boss.id, name: boss.name, emoji: boss.emoji, hp: bossHp, atk: boss.atk, reward: bossReward, dropChance: boss.dropChance, essence: boss.essence },
     scale: { members: participants.length, hp: sc.hp, danger: sc.danger },
-    bossHP: bossHp, partyHP: 100, dr, drBase: dr, healPct, atkBuff, attacks, participants: parts,
+    bossHP: bossHp, partyHP: 100, dr, drBase: dr, healPct, atkBuff, soloMult, attacks, participants: parts,
     contrib: {}, hits: {}, skillUsed: {}, events: [{ t: 0, text: '⚔️ 전투 시작!' }], win: null, rewards: [], topContributor: null,
   };
   if (parts.length === 1) pt.raid.events.push({ t: 0, text: '⏱ 혼자 도전 — 전투 시간 ' + duration / 1000 + '초' });
   if (atkBuff > 0) pt.raid.events.push({ t: 0, text: '✨ 힐러의 축복 — 파티 공격력 +' + Math.round(atkBuff * 100) + '%' });
+  if (soloMult > 1) pt.raid.events.push({ t: 0, text: parts[0].classEmoji + ' 지킬 동료가 없어 공격에 전념 — 공격력 ×' + (Math.round(soloMult * 100) / 100) });
   parts.forEach(m => { pt.raid.contrib[m.nick] = 0; pt.raid.hits[m.nick] = 0; pt.raid.skillUsed[m.nick] = false; });
   addLog(db, '⚔️ ' + p.nick + ' 파티가 ' + boss.emoji + '[' + boss.name + '] 레이드 시작! (' + parts.length + '명)');
   return { ok: true, raid: raidView(pt.raid) };
@@ -2304,7 +2310,7 @@ function raidView(raid) {
     remain: Math.max(0, raid.duration - (Date.now() - raid.startTs)),
     boss: { id: raid.boss.id, name: raid.boss.name, emoji: raid.boss.emoji, hp: raid.boss.hp, atk: raid.boss.atk },
     bossHP: Math.round(raid.bossHP), bossMax: raid.boss.hp, partyHP: Math.round(raid.partyHP),
-    dr: Math.round(raid.dr * 100), atkBuff: Math.round((raid.atkBuff || 0) * 100), scale: raid.scale || null,
+    dr: Math.round(raid.dr * 100), atkBuff: Math.round((raid.atkBuff || 0) * 100), soloMult: raid.soloMult || 1, scale: raid.scale || null,
     participants: raid.participants.map(m => ({ nick: m.nick, classEmoji: m.classEmoji, class: m.class, hits: raid.hits[m.nick] || 0, contrib: Math.round(raid.contrib[m.nick] || 0), skillUsed: !!raid.skillUsed[m.nick] })),
     events: raid.events.slice(-8),
     win: raid.win, rewards: raid.rewards, topContributor: raid.topContributor,
