@@ -135,6 +135,8 @@ async function main() {
   ok((await q('SELECT count(*)::int AS c FROM parties'))[0].c === 0, '리더 탈퇴 시 파티 해체(삭제 영속화)');
 
   // 11) 인터랙티브 레이드 — 시작(active) → 연타로 딜 → 처치/종료 → 전원 보상·횟수 영속화
+  // 💥 치명타가 터지면 보스가 일찍 쓰러져 뒤 단계(예산·스킬) 검증이 흔들린다 — 이 구간은 난수를 0.25 이상으로만 굴려 치명타(최대 22%)를 끈다
+  const realRandomRaid = Math.random; Math.random = () => 0.25 + 0.75 * realRandomRaid();
   console.log('[레이드]');
   await q("UPDATE players SET level = 90 WHERE nick IN ('검사','궁수')"); // 마계 군주 입장 조건(+85) 이상
   r = await req('POST', '/api/party-create', { token: tok });
@@ -186,6 +188,7 @@ async function main() {
   pdata.raid.endTs = Date.now() - 61000;
   await q('UPDATE parties SET data=$2 WHERE id=$1', [pid2, JSON.stringify(pdata)]);
   ok((await req('GET', '/api/party-raid', { token: tok2 })).body.raid === null, '1분 지난 결과는 숨김(로비로)');
+  Math.random = realRandomRaid;
 
   // 12) 속도제한 — 전용 테스트만 rateLimit:true
   console.log('[속도제한]');
@@ -517,13 +520,38 @@ async function main() {
     ok(sr.raid.soloMult === 2, '혼자 싸우는 힐러는 공격에 전념(×' + sr.raid.soloMult + ')');
     ok(sdb.parties[sp.party].raid.attacks.every(a => a.t <= sr.raid.duration - 600), '보스 반격도 늘어난 시간 안에 나뉜다');
     ok(sr.raid.events.some(e => /혼자 도전/.test(e.text)) && sr.raid.events.some(e => /힐러의 축복/.test(e.text)), '전투 기록에 혼자 도전·공격력 업 표시');
+    const realRandom = Math.random;
+    Math.random = () => 0.999;   // 💥 치명타 없이 정확한 값을 본다
     const h = GAME.raidHit(sdb, 's', 10);
     const plain = (12 + 99 * 8) * 0.5 * 2 * GAME.CONFIG.raidHitDmgMult * 10;   // 힐러 계수 0.5 → 혼자면 1.0
-    ok(h.dmg === Math.round(plain * (1 + GAME.CONFIG.raidAtkBuffCap)), '연타 피해에 공격력 업 반영(' + h.dmg + ')');
+    ok(h.dmg === Math.round(plain * (1 + GAME.CONFIG.raidAtkBuffCap)) && h.crits === 0, '연타 피해에 공격력 업 반영(' + h.dmg + ')');
     sdb.parties[sp.party].raid.startTs -= 3000;   // 경과시간 예산(연타+강공격)을 채워 둔다
     const before = h.raid.bossHP;
     const sk = GAME.raidStrong(sdb, 's', 1);
     ok(sk.ok && before - sk.raid.bossHP === Math.round((12 + 99 * 8) * 0.5 * 2 * GAME.CONFIG.raidHitDmgMult * 22 * (1 + GAME.CONFIG.raidAtkBuffCap)), '별빛 폭발 피해에도 공격력 업 반영(' + (sk.dmg || 0) + ')');
+    // 💥 치명타 — 전부 터지게 굴리면 연타·강공격 모두 직업 배율(힐러 ×1.7)만큼
+    Math.random = () => 0;
+    const hc = GAME.raidHit(sdb, 's', 10);
+    const resM = GAME.STRONG_ATTACKS.healer.buff.mult;   // 방금 별빛 폭발로 마력 공명(연타 ×1.5) 중
+    ok(hc.crits === 10 && hc.dmg === Math.round(plain * (1 + GAME.CONFIG.raidAtkBuffCap) * GAME.CLASS_CRIT.healer.m * resM), '연타 치명타 10/10 → 피해 ×' + GAME.CLASS_CRIT.healer.m + ' (' + hc.dmg + ')');
+    sdb.parties[sp.party].raid.strongAt = {}; sdb.parties[sp.party].raid.startTs -= 3000;   // 쿨타임·예산 비우기
+    const skc = GAME.raidStrong(sdb, 's', 1);   // (보스가 여기서 쓰러질 수 있어 남은 HP 대신 이번 피해량을 본다)
+    ok(skc.ok && skc.crit && skc.dmg === Math.round((12 + 99 * 8) * 0.5 * 2 * GAME.CONFIG.raidHitDmgMult * 22 * (1 + GAME.CONFIG.raidAtkBuffCap) * GAME.CLASS_CRIT.healer.m) && /치명타/.test(skc.strongText), '강공격 치명타 → 피해 ×배율 · 기록에 💥치명타');
+    Math.random = realRandom;
+  }
+  // 💥 직업별 치명타 표 — 순위(확률: 전사>힐러>궁수>탱커 · 피해: 궁수>전사>힐러>탱커)와 화면 표가 같은지
+  {
+    const K = GAME.CLASS_CRIT;
+    ok(K.warrior.p > K.healer.p && K.healer.p > K.archer.p && K.archer.p > K.tanker.p, '치명 확률 순위 전사 > 힐러 > 궁수 > 탱커');
+    ok(K.archer.m > K.warrior.m && K.warrior.m > K.healer.m && K.healer.m > K.tanker.m, '치명 피해 순위 궁수 > 전사 > 힐러 > 탱커');
+    const src = readFileSync(path.join(dir, '..', 'public', 'app.js'), 'utf8');
+    const mm = src.match(/const CRIT = (\{[^;]+\});/);
+    const client = mm && Function('return ' + mm[1])();
+    ok(client && Object.keys(K).every(c => client[c].p === K[c].p && client[c].m === K[c].m), '화면(app.js CRIT)과 서버(CLASS_CRIT) 치명타 값이 같다');
+    const hdb = { players: {}, parties: {}, log: [] }, hp = GAME.makePlayer('치명러'); GAME.norm(hp); Object.assign(hp, { class: 'archer', level: 50 }); hdb.players.h = hp;
+    const realRandom = Math.random; Math.random = () => 0;
+    const hr = GAME.hunt(hdb, 'h'); Math.random = realRandom;
+    ok(hr.ok && hr.crit && hr.critMult === K.archer.m, '사냥 치명타도 직업 배율(궁수 ×' + hr.critMult + ')');
   }
 
   // 정수 페이스 — ★3 까지는 그 ★ 로 들어갈 수 있는 가장 정수 많은 보스를 하루 레이드 횟수만큼 깨면 다음 ★ 정수가 모인다

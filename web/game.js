@@ -172,6 +172,19 @@ function classOf(p) { return CLASSES[p && p.class] || CLASSES.warrior; }
 //  - 탱커: 낮은 공격, 높은 체력 + 방어(flat armor) + 아군 피해감소(dr)
 //  - 힐러: 낮은 공격, 아군 회복(heal) + 아군 공격버프(atkBuff)
 const CLASS_ATK = { archer: 1.35, warrior: 1.2, tanker: 0.6, healer: 0.5 };   // 직업 공격 계수
+/* 💥 치명타 — 사냥·파티 레이드·초월 던전의 일반 공격·강공격에 붙는다(스킬은 고정 피해라 제외).
+ *  확률 순위: 전사 > 힐러 > 궁수 > 탱커 · 피해 순위: 궁수 > 전사 > 힐러 > 탱커
+ *  기대 배율(1 + p×(m−1)): 전사 1.20 · 궁수 1.17 · 힐러 1.12 · 탱커 1.04 (예전 사냥 공통 15%·×2 = 1.15)
+ *  화면(public/app.js CRIT)도 같은 값 — 테스트가 둘이 같은지 본다. */
+const CLASS_CRIT = {
+  warrior: { p: 0.22, m: 1.9 },
+  healer:  { p: 0.17, m: 1.7 },
+  archer:  { p: 0.12, m: 2.4 },
+  tanker:  { p: 0.08, m: 1.5 },
+};
+function critOf(cls) { return CLASS_CRIT[cls] || CLASS_CRIT.warrior; }
+// n 타 중 치명타 수(타마다 따로 굴린다 — 한 번에 받는 연타는 최대 40)
+function rollCrits(n, cls) { const c = critOf(cls); let k = 0; for (let i = 0; i < n; i++) if (Math.random() < c.p) k++; return k; }
 function memberStats(p) {
   const L = p.level || 0;
   const base = (12 + L * 8) * (1 + starsOf(p) * CONFIG.ascendAtkBonus);   // 초월 ★당 공격력 +8%
@@ -1241,11 +1254,12 @@ function dunHit(db, id, hits) {
   if (usedD + hits > maxTotal) hits = Math.max(0, maxTotal - usedD);
   const haste = dunBuff(f, 'haste', t).reduce((m, b) => Math.max(m, b.v), 1);
   const mult = elemMult(p.element, dunPhaseEl(f, t));
-  const dmg = hits * memberStats(p).atk * CONFIG.raidHitDmgMult * mult * haste;
+  const crits = rollCrits(hits, p.class), units = hits + crits * (critOf(p.class).m - 1);   // 💥 치명타
+  const dmg = units * memberStats(p).atk * CONFIG.raidHitDmgMult * mult * haste;
   f.bossHP = Math.max(0, f.bossHP - dmg); f.hits += hits; f.dmg += dmg;
   addTaps(p, hits); if (mult > 1 && hits) bumpD(p, 'weak', hits);   // 칭호용
   if (f.bossHP <= 0) dunTick(db, p, f);
-  return { ok: true, silent: true, dmg: Math.round(dmg), mult, fight: dunFightView(p) };
+  return { ok: true, silent: true, dmg: Math.round(dmg), crits, mult, fight: dunFightView(p) };
 }
 // 스킬 효과 적용(직업·속성 공통) — 피해는 지금 단계 속성과의 상성 배율을 곱한다
 function dunApplySkill(p, f, s, t, srcEl) {
@@ -1271,14 +1285,15 @@ function dunStrong(db, id, power) {
   const units = strongUnits(p.class, power), mult = elemMult(p.element, dunPhaseEl(f, t));
   if (f.hits + (f.sUnits || 0) + units > Math.floor(t / CONFIG.raidHitMsPerTap) + 12) return { ok: false, silent: true, error: '숨 고르는 중…' };
   f.strongAt = now; f.sUnits = (f.sUnits || 0) + units;
-  const dmg = units * memberStats(p).atk * CONFIG.raidHitDmgMult * mult;
+  const crit = Math.random() < critOf(p.class).p;
+  const dmg = units * memberStats(p).atk * CONFIG.raidHitDmgMult * mult * (crit ? critOf(p.class).m : 1);
   f.bossHP = Math.max(0, f.bossHP - dmg); f.dmg += dmg;
-  let text = c.emoji + ' ' + c.name + '! 보스 -' + Math.round(dmg).toLocaleString() + (mult > 1 ? ' (효과 굉장!)' : mult < 1 ? ' (효과 별로…)' : '');
+  let text = c.emoji + ' ' + c.name + '!' + (crit ? ' 💥치명타' : '') + ' 보스 -' + Math.round(dmg).toLocaleString() + (mult > 1 ? ' (효과 굉장!)' : mult < 1 ? ' (효과 별로…)' : '');
   if (c.buff) { f.buffs.push({ k: 'haste', v: c.buff.mult, from: t, to: t + c.buff.ms }); text += ' · ✨ 마력 공명'; }
   dunEvent(f, t, text);
   countStrong(p);
   dunTick(db, p, f);
-  return { ok: true, silent: true, dmg: Math.round(dmg), mult, strongText: text, fight: dunFightView(p) };
+  return { ok: true, silent: true, dmg: Math.round(dmg), crit, mult, strongText: text, fight: dunFightView(p) };
 }
 function dunSkill(db, id, kind) {
   const { p, f, err } = dunActive(db, id); if (err) return err;
@@ -1876,8 +1891,9 @@ function hunt(db, id, atk) {
   p.huntsUsed++;
   const m = huntSpawn(p.level);
   let dmg = huntDamage(p.level);
-  const crit = Math.random() < 0.15;      // 치명타: 데미지 2배
-  if (crit) dmg *= 2;
+  const cc = critOf(p.class);
+  const crit = Math.random() < cc.p;      // 💥 치명타: 직업마다 확률·배율이 다르다(CLASS_CRIT)
+  if (crit) dmg = Math.round(dmg * cc.m);
   const dealt = Math.min(dmg, m.hp);
   const slain = dmg >= m.hp;
   let gold = Math.round(dealt * m.gpp);
@@ -1927,7 +1943,7 @@ function hunt(db, id, atk) {
       drop = { type: 'potion', stamina: Math.round(ns - st), text: '⛏️ 채광 물약! 채굴 기력 +' + Math.round(ns - st) };
     }
   }
-  return { ok: true, monster: { name: m.name, emoji: m.emoji, hp: m.hp, rarity: m.rarity, tier: m.tier }, dmg, dealt, slain, crit, gold, drop, mat, loot, overtime };
+  return { ok: true, monster: { name: m.name, emoji: m.emoji, hp: m.hp, rarity: m.rarity, tier: m.tier }, dmg, dealt, slain, crit, critMult: cc.m, gold, drop, mat, loot, overtime };
 }
 // 방지권 상점 구매는 하루 CONFIG.protectDailyBuy 개까지. 나머지는 사냥 드랍으로 얻는다.
 // 날짜 필드는 players.data JSON 에 남아 '읽을 때 지연 리셋' 된다(일일 사냥과 같은 방식).
@@ -2244,13 +2260,14 @@ function raidHit(db, id, hits) {
   const usedR = (raid.hits[p.nick] || 0) + ((raid.sUnits && raid.sUnits[p.nick]) || 0);
   if (usedR + hits > maxTotal) hits = Math.max(0, maxTotal - usedR);
   const res = raid.res && raid.res[p.nick] > Date.now() ? STRONG_ATTACKS.healer.buff.mult : 1;   // ✨ 마력 공명
-  const dmg = Math.round(hits * raidAtk(p, raid) * CONFIG.raidHitDmgMult * res);
+  const crits = rollCrits(hits, p.class), units = hits + crits * (critOf(p.class).m - 1);   // 💥 치명타 타수만큼 배율을 더한다
+  const dmg = Math.round(units * raidAtk(p, raid) * CONFIG.raidHitDmgMult * res);
   raid.bossHP = Math.max(0, raid.bossHP - dmg);
   raid.contrib[p.nick] = (raid.contrib[p.nick] || 0) + dmg;
   raid.hits[p.nick] = (raid.hits[p.nick] || 0) + hits;
   addTaps(p, hits);   // 칭호용 일반 공격(서버가 검증한 타수)
   if (raid.bossHP <= 0) raidTick(db, pt);
-  return { ok: true, dmg, raid: raidView(raid) };
+  return { ok: true, dmg, crits, raid: raidView(raid) };
 }
 // ⚡ 레이드 강공격 — 그린 커맨드 1번 = 연타 n회분(쿨타임은 서버가 막는다)
 function raidStrong(db, id, power) {
@@ -2268,15 +2285,16 @@ function raidStrong(db, id, power) {
   if ((raid.hits[p.nick] || 0) + (raid.sUnits[p.nick] || 0) + units > budget) return { ok: false, silent: true, error: '숨 고르는 중…' };
   raid.strongAt[p.nick] = now;
   raid.sUnits[p.nick] = (raid.sUnits[p.nick] || 0) + units;
-  const dmg = Math.round(units * raidAtk(p, raid) * CONFIG.raidHitDmgMult);
+  const crit = Math.random() < critOf(p.class).p;
+  const dmg = Math.round(units * raidAtk(p, raid) * CONFIG.raidHitDmgMult * (crit ? critOf(p.class).m : 1));
   raid.bossHP = Math.max(0, raid.bossHP - dmg);
   raid.contrib[p.nick] = (raid.contrib[p.nick] || 0) + dmg;
-  let text = c.emoji + ' ' + p.nick + ' ' + c.name + '! 보스 -' + dmg.toLocaleString();
+  let text = c.emoji + ' ' + p.nick + ' ' + c.name + '!' + (crit ? ' 💥치명타' : '') + ' 보스 -' + dmg.toLocaleString();
   if (c.buff) { if (!raid.res) raid.res = {}; raid.res[p.nick] = now + c.buff.ms; text += ' · ✨ 마력 공명(연타 ×' + c.buff.mult + ')'; }
   raid.events.push({ t: now - raid.startTs, text });
   countStrong(p);
   if (raid.bossHP <= 0) raidTick(db, pt);
-  return { ok: true, silent: true, dmg, units, strongText: text, raid: raidView(raid) };
+  return { ok: true, silent: true, dmg, units, crit, strongText: text, raid: raidView(raid) };
 }
 function raidSkill(db, id) {
   const { p, pt, raid } = raidMember(db, id);
@@ -2602,7 +2620,7 @@ function bpBuyPremium(db, id) {
 }
 
 module.exports = {
-  devEgg, raidStrong, dunStrong, STRONG_ATTACKS, eggFound, atkReport, reportAtk, ACHIEVEMENTS,
+  devEgg, raidStrong, dunStrong, STRONG_ATTACKS, CLASS_CRIT, eggFound, atkReport, reportAtk, ACHIEVEMENTS,
   CONFIG, GRADES, RARITIES, CLASSES, BOSSES, odds, enhanceCost, weaponName, grade,
   missionView, missionClaim, bpView, bpClaim, bpBuyPremium,
   login, setClass, rename, publicView, enhance, ascend, attend, mine, mineSwing, hunt, buyProtect, fight,

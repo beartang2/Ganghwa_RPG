@@ -466,6 +466,7 @@ body.loading-on #globalLoading{opacity:1}
 .gs-glyph{flex:0 0 auto;width:44px;height:44px;border-radius:10px;background:rgba(0,0,0,.25)}
 .gs-txt{display:flex;flex-direction:column;min-width:0;font-size:12.5px;line-height:1.45;color:#ddd3c6}
 .gs-txt b{color:var(--text);font-size:13.5px}
+.gs-txt .gs-crit{color:#ffb38a;font-size:11.5px}
 .gs-txt .gs-me{color:var(--molten-hi);font-size:11px;font-weight:800;margin-left:4px}
 .guide-tips{margin:8px 0 0;padding:0 0 0 18px;font-size:12.5px;line-height:1.55;color:var(--muted)}
 .guide-tips li{margin:3px 0}
