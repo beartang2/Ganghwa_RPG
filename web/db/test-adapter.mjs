@@ -539,6 +539,12 @@ async function main() {
     ok(skc.ok && skc.crit && skc.dmg === Math.round((12 + 99 * 8) * 0.8 * GAME.CONFIG.raidHitDmgMult * 22 * (1 + GAME.CONFIG.raidAtkBuffCap) * GAME.CLASS_CRIT.healer.m) && /치명타/.test(skc.strongText), '강공격 치명타 → 피해 ×배율 · 기록에 💥치명타');
     Math.random = realRandom;
   }
+  // ⚗️ 연금술 확률표 — 합이 1 · 꽝은 불이 셀수록 낮다
+  {
+    const A = GAME.ALCHEMY, sum = t => t.reduce((x, e) => x + e.p, 0), fail = a => a.table.find(e => e.n === 0).p;
+    ok(A.every(a => Math.abs(sum(a.table) - 1) < 1e-9), '연금술 확률표 합 = 100%');
+    ok(fail(A[0]) > fail(A[1]) && fail(A[1]) > fail(A[2]) && fail(A[0]) <= 0.4, '꽝: 약불 > 중불 > 강불 (' + A.map(a => Math.round(fail(a) * 100) + '%').join(' · ') + ')');
+  }
   // 💥 직업별 치명타 표 — 순위(확률: 전사>힐러>궁수>탱커 · 피해: 궁수>전사>힐러>탱커)와 화면 표가 같은지
   {
     const K = GAME.CLASS_CRIT;
