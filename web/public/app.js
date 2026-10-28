@@ -10,6 +10,7 @@ const PATCH = {
   version: '6',
   title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
+    '⚔️ <b>싸움 규칙 변경</b> — 내가 먼저 건 싸움은 져도 골드만 잃고 <b>무기는 안전</b>해요. 무기 손상(10% 확률 −1강)은 걸려 온 싸움에서 진 쪽만',
     '🕯️ <b>추모</b> — 싸움에서 져서 손상된 무기(−1강)도 오늘의 추모에 올라가요',
     '⚗️ <b>연금술 꽝 확률 인하</b> — 잿더미가 약불 62→40% · 중불 52→30% · 강불 52→20%. 불이 셀수록 덜 꽝이고, 기대 💎도 약불 0.82 · 중불 3.04 · 강불 10.05로 올랐어요',
     '🛠️ <b>고침</b> — 휴대폰에서 강공격 궤적이 손가락보다 아래에 그려지던 문제(주소창이 보일 때)',
@@ -2513,7 +2514,7 @@ async function loadTab() {
   } else if (currentTab === 'fight') {
     const { list } = await api('players'); if (stale()) return;
     const others = list.filter(n => n !== me.nick);
-    panel.innerHTML = `<p class="hint" style="margin:0 0 8px">이기면 상대 골드 20% 획득. (남은 싸움 ${me.fightsLeft}/${me.dailyFights})</p>` +
+    panel.innerHTML = `<p class="hint" style="margin:0 0 8px">이기면 상대 골드 20% 획득 · 져도 내 무기는 안전(걸려 온 싸움에서 지면 10% 확률로 −1강). (남은 싸움 ${me.fightsLeft}/${me.dailyFights})</p>` +
       (others.length ? others.map(n =>
         `<div class="fightrow"><div class="nm" data-nick="${esc(n)}">${nmLine(n)}</div>
           <button class="btn sm primary" data-fight="${esc(n)}" ${me.fightsLeft <= 0 ? 'disabled' : ''}>싸움</button></div>`).join('') : emptyMsg('상대가 없어요'));

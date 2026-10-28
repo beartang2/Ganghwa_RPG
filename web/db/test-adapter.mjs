@@ -550,6 +550,10 @@ async function main() {
     ok(fr.ok && fr.iWon && fr.broke && fr.broke.who === '방어러' && D.level === 98, '싸움 패배 손상: 방어자 +99 → +98');
     const hl = GAME.hogu(fdb);
     ok(hl.some(x => x.nick === '방어러' && x.c === 1), '싸움 손상도 추모 목록에 1번 파괴로 올라감');
+    // 먼저 건 사람이 지면 골드만 잃고 무기는 안전 — 손상 판정이 '터지는' 난수(0)를 줘도 그대로
+    A.fightsUsed = 0; const seq = [0.95, 0]; Math.random = () => (seq.length ? seq.shift() : 0.5);
+    const fl = GAME.fight(fdb, 'a', '방어러'); Math.random = realRandom;
+    ok(fl.ok && !fl.iWon && !fl.broke && A.level === 44, '건 사람이 지면 무기 손상 없음(골드만)');
   }
   // ⚗️ 연금술 확률표 — 합이 1 · 꽝은 불이 셀수록 낮다
   {

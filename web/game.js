@@ -13,7 +13,7 @@ const CONFIG = {
   destroyDropRatio: 0.15,    // 파괴 시 떨어지는 폭(만렙 대비). 99 기준 -15레벨
   stealPct: 0.2, protectPrice: 8000,
   protectDailyBuy: 3,        // 🛡️ 상점 일일 구매 상한 — 나머지는 사냥 드랍으로 얻는다
-  fightBreakChance: 0.10,    // 싸움 패배 시 무기 1단계 하락 확률(진 사람만, 확률적)
+  fightBreakChance: 0.10,    // 싸움 패배 시 무기 1단계 하락 확률 — '걸려 온 싸움'에서 진 방어자만(건 사람은 져도 골드만 잃는다)
   dropProtectChance: 0.05, dropGoldChance: 0.07,   // 방지권 주 공급원이 사냥이라 확률을 올림
   mineRate: 12, mineCap: 3000, partyMax: 5, raidMinMembers: 1,   // 1=혼자도 레이드 가능(고레벨 솔로 딜로 잡힘, 난이도는 보스 danger가 담당)
   raidAtkBuffCap: 0.15,      // 힐러 아군 공격 버프 상한
@@ -2004,7 +2004,8 @@ function fight(db, id, targetNick) {
   loseP.gold -= steal;
   gainGold(winP, steal, true);   // 약탈 = 이전이라 초월 배수 미적용(골드 총량 보존)
   let broke = null;
-  if (loseP.level > 0 && Math.random() < CONFIG.fightBreakChance) {
+  // 💢 무기 손상은 방어자만 — 먼저 건 사람이 골드도 잃고 무기까지 깨지면 아무도 싸움을 걸지 않는다
+  if (loseP === def && loseP.level > 0 && Math.random() < CONFIG.fightBreakChance) {
     const b = loseP.level; loseP.level--; broke = { who: loser, from: b, to: loseP.level };
     // 🕯️ 추모 — 싸움에서 손상된 무기도 오늘 떠나보낸 무기로 센다(강화 파괴와 같은 일일 카운터 destroysToday)
     if (loseP.destroyDay !== today()) { loseP.destroyDay = today(); loseP.destroysToday = 0; }
