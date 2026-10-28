@@ -24,7 +24,8 @@ const CONFIG = {
                              //  '뭉칠수록 유리' 가 유지된다. 1.35 로 잡으면 5인이 솔로보다 어려워진다)
   raidPartyDangerScale: 0.12,// 인원 1명 늘 때마다 보스 화력 +12%(탱커·힐러가 필요해지는 이유)
   raidDuration: 15000,       // 전투 지속(ms) — 2명 이상
-  raidSoloSupportAtk: 1.0,  // 혼자 레이드면 탱커·힐러의 공격 계수(0.6·0.5)를 이 값으로 — 지킬 동료가 없어 공격에 전념
+  raidSoloSupportAtk: { tanker: 1.0, healer: 0.8 },   // 혼자 레이드면 탱커·힐러의 공격 계수(0.6·0.5)를 이 값으로 — 지킬 동료가 없어 공격에 전념.
+                             // 힐러는 별(22회분)·마력 공명·축복이 이미 있어 0.8(×1.6) — 1.0 이면 혼자 초당 딜이 궁수·전사를 넘었다
   raidSoloDuration: 20000,   // 혼자 도전하면 전투 시간 +5초(체력을 나눠 줄 동료도, 탱커·힐러 도움도 없어서)
   raidHitDmgMult: 0.55,      // 탭 1회 데미지 = memberStats.atk * 이 배율
   raidHitBatchMax: 40,       // raidHit 한 번에 인정하는 최대 타수(치트 방지)
@@ -1403,7 +1404,7 @@ function raidDurationFor(n) { return n <= 1 ? CONFIG.raidSoloDuration : CONFIG.r
 // 레이드에서 실제로 들어가는 1타 공격력 — 힐러의 '아군 공격력 업'(raid.atkBuff)까지 곱한다
 // + 혼자 싸우는 탱커·힐러는 공격 계수를 raidSoloSupportAtk 로 올려 준다(raid.soloMult — 시작할 때 정해 둔다).
 function raidAtk(p, raid) { return memberStats(p).atk * (1 + ((raid && raid.atkBuff) || 0)) * ((raid && raid.soloMult) || 1); }
-function soloSupportMult(cls) { const c = CLASS_ATK[cls]; return c && c < CONFIG.raidSoloSupportAtk ? CONFIG.raidSoloSupportAtk / c : 1; }
+function soloSupportMult(cls) { const c = CLASS_ATK[cls], to = CONFIG.raidSoloSupportAtk[cls]; return c && to > c ? to / c : 1; }
 // 입장 조건 미달 사유. 만족하면 null.
 function bossLock(p, boss) {
   if ((p.level || 0) < boss.reqLevel) return '무기 +' + boss.reqLevel + ' 이상 필요';

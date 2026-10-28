@@ -517,18 +517,18 @@ async function main() {
     const sr = GAME.raidStart(sdb, 's', 'dragon');
     ok(sr.ok && sr.raid.duration === GAME.CONFIG.raidSoloDuration && sr.raid.duration > GAME.CONFIG.raidDuration, '혼자 도전 → 전투 시간이 더 길다(' + sr.raid.duration / 1000 + '초)');
     ok(sr.raid.atkBuff === Math.round(GAME.CONFIG.raidAtkBuffCap * 100), '힐러 +99 → 파티 공격력 업은 상한(+' + sr.raid.atkBuff + '%)');
-    ok(sr.raid.soloMult === 2, '혼자 싸우는 힐러는 공격에 전념(×' + sr.raid.soloMult + ')');
+    ok(Math.abs(sr.raid.soloMult - 1.6) < 1e-9, '혼자 싸우는 힐러는 공격에 전념(×' + sr.raid.soloMult + ')');
     ok(sdb.parties[sp.party].raid.attacks.every(a => a.t <= sr.raid.duration - 600), '보스 반격도 늘어난 시간 안에 나뉜다');
     ok(sr.raid.events.some(e => /혼자 도전/.test(e.text)) && sr.raid.events.some(e => /힐러의 축복/.test(e.text)), '전투 기록에 혼자 도전·공격력 업 표시');
     const realRandom = Math.random;
     Math.random = () => 0.999;   // 💥 치명타 없이 정확한 값을 본다
     const h = GAME.raidHit(sdb, 's', 10);
-    const plain = (12 + 99 * 8) * 0.5 * 2 * GAME.CONFIG.raidHitDmgMult * 10;   // 힐러 계수 0.5 → 혼자면 1.0
+    const plain = (12 + 99 * 8) * 0.8 * GAME.CONFIG.raidHitDmgMult * 10;   // 힐러 계수 0.5 → 혼자면 0.8
     ok(h.dmg === Math.round(plain * (1 + GAME.CONFIG.raidAtkBuffCap)) && h.crits === 0, '연타 피해에 공격력 업 반영(' + h.dmg + ')');
     sdb.parties[sp.party].raid.startTs -= 3000;   // 경과시간 예산(연타+강공격)을 채워 둔다
     const before = h.raid.bossHP;
     const sk = GAME.raidStrong(sdb, 's', 1);
-    ok(sk.ok && before - sk.raid.bossHP === Math.round((12 + 99 * 8) * 0.5 * 2 * GAME.CONFIG.raidHitDmgMult * 22 * (1 + GAME.CONFIG.raidAtkBuffCap)), '별빛 폭발 피해에도 공격력 업 반영(' + (sk.dmg || 0) + ')');
+    ok(sk.ok && before - sk.raid.bossHP === Math.round((12 + 99 * 8) * 0.8 * GAME.CONFIG.raidHitDmgMult * 22 * (1 + GAME.CONFIG.raidAtkBuffCap)), '별빛 폭발 피해에도 공격력 업 반영(' + (sk.dmg || 0) + ')');
     // 💥 치명타 — 전부 터지게 굴리면 연타·강공격 모두 직업 배율(힐러 ×1.7)만큼
     Math.random = () => 0;
     const hc = GAME.raidHit(sdb, 's', 10);
@@ -536,7 +536,7 @@ async function main() {
     ok(hc.crits === 10 && hc.dmg === Math.round(plain * (1 + GAME.CONFIG.raidAtkBuffCap) * GAME.CLASS_CRIT.healer.m * resM), '연타 치명타 10/10 → 피해 ×' + GAME.CLASS_CRIT.healer.m + ' (' + hc.dmg + ')');
     sdb.parties[sp.party].raid.strongAt = {}; sdb.parties[sp.party].raid.startTs -= 3000;   // 쿨타임·예산 비우기
     const skc = GAME.raidStrong(sdb, 's', 1);   // (보스가 여기서 쓰러질 수 있어 남은 HP 대신 이번 피해량을 본다)
-    ok(skc.ok && skc.crit && skc.dmg === Math.round((12 + 99 * 8) * 0.5 * 2 * GAME.CONFIG.raidHitDmgMult * 22 * (1 + GAME.CONFIG.raidAtkBuffCap) * GAME.CLASS_CRIT.healer.m) && /치명타/.test(skc.strongText), '강공격 치명타 → 피해 ×배율 · 기록에 💥치명타');
+    ok(skc.ok && skc.crit && skc.dmg === Math.round((12 + 99 * 8) * 0.8 * GAME.CONFIG.raidHitDmgMult * 22 * (1 + GAME.CONFIG.raidAtkBuffCap) * GAME.CLASS_CRIT.healer.m) && /치명타/.test(skc.strongText), '강공격 치명타 → 피해 ×배율 · 기록에 💥치명타');
     Math.random = realRandom;
   }
   // 💥 직업별 치명타 표 — 순위(확률: 전사>힐러>궁수>탱커 · 피해: 궁수>전사>힐러>탱커)와 화면 표가 같은지
