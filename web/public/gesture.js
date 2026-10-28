@@ -286,15 +286,20 @@
     const o = Object.assign({ z: 115 }, opts);
     const cv = document.createElement('canvas');
     cv.setAttribute('aria-hidden', 'true');
-    cv.style.cssText = 'position:fixed;left:0;top:0;width:100vw;height:100vh;pointer-events:none;z-index:' + o.z;
+    cv.style.cssText = 'position:fixed;left:0;top:0;pointer-events:none;z-index:' + o.z;
     document.body.appendChild(cv);
     const ctx = cv.getContext('2d');
     let W = 0, H = 0, dpr = 1;
+    // 화면에 보이는 크기(CSS)와 그리는 좌표계(W×H)를 같은 값(innerWidth/innerHeight)으로 맞춘다.
+    // 예전엔 CSS 를 100vw×100vh 로 줬는데, 휴대폰 브라우저의 100vh 는 주소창이 '접혔을 때'의 높이라
+    // 주소창이 보이는 동안엔 innerHeight 보다 크다 → 캔버스가 세로로 늘어나 궤적이 손가락보다 아래에 그려졌다(아래로 갈수록 더).
     const fit = () => {
       dpr = Math.min(2, window.devicePixelRatio || 1); W = window.innerWidth; H = window.innerHeight;
       cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+      cv.style.width = W + 'px'; cv.style.height = H + 'px';
     };
     fit(); window.addEventListener('resize', fit);
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', fit);   // 주소창이 접히고 펴질 때
     let stroke = null;            // 지금 그리는 선
     const fading = [];            // 손을 뗀 뒤 사라지는 선들
     const fx = [];                // 플래시·화살·충격파·링
