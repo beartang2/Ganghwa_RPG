@@ -539,6 +539,18 @@ async function main() {
     ok(skc.ok && skc.crit && skc.dmg === Math.round((12 + 99 * 8) * 0.8 * GAME.CONFIG.raidHitDmgMult * 22 * (1 + GAME.CONFIG.raidAtkBuffCap) * GAME.CLASS_CRIT.healer.m) && /치명타/.test(skc.strongText), '강공격 치명타 → 피해 ×배율 · 기록에 💥치명타');
     Math.random = realRandom;
   }
+  // 🕯️ 싸움에서 손상된 무기도 추모(오늘 파괴 수)에 들어간다 — 진 쪽이 공격자든 방어자든
+  {
+    const fdb = { players: {}, parties: {}, log: [] };
+    const A = GAME.makePlayer('공격러'), D = GAME.makePlayer('방어러'); GAME.norm(A); GAME.norm(D);
+    Object.assign(A, { class: 'warrior', level: 44 }); Object.assign(D, { class: 'healer', level: 99 });
+    fdb.players.a = A; fdb.players.d = D;
+    const realRandom = Math.random; Math.random = () => 0;   // 공격자 승리(0 < pWin) · 손상 발동(0 < 10%)
+    const fr = GAME.fight(fdb, 'a', '방어러'); Math.random = realRandom;
+    ok(fr.ok && fr.iWon && fr.broke && fr.broke.who === '방어러' && D.level === 98, '싸움 패배 손상: 방어자 +99 → +98');
+    const hl = GAME.hogu(fdb);
+    ok(hl.some(x => x.nick === '방어러' && x.c === 1), '싸움 손상도 추모 목록에 1번 파괴로 올라감');
+  }
   // ⚗️ 연금술 확률표 — 합이 1 · 꽝은 불이 셀수록 낮다
   {
     const A = GAME.ALCHEMY, sum = t => t.reduce((x, e) => x + e.p, 0), fail = a => a.table.find(e => e.n === 0).p;

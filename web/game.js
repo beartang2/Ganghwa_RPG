@@ -2006,6 +2006,9 @@ function fight(db, id, targetNick) {
   let broke = null;
   if (loseP.level > 0 && Math.random() < CONFIG.fightBreakChance) {
     const b = loseP.level; loseP.level--; broke = { who: loser, from: b, to: loseP.level };
+    // 🕯️ 추모 — 싸움에서 손상된 무기도 오늘 떠나보낸 무기로 센다(강화 파괴와 같은 일일 카운터 destroysToday)
+    if (loseP.destroyDay !== today()) { loseP.destroyDay = today(); loseP.destroysToday = 0; }
+    loseP.destroysToday++;
     bumpRank(db);
     addLog(db, '💢 ' + loser + ' 무기 손상 +' + b + '→+' + loseP.level);
   }

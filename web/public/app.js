@@ -10,6 +10,7 @@ const PATCH = {
   version: '6',
   title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
+    '🕯️ <b>추모</b> — 싸움에서 져서 손상된 무기(−1강)도 오늘의 추모에 올라가요',
     '⚗️ <b>연금술 꽝 확률 인하</b> — 잿더미가 약불 62→40% · 중불 52→30% · 강불 52→20%. 불이 셀수록 덜 꽝이고, 기대 💎도 약불 0.82 · 중불 3.04 · 강불 10.05로 올랐어요',
     '🛠️ <b>고침</b> — 휴대폰에서 강공격 궤적이 손가락보다 아래에 그려지던 문제(주소창이 보일 때)',
     '💥 <b>직업별 치명타</b> — 사냥뿐 아니라 파티 레이드·초월 던전의 연타·강공격에도 치명타! ⚔️전사 22%·×1.9 · ✨힐러 17%·×1.7 · 🏹궁수 12%·×2.4 · 🛡️탱커 8%·×1.5 (플레이 방법 → 사냥 탭에서 확인)',
@@ -2502,10 +2503,10 @@ async function loadTab() {
       }).join('');
   } else if (currentTab === 'hogu') {
     const { list } = await api('hogu'); if (stale()) return;
-    panel.innerHTML = list.length ? list.map((p, i) =>
+    panel.innerHTML = '<p class="hint" style="margin:0 0 8px">🕯️ 오늘 강화하다 파괴되거나 ⚔️ 싸움에서 손상된 무기를 기려요</p>' + (list.length ? list.map((p, i) =>
       `<div class="row"><span class="rk">${i < 3 ? ['👑', '🥈', '🥉'][i] : (i + 1)}</span>
         <div class="nm" data-nick="${esc(p.nick)}">${nmLine(p.nick)}</div>
-        <span class="val">🕯️ ${p.c}번 파괴</span></div>`).join('') : emptyMsg('😌 오늘은 아직 아무도 안 깨졌어요');
+        <span class="val">🕯️ ${p.c}번 파괴</span></div>`).join('') : emptyMsg('😌 오늘은 아직 아무도 안 깨졌어요'));
   } else if (currentTab === 'log') {
     const { list } = await api('log'); if (stale()) return;
     panel.innerHTML = list.length ? list.map(l => `<div class="logline">${esc(l.text)}</div>`).join('') : emptyMsg('기록 없음');
