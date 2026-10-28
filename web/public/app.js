@@ -10,8 +10,12 @@ const PATCH = {
   version: '6',
   title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
+    '💥 <b>직업별 치명타</b> — 사냥뿐 아니라 파티 레이드·초월 던전의 연타·강공격에도 치명타! ⚔️전사 22%·×1.9 · ✨힐러 17%·×1.7 · 🏹궁수 12%·×2.4 · 🛡️탱커 8%·×1.5 (플레이 방법 → 사냥 탭에서 확인)',
+    '🎯 <b>미션·시즌 패스 보상 대폭 상향</b> — 골드는 내 최고 강화 기록에 맞춰 <b>강화 n회분</b>으로 커지고, 💎프리즘 · 💠파편 · 🌟정수 · 🗝️열쇠 · 🔮마석 · 🔨망치까지 줘요. 패스 무료 트랙만으로 한 시즌 💠300 · 🌟45 · 💎45',
+    '🌟 <b>레이드 정수 상향</b> — 👺1 · 🗿3 · 🐲7 · 😈10 · 🌋20 · 🌌30. <b>★3까지는 하루 레이드 3번이면 다음 ★에 필요한 정수가 모여요</b>',
     '📱 <b>휴대폰 전투 화면 넓게</b> — 레이드·초월 던전에서 보스 판이 화면 가운데를 크게 차지해요. 별·호·당기기 커맨드를 넉넉하게 그리고, 보스도 더 크게 눌러요',
     '⏱ <b>혼자 레이드 +5초</b> — 혼자 도전하면 전투 시간이 <b>20초</b>로 늘어나요 · ✨ 힐러의 <b>파티 공격력 업</b>(최대 +15%, 힐러 자신 포함)이 이제 레이드에서 제대로 들어가요 · 🛡️ <b>방패 강타</b>가 연타 5회분 → <b>8회분</b>으로 세졌어요',
+    '⚔️ <b>혼자 싸우는 탱커·힐러</b> — 레이드에 혼자 들어가면 지킬 동료가 없어 공격에 전념해요(탱커 공격력 ×1.67 · 힐러 ×1.6). 이제 +99면 어느 직업이든 마계 군주를 혼자 잡을 수 있어요',
     '⚔️ <b>보스에게도 강공격!</b> — 파티 레이드·초월 던전에서도 무기별 커맨드(검 호 · 활 당기기 · 지팡이 별 · 방패 꾹)를 그릴 수 있어요',
     '🌈 <b>숨겨진 칭호</b> — 새 등급 <b>프리즘</b>! 어딘가에 숨어 있는 걸 찾으면 열려요. 무엇을 하면 열리는지는… 비밀 🤫',
     '🏷️ <b>새 칭호 23종</b> — ⚡ 일반 공격·강공격 횟수(무기별 강공격 칭호도!) · 🌌 초월 던전(약점 저격·무기 교체·무피격 돌파 등) · 💎 프리즘 도박(상자·연금술·캡슐 대박과 꽝). 프로필의 칭호는 이제 <b>접었다 펼 수 있어요</b>',
@@ -1314,7 +1318,7 @@ function tapMonster(e) {
   sfx(isCrit ? 'crit' : last ? 'kill' : 'hit');
   const monEl = el('huntMon');
   if (monEl) { monEl.classList.remove('hit'); void monEl.offsetWidth; monEl.classList.add('hit'); }
-  spawnHuntDmg(Math.round((isCrit ? 2 : 1) * c.dmgPerTap * amt), isCrit);
+  spawnHuntDmg(Math.round((isCrit ? c.r.critMult || 2 : 1) * c.dmgPerTap * amt), isCrit);
   el('huntHpFill').style.width = Math.max(0, 100 - c.taps / c.need * 100) + '%';
   if (last) killMonster();
 }
@@ -1333,6 +1337,8 @@ const STRONG = {
   tanker:  { cmd: 'hold', style: null,     wpn: '🛡️ 방패는',   name: '방패 강타',   taps: 8,  how: '<b>꾹</b> 눌렀다 떼요' },
   healer:  { cmd: 'star', style: 'magic',  wpn: '✨ 지팡이는', name: '별빛 폭발',   taps: 22, how: '<b>별</b>을 한 붓에 그려요', buff: { mult: 1.5, ms: 5000, name: '마력 공명' } },
 };
+// 💥 직업별 치명타(확률 p · 피해 배율 m) — 서버 game.js CLASS_CRIT 와 같은 값(테스트가 맞춰 본다). 화면 안내·사냥 리빌용.
+const CRIT = { warrior: { p: 0.22, m: 1.9 }, healer: { p: 0.17, m: 1.7 }, archer: { p: 0.12, m: 2.4 }, tanker: { p: 0.08, m: 1.5 } };
 const CMD_NAME = { arc: '⚔️ 검 커맨드', line: '🏹 활 커맨드', star: '✨ 지팡이 커맨드', hold: '🛡️ 방패 커맨드' };
 const STRONG_DELAY = HUNT_TAP_MS * 2;
 let huntLockUntil = 0, huntBuff = null, huntBuffT = null;
@@ -1380,6 +1386,14 @@ function strongFx(bossEl, cfg, power, at) {
   if (at && FX && FX.sparks) FX.sparks.burst(at.x, at.y, { sparkCount: 16, sparkRadius: 70, duration: 520, sparkSize: 12 });
   if (at) gestTip('⚡ ' + cfg.name + (power && power < 1 ? ' ' + Math.round(power * 100) + '%' : ''), at.x, at.y - 70, true);
 }
+// 💥 레이드·던전 치명타 — 연타는 0.7초마다 묶어서 서버가 굴리므로, 묶음에 치명타가 있으면 그 묶음 피해를 한 번 띄운다
+function critFx(bossEl, dmg) {
+  sfx('crit'); vibe([10, 20, 16]);
+  if (!bossEl) return;
+  if (dmg) spawnDmgAt(bossEl, dmg, true);
+  const rc = bossEl.getBoundingClientRect();
+  gestTip('💥 치명타!', rc.left + rc.width / 2, rc.top + rc.height * 0.15, true);
+}
 // ⚡ 레이드·던전 강공격 — 연출은 바로, 위력은 서버가 정한다(먼저 쌓인 연타를 보낸 뒤 강공격을 보내 순서를 지킨다)
 let raidLockUntil = 0, dunLockUntil = 0;
 function raidStrongHit(cfg, power, at) {
@@ -1393,6 +1407,7 @@ function raidStrongHit(cfg, power, at) {
       curRaid = r.raid; if (r.me) applyMe(r.me);
       if (raidBuiltFor === curRaid.startTs) updateBattleUI();
       if (r.dmg) spawnDmgAt(el('rBoss'), r.dmg, true);
+      if (r.crit) critFx(el('rBoss'));
       if (cfg.buff) { battleBuffUntil = performance.now() + cfg.buff.ms; updateBattleCmd('raid'); setTimeout(() => updateBattleCmd('raid'), cfg.buff.ms + 30); }
     } else if (r && !r.ok && r.error && at) gestTip(r.error, at.x, at.y - 40);
   })();
@@ -1408,6 +1423,7 @@ function dunStrongHit(cfg, power, at) {
     if (r && r.ok && r.fight) {
       setDunFight(r.fight); updateDunUI();
       if (r.dmg) spawnDmgAt(el('dBoss'), r.dmg, true);
+      if (r.crit) critFx(el('dBoss'));
       if (cfg.buff) { battleBuffUntil = performance.now() + cfg.buff.ms; updateBattleCmd('dun'); setTimeout(() => updateBattleCmd('dun'), cfg.buff.ms + 30); }
     } else if (r && !r.ok && r.error && at) gestTip(r.error, at.x, at.y - 40);
   })();
@@ -1424,7 +1440,7 @@ function huntStrong(cfg, power) {
   vibe(isCrit ? [16, 30, 34] : [14, 26, 24]); sfx(isCrit ? 'crit' : 'kill');
   const monEl = el('huntMon');
   if (monEl) { monEl.classList.remove('hit'); void monEl.offsetWidth; monEl.classList.add('hit'); }
-  spawnHuntDmg(units * c.dmgPerTap * (isCrit ? 2 : 1), true);
+  spawnHuntDmg(Math.round(units * c.dmgPerTap * (isCrit ? c.r.critMult || 2 : 1)), true);
   const m = monCenter();
   if (FX && FX.sparks) FX.sparks.burst(m.x, m.y, { sparkCount: 16, sparkRadius: 70, duration: 520, sparkSize: 12 });
   gestTip('⚡ ' + cfg.name + (power && power < 1 ? ' ' + Math.round(power * 100) + '%' : ''), m.x, m.y - 70, true);
@@ -1926,7 +1942,7 @@ function updateBattleUI() {
   const ph = document.getElementById('rPartyHp'), pt = document.getElementById('rPartyTxt'), dr = document.getElementById('rDr');
   if (ph) { ph.style.width = raid.partyHP + '%'; ph.classList.toggle('low', raid.partyHP <= 30); }
   if (pt) pt.textContent = raid.partyHP + '%';
-  if (dr) dr.textContent = [raid.dr ? '🛡️피해감소 ' + raid.dr + '%' : '', raid.atkBuff ? '✨공격력 +' + raid.atkBuff + '%' : ''].filter(Boolean).join(' · ');
+  if (dr) dr.textContent = [raid.dr ? '🛡️피해감소 ' + raid.dr + '%' : '', raid.atkBuff ? '✨공격력 +' + raid.atkBuff + '%' : '', raid.soloMult > 1 ? '⚔️혼자 ×' + (Math.round(raid.soloMult * 100) / 100) : ''].filter(Boolean).join(' · ');
   const parts = document.getElementById('rParts');
   if (parts) parts.innerHTML = raid.participants.map(p =>
     `<span class="raid-part${p.nick === (me && me.nick) ? ' me' : ''}">${p.classEmoji}${esc(p.nick)} <b>${p.contrib.toLocaleString()}</b>${p.skillUsed ? ' ✨' : ''}</span>`).join('');
@@ -1977,7 +1993,8 @@ async function flushRaidHits() {
   const hits = raidLocalHits; raidLocalHits = 0;
   if (hits <= 0 || !curRaid || curRaid.status !== 'active') return;
   const r = await api('raid-hit', 'POST', { hits });
-  if (r && r.ok && r.raid) { curRaid = r.raid; if (r.me) applyMe(r.me); if (raidBuiltFor === curRaid.startTs) updateBattleUI(); }
+  if (r && r.ok && r.raid) { curRaid = r.raid; if (r.me) applyMe(r.me); if (raidBuiltFor === curRaid.startTs) updateBattleUI();
+    if (r.crits > 0) critFx(el('rBoss'), r.dmg); }
 }
 async function doRaidSkill() {
   if (!curRaid || curRaid.status !== 'active') return;
@@ -2321,7 +2338,7 @@ async function flushDunHits(force) {
   if ((!hits && !force) || !dunF || dunF.status !== 'active') return;
   dunLastSync = Date.now();
   const r = await api('dun-hit', 'POST', { hits });
-  if (r && r.ok && r.fight) { setDunFight(r.fight); updateDunUI(); }
+  if (r && r.ok && r.fight) { setDunFight(r.fight); updateDunUI(); if (r.crits > 0) critFx(el('dBoss'), r.dmg); }
 }
 async function doDunSwap(cls) {
   if (dunLocalHits) { if (dunFlushT) { clearTimeout(dunFlushT); dunFlushT = null; } await flushDunHits(); }   // 바꾸기 전 연타는 원래 무기로
@@ -2762,7 +2779,8 @@ function renderGuideStrong() {
     const buff = c.buff ? ` · <b>${c.buff.name}</b> ${c.buff.ms / 1000}초간 연타 ×${c.buff.mult}` : '';
     return `<div class="gs-row${cls === mine ? ' me' : ''}"><svg class="gs-glyph" viewBox="0 0 44 44" aria-hidden="true">${GS_GLYPH[c.cmd]}</svg>
       <div class="gs-txt"><b>${who}${cls === mine ? '<span class="gs-me">내 무기</span>' : ''}</b>
-      <span>${c.how} → ⚡${c.name} (연타 ${c.taps}회분${extra})${buff}</span></div></div>`;
+      <span>${c.how} → ⚡${c.name} (연타 ${c.taps}회분${extra})${buff}</span>
+      <span class="gs-crit">💥 치명타 ${Math.round(CRIT[cls].p * 100)}% · 피해 ×${CRIT[cls].m}</span></div></div>`;
   }).join('');
 }
 function openGuide(tab) { renderGuideStrong(); setGuideTab(tab || 'forge'); el('guide').hidden = false; }
@@ -3016,7 +3034,7 @@ async function renderMissions() {
   if (!r.ok) { el('missionList').innerHTML = '<div class="empty">불러오기 실패</div>'; return; }
   const list = missionScope === 'daily' ? r.daily : r.weekly;
   document.querySelectorAll('.mission-tab').forEach(b => b.classList.toggle('active', b.dataset.scope === missionScope));
-  el('missionList').innerHTML = list.map(m => {
+  el('missionList').innerHTML = '<div class="mission-hint">💰 골드는 내 최고 강화 기록(★ 포함)의 강화 비용에 맞춰 커져요</div>' + list.map(m => {
     const pct = Math.min(100, Math.round(m.progress / m.target * 100));
     const btn = m.claimed
       ? '<button class="btn sm mission-claim" disabled>완료 ✓</button>'
@@ -3026,7 +3044,7 @@ async function renderMissions() {
     return '<div class="mission-row' + (m.done && !m.claimed ? ' ready' : '') + (m.claimed ? ' claimed' : '') + '">'
       + '<div class="mission-info"><div class="mission-desc">' + esc(m.desc) + '</div>'
       + '<div class="mission-bar"><div class="mission-fill" style="width:' + pct + '%"></div></div>'
-      + '<div class="mission-reward">💰' + m.gold.toLocaleString() + ' · 🎟️ XP ' + m.xp + '</div></div>'
+      + '<div class="mission-reward">' + rewardText(m.reward || { gold: m.gold }) + ' <span class="mr-xp">🎟️ XP ' + m.xp + '</span></div></div>'
       + btn + '</div>';
   }).join('');
   const bp = r.bp;
@@ -3041,13 +3059,17 @@ async function claimMission(id) {
   await renderMissions();
 }
 
-function bpRewardText(r) {
+// 미션·패스 보상 꾸러미 한 줄 — 서버 bundleFor 와 같은 키(골드는 서버가 내 기준으로 계산해서 보낸다)
+const REWARD_ICON = [['prism', '💎'], ['shard', '💠'], ['essence', '🌟'], ['boxkey', '🗝️'], ['stone', '🔮'],
+  ['protect', '🛡️'], ['boost', '🍀'], ['hammer', '🔨'], ['prismdye', '🫧'], ['slots', '🎒']];
+function rewardText(r) {
+  if (!r) return '-';
   const parts = [];
-  if (r.gold) parts.push('💰' + r.gold.toLocaleString());
-  if (r.protect) parts.push('🛡️×' + r.protect);
-  if (r.boost) parts.push('🍀×' + r.boost);
-  return parts.join(' ') || '-';
+  if (r.gold) parts.push('<span class="rw">💰' + r.gold.toLocaleString() + '</span>');
+  for (const [k, ic] of REWARD_ICON) if (r[k]) parts.push('<span class="rw">' + ic + r[k] + (k === 'slots' ? '칸' : '') + '</span>');
+  return parts.length ? '<span class="rws">' + parts.join('') + '</span>' : '-';
 }
+const bpRewardText = rewardText;
 async function openPass() { el('passModal').hidden = false; await renderPass(); }
 function closePass() { el('passModal').hidden = true; }
 async function renderPass() {

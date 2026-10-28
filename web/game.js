@@ -24,6 +24,8 @@ const CONFIG = {
                              //  '뭉칠수록 유리' 가 유지된다. 1.35 로 잡으면 5인이 솔로보다 어려워진다)
   raidPartyDangerScale: 0.12,// 인원 1명 늘 때마다 보스 화력 +12%(탱커·힐러가 필요해지는 이유)
   raidDuration: 15000,       // 전투 지속(ms) — 2명 이상
+  raidSoloSupportAtk: { tanker: 1.0, healer: 0.8 },   // 혼자 레이드면 탱커·힐러의 공격 계수(0.6·0.5)를 이 값으로 — 지킬 동료가 없어 공격에 전념.
+                             // 힐러는 별(22회분)·마력 공명·축복이 이미 있어 0.8(×1.6) — 1.0 이면 혼자 초당 딜이 궁수·전사를 넘었다
   raidSoloDuration: 20000,   // 혼자 도전하면 전투 시간 +5초(체력을 나눠 줄 동료도, 탱커·힐러 도움도 없어서)
   raidHitDmgMult: 0.55,      // 탭 1회 데미지 = memberStats.atk * 이 배율
   raidHitBatchMax: 40,       // raidHit 한 번에 인정하는 최대 타수(치트 방지)
@@ -170,15 +172,29 @@ function classOf(p) { return CLASSES[p && p.class] || CLASSES.warrior; }
 //  - 딜러(근/원): 높은 공격, 낮은 체력
 //  - 탱커: 낮은 공격, 높은 체력 + 방어(flat armor) + 아군 피해감소(dr)
 //  - 힐러: 낮은 공격, 아군 회복(heal) + 아군 공격버프(atkBuff)
+const CLASS_ATK = { archer: 1.35, warrior: 1.2, tanker: 0.6, healer: 0.5 };   // 직업 공격 계수
+/* 💥 치명타 — 사냥·파티 레이드·초월 던전의 일반 공격·강공격에 붙는다(스킬은 고정 피해라 제외).
+ *  확률 순위: 전사 > 힐러 > 궁수 > 탱커 · 피해 순위: 궁수 > 전사 > 힐러 > 탱커
+ *  기대 배율(1 + p×(m−1)): 전사 1.20 · 궁수 1.17 · 힐러 1.12 · 탱커 1.04 (예전 사냥 공통 15%·×2 = 1.15)
+ *  화면(public/app.js CRIT)도 같은 값 — 테스트가 둘이 같은지 본다. */
+const CLASS_CRIT = {
+  warrior: { p: 0.22, m: 1.9 },
+  healer:  { p: 0.17, m: 1.7 },
+  archer:  { p: 0.12, m: 2.4 },
+  tanker:  { p: 0.08, m: 1.5 },
+};
+function critOf(cls) { return CLASS_CRIT[cls] || CLASS_CRIT.warrior; }
+// n 타 중 치명타 수(타마다 따로 굴린다 — 한 번에 받는 연타는 최대 40)
+function rollCrits(n, cls) { const c = critOf(cls); let k = 0; for (let i = 0; i < n; i++) if (Math.random() < c.p) k++; return k; }
 function memberStats(p) {
   const L = p.level || 0;
   const base = (12 + L * 8) * (1 + starsOf(p) * CONFIG.ascendAtkBonus);   // 초월 ★당 공격력 +8%
   switch (p.class) {
-    case 'archer': return { atk: base * 1.35, hp: 80 + L * 10,  heal: 0, armor: 0, dr: 0, atkBuff: 0 };
-    case 'tanker': return { atk: base * 0.6,  hp: 300 + L * 30, heal: 0, armor: 60 + L * 7, dr: 0.05 + L * 0.004, atkBuff: 0 };
-    case 'healer': return { atk: base * 0.5,  hp: 150 + L * 15, heal: 45 + L * 9, armor: 0, dr: 0, atkBuff: 0.01 + L * 0.002 };
+    case 'archer': return { atk: base * CLASS_ATK.archer, hp: 80 + L * 10,  heal: 0, armor: 0, dr: 0, atkBuff: 0 };
+    case 'tanker': return { atk: base * CLASS_ATK.tanker, hp: 300 + L * 30, heal: 0, armor: 60 + L * 7, dr: 0.05 + L * 0.004, atkBuff: 0 };
+    case 'healer': return { atk: base * CLASS_ATK.healer, hp: 150 + L * 15, heal: 45 + L * 9, armor: 0, dr: 0, atkBuff: 0.01 + L * 0.002 };
     case 'warrior':
-    default:       return { atk: base * 1.2,  hp: 120 + L * 12, heal: 0, armor: 0, dr: 0, atkBuff: 0 };
+    default:       return { atk: base * CLASS_ATK.warrior, hp: 120 + L * 12, heal: 0, armor: 0, dr: 0, atkBuff: 0 };
   }
 }
 
@@ -1239,11 +1255,12 @@ function dunHit(db, id, hits) {
   if (usedD + hits > maxTotal) hits = Math.max(0, maxTotal - usedD);
   const haste = dunBuff(f, 'haste', t).reduce((m, b) => Math.max(m, b.v), 1);
   const mult = elemMult(p.element, dunPhaseEl(f, t));
-  const dmg = hits * memberStats(p).atk * CONFIG.raidHitDmgMult * mult * haste;
+  const crits = rollCrits(hits, p.class), units = hits + crits * (critOf(p.class).m - 1);   // 💥 치명타
+  const dmg = units * memberStats(p).atk * CONFIG.raidHitDmgMult * mult * haste;
   f.bossHP = Math.max(0, f.bossHP - dmg); f.hits += hits; f.dmg += dmg;
   addTaps(p, hits); if (mult > 1 && hits) bumpD(p, 'weak', hits);   // 칭호용
   if (f.bossHP <= 0) dunTick(db, p, f);
-  return { ok: true, silent: true, dmg: Math.round(dmg), mult, fight: dunFightView(p) };
+  return { ok: true, silent: true, dmg: Math.round(dmg), crits, mult, fight: dunFightView(p) };
 }
 // 스킬 효과 적용(직업·속성 공통) — 피해는 지금 단계 속성과의 상성 배율을 곱한다
 function dunApplySkill(p, f, s, t, srcEl) {
@@ -1269,14 +1286,15 @@ function dunStrong(db, id, power) {
   const units = strongUnits(p.class, power), mult = elemMult(p.element, dunPhaseEl(f, t));
   if (f.hits + (f.sUnits || 0) + units > Math.floor(t / CONFIG.raidHitMsPerTap) + 12) return { ok: false, silent: true, error: '숨 고르는 중…' };
   f.strongAt = now; f.sUnits = (f.sUnits || 0) + units;
-  const dmg = units * memberStats(p).atk * CONFIG.raidHitDmgMult * mult;
+  const crit = Math.random() < critOf(p.class).p;
+  const dmg = units * memberStats(p).atk * CONFIG.raidHitDmgMult * mult * (crit ? critOf(p.class).m : 1);
   f.bossHP = Math.max(0, f.bossHP - dmg); f.dmg += dmg;
-  let text = c.emoji + ' ' + c.name + '! 보스 -' + Math.round(dmg).toLocaleString() + (mult > 1 ? ' (효과 굉장!)' : mult < 1 ? ' (효과 별로…)' : '');
+  let text = c.emoji + ' ' + c.name + '!' + (crit ? ' 💥치명타' : '') + ' 보스 -' + Math.round(dmg).toLocaleString() + (mult > 1 ? ' (효과 굉장!)' : mult < 1 ? ' (효과 별로…)' : '');
   if (c.buff) { f.buffs.push({ k: 'haste', v: c.buff.mult, from: t, to: t + c.buff.ms }); text += ' · ✨ 마력 공명'; }
   dunEvent(f, t, text);
   countStrong(p);
   dunTick(db, p, f);
-  return { ok: true, silent: true, dmg: Math.round(dmg), mult, strongText: text, fight: dunFightView(p) };
+  return { ok: true, silent: true, dmg: Math.round(dmg), crit, mult, strongText: text, fight: dunFightView(p) };
 }
 function dunSkill(db, id, kind) {
   const { p, f, err } = dunActive(db, id); if (err) return err;
@@ -1362,14 +1380,17 @@ function huntSpawn(level) {
 // reqLevel/reqAscend 를 모든 참가자가 만족해야 입장할 수 있다.
 // hp 는 각 보스의 reqLevel 근처 플레이어가 15초(혼자면 20초) 안에 '쉬지 않고 연타 + 스킬' 로
 // 겨우 넘기는 선에 맞춰져 있다 — 대충 두들기면 못 깬다.
+// essence(🌟 정수, 참가자 전원 확정) — ★3 까지는 '하루 레이드(dailyRaids 3회)로 다음 ★ 정수(20·40·60)' 가 모이게:
+//   ★0 → 드래곤 7×3=21 ≥ 20 · ★1 → 거인 20×3=60 ≥ 40 · ★2 → 거인 60 ≥ 60 (공허는 ★3 부터라 ★2 땐 못 들어감).
+//   ★3 이후(80·100…)는 공허 30×3=90 으로 하루~이틀. 테스트가 이 규칙을 지킨다(test-adapter '정수 페이스').
 const BOSSES = [
-  { id: 'goblin', name: '고블린 군주', emoji: '👺', tier: '입문',   hp: 2000,  atk: 130,  reward: 5000,   dropChance: 0.10, danger: 60,  essence: 1, reqLevel: 0,  reqAscend: 0 },
-  { id: 'golem',  name: '스톤 골렘',   emoji: '🗿', tier: '보통',   hp: 20000, atk: 340,  reward: 15000,  dropChance: 0.18, danger: 80,  essence: 1, reqLevel: 30, reqAscend: 0 },
-  { id: 'dragon', name: '고대 드래곤', emoji: '🐲', tier: '어려움', hp: 38000, atk: 600,  reward: 40000,  dropChance: 0.28, danger: 100, essence: 2, reqLevel: 60, reqAscend: 0 },
-  { id: 'demon',  name: '마계 군주',   emoji: '😈', tier: '지옥',   hp: 60000, atk: 780,  reward: 90000,  dropChance: 0.40, danger: 115, essence: 2, reqLevel: 85, reqAscend: 0 },
+  { id: 'goblin', name: '고블린 군주', emoji: '👺', tier: '입문',   hp: 2000,  atk: 130,  reward: 5000,   dropChance: 0.10, danger: 60,  essence: 1,  reqLevel: 0,  reqAscend: 0 },
+  { id: 'golem',  name: '스톤 골렘',   emoji: '🗿', tier: '보통',   hp: 20000, atk: 340,  reward: 15000,  dropChance: 0.18, danger: 80,  essence: 3,  reqLevel: 30, reqAscend: 0 },
+  { id: 'dragon', name: '고대 드래곤', emoji: '🐲', tier: '어려움', hp: 38000, atk: 600,  reward: 40000,  dropChance: 0.28, danger: 100, essence: 7,  reqLevel: 60, reqAscend: 0 },
+  { id: 'demon',  name: '마계 군주',   emoji: '😈', tier: '지옥',   hp: 60000, atk: 780,  reward: 90000,  dropChance: 0.40, danger: 115, essence: 10, reqLevel: 85, reqAscend: 0 },
   // 초월 전용 — ★ 가 있어야 입장 가능
-  { id: 'titan',  name: '초월의 거인', emoji: '🌋', tier: '초월',   hp: 43000, atk: 900,  reward: 150000, dropChance: 0.45, danger: 110, essence: 3, reqLevel: 50, reqAscend: 1 },
-  { id: 'void',   name: '공허의 군주', emoji: '🌌', tier: '초월',   hp: 76000, atk: 1200, reward: 300000, dropChance: 0.60, danger: 125, essence: 4, reqLevel: 80, reqAscend: 3 },
+  { id: 'titan',  name: '초월의 거인', emoji: '🌋', tier: '초월',   hp: 43000, atk: 900,  reward: 150000, dropChance: 0.45, danger: 110, essence: 20, reqLevel: 50, reqAscend: 1 },
+  { id: 'void',   name: '공허의 군주', emoji: '🌌', tier: '초월',   hp: 76000, atk: 1200, reward: 300000, dropChance: 0.60, danger: 125, essence: 30, reqLevel: 80, reqAscend: 3 },
 ];
 function bossById(id) { return BOSSES.find(b => b.id === id); }
 // 참여 인원에 맞춘 난이도 스케일. 체력은 인원수보다 가파르게, 화력은 완만하게 올라간다
@@ -1381,7 +1402,9 @@ function raidScale(n) {
 // 전투 시간 — 혼자면 조금 더 길게(1인당 보스 체력이 파티보다 많다: 2명 0.85 · 3명 0.8 · 혼자 1.0)
 function raidDurationFor(n) { return n <= 1 ? CONFIG.raidSoloDuration : CONFIG.raidDuration; }
 // 레이드에서 실제로 들어가는 1타 공격력 — 힐러의 '아군 공격력 업'(raid.atkBuff)까지 곱한다
-function raidAtk(p, raid) { return memberStats(p).atk * (1 + ((raid && raid.atkBuff) || 0)); }
+// + 혼자 싸우는 탱커·힐러는 공격 계수를 raidSoloSupportAtk 로 올려 준다(raid.soloMult — 시작할 때 정해 둔다).
+function raidAtk(p, raid) { return memberStats(p).atk * (1 + ((raid && raid.atkBuff) || 0)) * ((raid && raid.soloMult) || 1); }
+function soloSupportMult(cls) { const c = CLASS_ATK[cls], to = CONFIG.raidSoloSupportAtk[cls]; return c && to > c ? to / c : 1; }
 // 입장 조건 미달 사유. 만족하면 null.
 function bossLock(p, boss) {
   if ((p.level || 0) < boss.reqLevel) return '무기 +' + boss.reqLevel + ' 이상 필요';
@@ -1869,8 +1892,9 @@ function hunt(db, id, atk) {
   p.huntsUsed++;
   const m = huntSpawn(p.level);
   let dmg = huntDamage(p.level);
-  const crit = Math.random() < 0.15;      // 치명타: 데미지 2배
-  if (crit) dmg *= 2;
+  const cc = critOf(p.class);
+  const crit = Math.random() < cc.p;      // 💥 치명타: 직업마다 확률·배율이 다르다(CLASS_CRIT)
+  if (crit) dmg = Math.round(dmg * cc.m);
   const dealt = Math.min(dmg, m.hp);
   const slain = dmg >= m.hp;
   let gold = Math.round(dealt * m.gpp);
@@ -1920,7 +1944,7 @@ function hunt(db, id, atk) {
       drop = { type: 'potion', stamina: Math.round(ns - st), text: '⛏️ 채광 물약! 채굴 기력 +' + Math.round(ns - st) };
     }
   }
-  return { ok: true, monster: { name: m.name, emoji: m.emoji, hp: m.hp, rarity: m.rarity, tier: m.tier }, dmg, dealt, slain, crit, gold, drop, mat, loot, overtime };
+  return { ok: true, monster: { name: m.name, emoji: m.emoji, hp: m.hp, rarity: m.rarity, tier: m.tier }, dmg, dealt, slain, crit, critMult: cc.m, gold, drop, mat, loot, overtime };
 }
 // 방지권 상점 구매는 하루 CONFIG.protectDailyBuy 개까지. 나머지는 사냥 드랍으로 얻는다.
 // 날짜 필드는 players.data JSON 에 남아 '읽을 때 지연 리셋' 된다(일일 사냥과 같은 방식).
@@ -2131,6 +2155,7 @@ function raidStart(db, id, bossId) {
   dr = Math.min(CONFIG.raidDRCap, dr);
   atkBuff = Math.min(CONFIG.raidAtkBuffCap, atkBuff);
   const duration = raidDurationFor(participants.length);
+  const soloMult = participants.length === 1 ? soloSupportMult(db.players[participants[0]].class) : 1;
   // 인원 스케일 — 체력·화력·보상을 참여 인원에 맞춰 키운다
   const sc = raidScale(participants.length);
   const bossHp = Math.round(boss.hp * sc.hp);
@@ -2151,11 +2176,12 @@ function raidStart(db, id, bossId) {
     status: 'active', startTs: now, lastTick: now, duration,
     boss: { id: boss.id, name: boss.name, emoji: boss.emoji, hp: bossHp, atk: boss.atk, reward: bossReward, dropChance: boss.dropChance, essence: boss.essence },
     scale: { members: participants.length, hp: sc.hp, danger: sc.danger },
-    bossHP: bossHp, partyHP: 100, dr, drBase: dr, healPct, atkBuff, attacks, participants: parts,
+    bossHP: bossHp, partyHP: 100, dr, drBase: dr, healPct, atkBuff, soloMult, attacks, participants: parts,
     contrib: {}, hits: {}, skillUsed: {}, events: [{ t: 0, text: '⚔️ 전투 시작!' }], win: null, rewards: [], topContributor: null,
   };
   if (parts.length === 1) pt.raid.events.push({ t: 0, text: '⏱ 혼자 도전 — 전투 시간 ' + duration / 1000 + '초' });
   if (atkBuff > 0) pt.raid.events.push({ t: 0, text: '✨ 힐러의 축복 — 파티 공격력 +' + Math.round(atkBuff * 100) + '%' });
+  if (soloMult > 1) pt.raid.events.push({ t: 0, text: parts[0].classEmoji + ' 지킬 동료가 없어 공격에 전념 — 공격력 ×' + (Math.round(soloMult * 100) / 100) });
   parts.forEach(m => { pt.raid.contrib[m.nick] = 0; pt.raid.hits[m.nick] = 0; pt.raid.skillUsed[m.nick] = false; });
   addLog(db, '⚔️ ' + p.nick + ' 파티가 ' + boss.emoji + '[' + boss.name + '] 레이드 시작! (' + parts.length + '명)');
   return { ok: true, raid: raidView(pt.raid) };
@@ -2235,13 +2261,14 @@ function raidHit(db, id, hits) {
   const usedR = (raid.hits[p.nick] || 0) + ((raid.sUnits && raid.sUnits[p.nick]) || 0);
   if (usedR + hits > maxTotal) hits = Math.max(0, maxTotal - usedR);
   const res = raid.res && raid.res[p.nick] > Date.now() ? STRONG_ATTACKS.healer.buff.mult : 1;   // ✨ 마력 공명
-  const dmg = Math.round(hits * raidAtk(p, raid) * CONFIG.raidHitDmgMult * res);
+  const crits = rollCrits(hits, p.class), units = hits + crits * (critOf(p.class).m - 1);   // 💥 치명타 타수만큼 배율을 더한다
+  const dmg = Math.round(units * raidAtk(p, raid) * CONFIG.raidHitDmgMult * res);
   raid.bossHP = Math.max(0, raid.bossHP - dmg);
   raid.contrib[p.nick] = (raid.contrib[p.nick] || 0) + dmg;
   raid.hits[p.nick] = (raid.hits[p.nick] || 0) + hits;
   addTaps(p, hits);   // 칭호용 일반 공격(서버가 검증한 타수)
   if (raid.bossHP <= 0) raidTick(db, pt);
-  return { ok: true, dmg, raid: raidView(raid) };
+  return { ok: true, dmg, crits, raid: raidView(raid) };
 }
 // ⚡ 레이드 강공격 — 그린 커맨드 1번 = 연타 n회분(쿨타임은 서버가 막는다)
 function raidStrong(db, id, power) {
@@ -2259,15 +2286,16 @@ function raidStrong(db, id, power) {
   if ((raid.hits[p.nick] || 0) + (raid.sUnits[p.nick] || 0) + units > budget) return { ok: false, silent: true, error: '숨 고르는 중…' };
   raid.strongAt[p.nick] = now;
   raid.sUnits[p.nick] = (raid.sUnits[p.nick] || 0) + units;
-  const dmg = Math.round(units * raidAtk(p, raid) * CONFIG.raidHitDmgMult);
+  const crit = Math.random() < critOf(p.class).p;
+  const dmg = Math.round(units * raidAtk(p, raid) * CONFIG.raidHitDmgMult * (crit ? critOf(p.class).m : 1));
   raid.bossHP = Math.max(0, raid.bossHP - dmg);
   raid.contrib[p.nick] = (raid.contrib[p.nick] || 0) + dmg;
-  let text = c.emoji + ' ' + p.nick + ' ' + c.name + '! 보스 -' + dmg.toLocaleString();
+  let text = c.emoji + ' ' + p.nick + ' ' + c.name + '!' + (crit ? ' 💥치명타' : '') + ' 보스 -' + dmg.toLocaleString();
   if (c.buff) { if (!raid.res) raid.res = {}; raid.res[p.nick] = now + c.buff.ms; text += ' · ✨ 마력 공명(연타 ×' + c.buff.mult + ')'; }
   raid.events.push({ t: now - raid.startTs, text });
   countStrong(p);
   if (raid.bossHP <= 0) raidTick(db, pt);
-  return { ok: true, silent: true, dmg, units, strongText: text, raid: raidView(raid) };
+  return { ok: true, silent: true, dmg, units, crit, strongText: text, raid: raidView(raid) };
 }
 function raidSkill(db, id) {
   const { p, pt, raid } = raidMember(db, id);
@@ -2301,7 +2329,7 @@ function raidView(raid) {
     remain: Math.max(0, raid.duration - (Date.now() - raid.startTs)),
     boss: { id: raid.boss.id, name: raid.boss.name, emoji: raid.boss.emoji, hp: raid.boss.hp, atk: raid.boss.atk },
     bossHP: Math.round(raid.bossHP), bossMax: raid.boss.hp, partyHP: Math.round(raid.partyHP),
-    dr: Math.round(raid.dr * 100), atkBuff: Math.round((raid.atkBuff || 0) * 100), scale: raid.scale || null,
+    dr: Math.round(raid.dr * 100), atkBuff: Math.round((raid.atkBuff || 0) * 100), soloMult: raid.soloMult || 1, scale: raid.scale || null,
     participants: raid.participants.map(m => ({ nick: m.nick, classEmoji: m.classEmoji, class: m.class, hits: raid.hits[m.nick] || 0, contrib: Math.round(raid.contrib[m.nick] || 0), skillUsed: !!raid.skillUsed[m.nick] })),
     events: raid.events.slice(-8),
     win: raid.win, rewards: raid.rewards, topContributor: raid.topContributor,
@@ -2380,21 +2408,64 @@ function ensureMstat(p) {
 // 액션 함수들이 호출 — 일일·주간 버킷 동시 증가
 function bumpMstat(p, key, n) { const m = ensureMstat(p); n = n || 1; m.d[key] = (m.d[key] || 0) + n; m.w[key] = (m.w[key] || 0) + n; }
 
+/* 미션·패스 보상 꾸러미 — { gold, enh, prism, shard, essence, boxkey, stone, protect, boost, hammer, prismdye, slots }
+ *  gold + enh × (최고 레벨·최고 ★ 기준 강화 1회 비용) 을 골드로 준다 → +0 이든 ★2 +99 든 '강화 n회분' 이라 체감이 같다.
+ *  (고정 골드만 주면 +70 의 하루 사냥 4.8만G 앞에서 1,200G 가 의미가 없었다.) 나머지는 새 재화(💎·초월 재료·프리즘 재료). */
 const DAILY_POOL = [
-  { id: 'd_hunt',   stat: 'hunt',   target: 15, gold: 1200, xp: 30, desc: '몬스터 15마리 사냥' },
-  { id: 'd_enh',    stat: 'enh',    target: 20, gold: 1000, xp: 30, desc: '강화 20회 시도' },
-  { id: 'd_mine',   stat: 'mine',   target: 12, gold: 1000, xp: 30, desc: '곡괭이질 12회' },
-  { id: 'd_attend', stat: 'attend', target: 1,  gold: 800,  xp: 20, desc: '출석하기' },
-  { id: 'd_fight',  stat: 'fight',  target: 1,  gold: 800,  xp: 20, desc: '싸움 1회 도전' },
-  { id: 'd_raid',   stat: 'raid',   target: 1,  gold: 1500, xp: 40, desc: '레이드 1회 참여' },
+  { id: 'd_hunt',   stat: 'hunt',   target: 15, xp: 30, desc: '몬스터 15마리 사냥',
+    reward: { gold: 1500, enh: 10, shard: 15, stone: 2 } },
+  { id: 'd_enh',    stat: 'enh',    target: 20, xp: 30, desc: '강화 20회 시도',
+    reward: { gold: 1500, enh: 10, boost: 2, boxkey: 1 } },
+  { id: 'd_mine',   stat: 'mine',   target: 12, xp: 30, desc: '곡괭이질 12회',
+    reward: { gold: 1500, enh: 10, stone: 3, boxkey: 1 } },
+  { id: 'd_attend', stat: 'attend', target: 1,  xp: 20, desc: '출석하기',
+    reward: { gold: 1000, enh: 6, boxkey: 1, prism: 1 } },
+  { id: 'd_fight',  stat: 'fight',  target: 1,  xp: 20, desc: '싸움 1회 도전',
+    reward: { gold: 1000, enh: 6, protect: 1, shard: 10 } },
+  { id: 'd_raid',   stat: 'raid',   target: 1,  xp: 40, desc: '레이드 1회 참여',
+    reward: { gold: 2000, enh: 15, essence: 3, shard: 10 } },
 ];
 const WEEKLY_POOL = [
-  { id: 'w_enh',      stat: 'enh',      target: 100, gold: 6000, xp: 120, desc: '강화 100회 시도' },
-  { id: 'w_hunt',     stat: 'hunt',     target: 150, gold: 6000, xp: 120, desc: '몬스터 150마리 처치' },
-  { id: 'w_fightwin', stat: 'fightWin', target: 10,  gold: 6000, xp: 120, desc: '싸움 10승' },
-  { id: 'w_raid',     stat: 'raid',     target: 5,   gold: 8000, xp: 150, desc: '레이드 5회 참여' },
-  { id: 'w_mine',     stat: 'mine',     target: 80,  gold: 6000, xp: 120, desc: '곡괭이질 80회' },
+  { id: 'w_enh',      stat: 'enh',      target: 100, xp: 120, desc: '강화 100회 시도',
+    reward: { gold: 8000, enh: 60, prism: 6, hammer: 1, boost: 5 } },
+  { id: 'w_hunt',     stat: 'hunt',     target: 150, xp: 120, desc: '몬스터 150마리 처치',
+    reward: { gold: 8000, enh: 60, shard: 80, boxkey: 3 } },
+  { id: 'w_fightwin', stat: 'fightWin', target: 10,  xp: 120, desc: '싸움 10승',
+    reward: { gold: 8000, enh: 60, prism: 6, protect: 3 } },
+  { id: 'w_raid',     stat: 'raid',     target: 5,   xp: 150, desc: '레이드 5회 참여',
+    reward: { gold: 10000, enh: 80, essence: 20, prism: 6 } },
+  { id: 'w_mine',     stat: 'mine',     target: 80,  xp: 120, desc: '곡괭이질 80회',
+    reward: { gold: 8000, enh: 60, stone: 20, boxkey: 3 } },
 ];
+const REWARD_ITEMS = ['shard', 'essence', 'boxkey', 'stone', 'protect', 'boost', 'hammer', 'prismdye'];
+// 기준은 '지금까지 오른 최고 레벨 · 최고 ★' 의 강화 비용 — 초월 직후(+0)에 받아도 손해가 없고, 받는 때를 미룰 이유도 없다.
+function rewardGold(p, r) { return Math.round((r.gold || 0) + (r.enh || 0) * enhanceCost(Math.max(p.level || 0, p.best || 0), ascendMax(p))); }
+// 이 플레이어가 받게 될 꾸러미(골드는 지금 무기 기준으로 계산된 값) — 화면 표시용
+function bundleFor(p, r) {
+  const out = {}, g = rewardGold(p, r);
+  if (g) out.gold = g;
+  if (r.prism) out.prism = r.prism;
+  for (const k of REWARD_ITEMS) if (r[k]) out[k] = r[k];
+  if (r.slots) out.slots = r.slots;
+  return out;
+}
+// 가방에 다 들어가는지(받다가 일부를 버리지 않게, 안 들어가면 수령 자체를 막는다)
+function bundleFits(p, r) {
+  const counts = Object.assign({}, ensureInv(p).items);
+  for (const k of REWARD_ITEMS) if (r[k]) counts[k] = (counts[k] || 0) + r[k];
+  let used = 0;
+  for (const k in counts) if (counts[k] > 0) used += slotsFor(counts[k]);
+  return used <= invSlots(p) + (r.slots || 0);
+}
+function bundleText(out) {
+  const parts = [];
+  if (out.gold) parts.push('💰+' + out.gold.toLocaleString());
+  if (out.prism) parts.push('💎+' + out.prism);
+  for (const k of REWARD_ITEMS) if (out[k]) parts.push(ITEMS[k].emoji + '+' + out[k]);
+  if (out.slots) parts.push('🎒+' + out.slots + '칸');
+  return parts.join(' ');
+}
+const BAG_FULL = '🎒 가방에 자리가 모자라요 — 칸을 비우고 다시 받아요.';
 const DAILY_COUNT = 4, WEEKLY_COUNT = 4;
 function seedNum(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
 // 날짜/주 시드로 결정적 선택 → 모든 유저가 같은 '오늘의 미션'을 본다(재현 가능·소셜).
@@ -2417,7 +2488,7 @@ function missionRow(p, m, scope) {
   const st = ensureMstat(p), cl = ensureMclaim(p);
   const prog = Math.min(m.target, (scope === 'daily' ? st.d : st.w)[m.stat] || 0);
   const claimed = (scope === 'daily' ? cl.d : cl.w).includes(m.id);
-  return { id: m.id, desc: m.desc, target: m.target, progress: prog, done: prog >= m.target, claimed, gold: m.gold, xp: m.xp };
+  return { id: m.id, desc: m.desc, target: m.target, progress: prog, done: prog >= m.target, claimed, reward: bundleFor(p, m.reward), xp: m.xp };
 }
 function missionAlert(p) { // 받을 수 있는 보상 개수(빨간점 배지용)
   let n = 0;
@@ -2446,24 +2517,33 @@ function missionClaim(db, id, missionId) {
   const row = missionRow(p, m, scope);
   if (row.claimed) return { ok: false, error: '이미 받은 보상이에요.' };
   if (!row.done) return { ok: false, error: '아직 완료하지 않았어요.' };
+  if (!bundleFits(p, m.reward)) return { ok: false, error: BAG_FULL };
   const cl = ensureMclaim(p);
   (scope === 'daily' ? cl.d : cl.w).push(m.id);
-  const gold = gainGold(p, m.gold);
+  const got = grantBundle(p, m.reward);
   addBpXp(p, m.xp);
-  return { ok: true, gold, xp: m.xp, msg: '미션 완료! +' + gold + 'G · 패스 XP +' + m.xp };
+  return { ok: true, reward: got, gold: got.gold || 0, xp: m.xp, msg: '미션 완료! ' + bundleText(got) + ' · 패스 XP +' + m.xp };
 }
 
 // ----- 배틀패스 -----
 const BP_XP_PER_LEVEL = 100, BP_MAX_LEVEL = 30;
+// 무료 트랙 30레벨 합계: 💠300 · 🔮60 · 🗝️20 · 🛡️6 · 💎45 · 🌟45 · 🔨3 + 골드(예전 고정분 6.2만 + 강화 615회분)
 function buildBpTrack() {
   const t = [];
   for (let lv = 1; lv <= BP_MAX_LEVEL; lv++) {
-    const free = { gold: 500 + lv * 100 };
-    if (lv % 5 === 0) free.protect = 1;                 // 5레벨마다 방지권
-    const paid = { gold: 1500 + lv * 200 };
-    if (lv % 3 === 0) paid.boost = 5;                   // 3레벨마다 부스트 5회
-    if (lv % 5 === 0) paid.protect = 2;
+    const free = { gold: 500 + lv * 100, enh: 5 + lv };  // 예전 고정 골드 + 강화 6~35회분(레벨이 오를수록 커진다)
+    if (lv % 2) free.shard = 20; else free.stone = 4;    // 홀수 💠 · 짝수 🔮
+    if (lv % 3 === 0) free.boxkey = 2;
+    if (lv % 5 === 0) { free.protect = 1; free.prism = 5; }
+    if (lv % 10 === 0) { free.essence = 15; free.hammer = 1; }
+    if (lv === BP_MAX_LEVEL) free.prism = (free.prism || 0) + 15;   // 마지막 칸 💎20
+    const paid = { gold: 1500 + lv * 200, enh: 10 + lv * 2 };
+    if (lv % 2) paid.shard = 40; else paid.stone = 8;
+    if (lv % 3 === 0) { paid.boost = 5; paid.boxkey = 3; }
+    if (lv % 5 === 0) { paid.protect = 2; paid.prism = 10; }
+    if (lv % 10 === 0) { paid.essence = 30; paid.hammer = 2; }
     if (lv === CONFIG.invBpLevel) paid.slots = CONFIG.invBpSlots;   // 중간 보상: 가방 칸 +4
+    if (lv === BP_MAX_LEVEL) paid.prismdye = 1;
     t.push({ level: lv, free, paid });
   }
   return t;
@@ -2497,7 +2577,7 @@ function bpView(db, id) {
   return {
     ok: true, ...bpSummary(p),
     track: BP_TRACK.map(t => ({
-      level: t.level, free: t.free, paid: t.paid,
+      level: t.level, free: bundleFor(p, t.free), paid: bundleFor(p, t.paid),
       unlocked: t.level <= lv,
       freeClaimed: bp.free.includes(t.level),
       paidClaimed: bp.paid.includes(t.level),
@@ -2508,11 +2588,11 @@ function bpView(db, id) {
 }
 // 배틀패스 보상 지급. 초월 배수가 붙을 수 있어 '실제로 준 것' 을 돌려준다.
 function grantBundle(p, r) {
-  const out = {};
-  if (r.gold) out.gold = gainGold(p, r.gold);
-  if (r.protect) out.protect = addItem(p, 'protect', r.protect);
-  if (r.boost) out.boost = addItem(p, 'boost', r.boost);
-  if (r.slots) out.slots = addSlots(p, r.slots);
+  const out = {}, g = rewardGold(p, r);
+  if (r.slots) out.slots = addSlots(p, r.slots);          // 칸부터 늘려야 같은 꾸러미의 아이템이 들어간다
+  if (g) out.gold = gainGold(p, g);
+  if (r.prism) out.prism = gainPrism(p, r.prism);
+  for (const k of REWARD_ITEMS) if (r[k]) out[k] = addItem(p, k, r[k]);
   return out;
 }
 function bpClaim(db, id, level, track) {
@@ -2524,12 +2604,16 @@ function bpClaim(db, id, level, track) {
   if (track === 'paid') {
     if (!bp.premium) return { ok: false, error: '시즌 패스(유료 트랙)가 필요해요.' };
     if (bp.paid.includes(level)) return { ok: false, error: '이미 받았어요.' };
+    if (!bundleFits(p, t.paid)) return { ok: false, error: BAG_FULL };
     bp.paid.push(level);
-    return { ok: true, reward: grantBundle(p, t.paid), msg: '패스 보상 수령! (Lv.' + level + ' 프리미엄)' };
+    const got = grantBundle(p, t.paid);
+    return { ok: true, reward: got, msg: '패스 보상 (Lv.' + level + ' 프리미엄) ' + bundleText(got) };
   }
   if (bp.free.includes(level)) return { ok: false, error: '이미 받았어요.' };
+  if (!bundleFits(p, t.free)) return { ok: false, error: BAG_FULL };
   bp.free.push(level);
-  return { ok: true, reward: grantBundle(p, t.free), msg: '패스 보상 수령! (Lv.' + level + ')' };
+  const got = grantBundle(p, t.free);
+  return { ok: true, reward: got, msg: '패스 보상 (Lv.' + level + ') ' + bundleText(got) };
 }
 // 시즌 패스(유료) 구매 — 결제 연동 전까지 '준비중'. 결제 붙으면 여기서 bp.premium=true 로.
 function bpBuyPremium(db, id) {
@@ -2537,7 +2621,7 @@ function bpBuyPremium(db, id) {
 }
 
 module.exports = {
-  devEgg, raidStrong, dunStrong, STRONG_ATTACKS, eggFound, atkReport, reportAtk, ACHIEVEMENTS,
+  devEgg, raidStrong, dunStrong, STRONG_ATTACKS, CLASS_CRIT, eggFound, atkReport, reportAtk, ACHIEVEMENTS,
   CONFIG, GRADES, RARITIES, CLASSES, BOSSES, odds, enhanceCost, weaponName, grade,
   missionView, missionClaim, bpView, bpClaim, bpBuyPremium,
   login, setClass, rename, publicView, enhance, ascend, attend, mine, mineSwing, hunt, buyProtect, fight,

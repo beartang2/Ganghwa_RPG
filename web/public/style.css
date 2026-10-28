@@ -466,6 +466,7 @@ body.loading-on #globalLoading{opacity:1}
 .gs-glyph{flex:0 0 auto;width:44px;height:44px;border-radius:10px;background:rgba(0,0,0,.25)}
 .gs-txt{display:flex;flex-direction:column;min-width:0;font-size:12.5px;line-height:1.45;color:#ddd3c6}
 .gs-txt b{color:var(--text);font-size:13.5px}
+.gs-txt .gs-crit{color:#ffb38a;font-size:11.5px}
 .gs-txt .gs-me{color:var(--molten-hi);font-size:11px;font-weight:800;margin-left:4px}
 .guide-tips{margin:8px 0 0;padding:0 0 0 18px;font-size:12.5px;line-height:1.55;color:var(--muted)}
 .guide-tips li{margin:3px 0}
@@ -663,7 +664,12 @@ body.loading-on #globalLoading{opacity:1}
 .mission-desc{font-size:14px;font-weight:600;margin-bottom:5px}
 .mission-bar{height:6px;border-radius:4px;background:var(--bg2);overflow:hidden;margin-bottom:4px}
 .mission-fill{height:100%;background:linear-gradient(90deg,var(--primary2),var(--primary));border-radius:4px;transition:width .3s}
-.mission-reward{font-size:12px;color:var(--muted)}
+.mission-reward{font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px}
+.mission-hint{font-size:11.5px;color:var(--muted);text-align:center;margin:-2px 0 2px}
+.rws{display:inline-flex;flex-wrap:wrap;justify-content:center;gap:2px 7px;color:var(--text)}
+.mission-reward .rws{justify-content:flex-start}
+.rw{white-space:nowrap;font-variant-numeric:tabular-nums}
+.mr-xp{white-space:nowrap}
 .mission-claim{white-space:nowrap;min-width:64px}
 .mission-bpfoot{margin-top:12px;padding-top:10px;border-top:1px solid var(--line);
   font-size:13px;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
