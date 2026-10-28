@@ -543,6 +543,7 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && p === '/api/me') return sendJson(res, 200, { ok: true, me: game.publicView(db, id) });
     if (req.method === 'GET' && p === '/api/party-raid') return sendJson(res, 200, game.raidState(db, id));
+    if (req.method === 'GET' && p === '/api/fight-list') return sendJson(res, 200, game.fightList(db, id));
     if (req.method === 'GET' && p === '/api/missions') return sendJson(res, 200, game.missionView(db, id));
     if (req.method === 'GET' && p === '/api/battlepass') return sendJson(res, 200, game.bpView(db, id));
     if (req.method === 'GET' && p === '/api/prism') return sendJson(res, 200, game.prismView(db, id));

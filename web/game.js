@@ -13,7 +13,8 @@ const CONFIG = {
   destroyDropRatio: 0.15,    // 파괴 시 떨어지는 폭(만렙 대비). 99 기준 -15레벨
   stealPct: 0.2, protectPrice: 8000,
   protectDailyBuy: 3,        // 🛡️ 상점 일일 구매 상한 — 나머지는 사냥 드랍으로 얻는다
-  fightBreakChance: 0.10,    // 싸움 패배 시 무기 1단계 하락 확률 — '걸려 온 싸움'에서 진 방어자만(건 사람은 져도 골드만 잃는다)
+  fightOddsK: 10, fightOddsMin: 0.02,   // 싸움 승률 = 1/(1+(상대 전투력/내 전투력)^K), 2%~98% (fightOdds)
+  fightBreakChance: 0.10,    // 싸움 패배 시 무기 1단계 하락 확률 — '걸려 온 싸움'에서 진 방어자만(건 사람은 져도 골드만 잃는다) · 방지권(★0)이 있으면 1장으로 막는다
   dropProtectChance: 0.05, dropGoldChance: 0.07,   // 방지권 주 공급원이 사냥이라 확률을 올림
   mineRate: 12, mineCap: 3000, partyMax: 5, raidMinMembers: 1,   // 1=혼자도 레이드 가능(고레벨 솔로 딜로 잡힘, 난이도는 보스 danger가 담당)
   raidAtkBuffCap: 0.15,      // 힐러 아군 공격 버프 상한
@@ -1982,6 +1983,25 @@ function buyDye(db, id) {
 function buyClassChange(db, id) {
   return { ok: false, error: '직업 변경권은 판매가 끝났어요 — 💎 프리즘 상점의 장비 칸으로 새 직업 무기를 따로 키울 수 있어요. (갖고 있는 변경권은 가방에서 그대로 쓸 수 있어요)' };
 }
+/* ⚔️ 싸움 전투력 — 레이드 기본 공격력과 같은 식(직업 계수는 빼서 직업끼리 공평하게): (12 + 8 × 강화) × (1 + 8% × ★).
+ * 승률은 전투력 '비율' 로 정한다: 1 / (1 + (상대/나)^K). 같으면 50%, 2%~98% 로 묶는다.
+ *  예) +99 vs +95 60% · +90 72% · +80 89% · +44 98% / 같은 +99 에 ★1 68% · ★3 90%
+ * (예전 50% + 강화 차 × 5%, 10~90% 는 +44 에게도 10% 로 지고 ★ 을 전혀 보지 않았다.) */
+function fightPower(p) { return (12 + (p.level || 0) * 8) * (1 + starsOf(p) * CONFIG.ascendAtkBonus); }
+function fightOdds(a, d) {
+  const r = fightPower(d) / fightPower(a), m = CONFIG.fightOddsMin;
+  return Math.max(m, Math.min(1 - m, 1 / (1 + Math.pow(r, CONFIG.fightOddsK))));
+}
+// 싸움 탭 목록 — 상대마다 지금 내 승률을 미리 보여 준다(전투력 높은 순)
+function fightList(db, id) {
+  const me = norm(db.players[id]);
+  const list = Object.keys(db.players).filter(k => k !== id && db.players[k].class).map(k => {
+    const q = norm(db.players[k]);
+    return { nick: q.nick, level: q.level || 0, ascend: starsOf(q), classEmoji: classOf(q).emoji, nickColor: q.nickColor || null,
+      title: equippedTitleView(q), power: fightPower(q), odds: Math.round(fightOdds(me, q) * 100) };
+  }).sort((a, b) => b.power - a.power || a.nick.localeCompare(b.nick));
+  return { ok: true, list, fightsLeft: fightsLeft(me), dailyFights: limitOf(me, 'dailyFights') };
+}
 function fight(db, id, targetNick) {
   targetNick = (targetNick || '').trim();
   const targetId = findByNick(db, targetNick);
@@ -1993,8 +2013,7 @@ function fight(db, id, targetNick) {
   if (atk.fightsUsed >= limitOf(atk, 'dailyFights')) return { ok: false, error: '오늘 싸움 횟수를 다 썼어요!' };
   atk.fightsUsed++;
   atk.fightsTotal = (atk.fightsTotal || 0) + 1;    // 도전과제: 싸움 도전 횟수(광견)
-  let pWin = 0.5 + (atk.level - def.level) * 0.05;
-  pWin = Math.max(0.1, Math.min(0.9, pWin));
+  const pWin = fightOdds(atk, def);
   const atkWin = Math.random() < pWin;
   bumpMstat(atk, 'fight'); if (atkWin) bumpMstat(atk, 'fightWin');   // 미션: 싸움/승리
   const winP = atkWin ? atk : def, loseP = atkWin ? def : atk;
@@ -2003,18 +2022,24 @@ function fight(db, id, targetNick) {
   const steal = Math.floor(loseP.gold * CONFIG.stealPct);
   loseP.gold -= steal;
   gainGold(winP, steal, true);   // 약탈 = 이전이라 초월 배수 미적용(골드 총량 보존)
-  let broke = null;
+  let broke = null, guarded = null;
   // 💢 무기 손상은 방어자만 — 먼저 건 사람이 골드도 잃고 무기까지 깨지면 아무도 싸움을 걸지 않는다
   if (loseP === def && loseP.level > 0 && Math.random() < CONFIG.fightBreakChance) {
-    const b = loseP.level; loseP.level--; broke = { who: loser, from: b, to: loseP.level };
-    // 🕯️ 추모 — 싸움에서 손상된 무기도 오늘 떠나보낸 무기로 센다(강화 파괴와 같은 일일 카운터 destroysToday)
-    if (loseP.destroyDay !== today()) { loseP.destroyDay = today(); loseP.destroysToday = 0; }
-    loseP.destroysToday++;
-    bumpRank(db);
-    addLog(db, '💢 ' + loser + ' 무기 손상 +' + b + '→+' + loseP.level);
+    if (protectWorks(loseP) && takeItem(loseP, 'protect', 1)) {
+      // 🛡️ 파괴방지권 1장으로 막는다 — 강화 파괴와 같은 규칙(★1+ 무기는 방지권 무효)
+      guarded = { who: loser, level: loseP.level, left: itemCount(loseP, 'protect') };
+      addLog(db, '🛡️ ' + loser + ' 파괴방지권으로 무기 손상을 막았어요 (+' + loseP.level + ' 유지)');
+    } else {
+      const b = loseP.level; loseP.level--; broke = { who: loser, from: b, to: loseP.level };
+      // 🕯️ 추모 — 싸움에서 손상된 무기도 오늘 떠나보낸 무기로 센다(강화 파괴와 같은 일일 카운터 destroysToday)
+      if (loseP.destroyDay !== today()) { loseP.destroyDay = today(); loseP.destroysToday = 0; }
+      loseP.destroysToday++;
+      bumpRank(db);
+      addLog(db, '💢 ' + loser + ' 무기 손상 +' + b + '→+' + loseP.level);
+    }
   }
   addLog(db, '⚔️ ' + winner + ' 승 vs ' + loser + ' (' + steal + 'G 약탈)');
-  return { ok: true, iWon: winner === atk.nick, winner, loser, steal, broke, atk: { nick: atk.nick, level: atk.level }, def: { nick: def.nick, level: def.level } };
+  return { ok: true, iWon: winner === atk.nick, winner, loser, steal, broke, guarded, pWin, atk: { nick: atk.nick, level: atk.level }, def: { nick: def.nick, level: def.level } };
 }
 
 /* ---------- 파티 / 레이드 (멤버는 accountId 로 저장, 표시만 nick) ---------- */
@@ -2631,7 +2656,7 @@ module.exports = {
   devEgg, raidStrong, dunStrong, STRONG_ATTACKS, CLASS_CRIT, eggFound, atkReport, reportAtk, ACHIEVEMENTS,
   CONFIG, GRADES, RARITIES, CLASSES, BOSSES, odds, enhanceCost, weaponName, grade,
   missionView, missionClaim, bpView, bpClaim, bpBuyPremium,
-  login, setClass, rename, publicView, enhance, ascend, attend, mine, mineSwing, hunt, buyProtect, fight,
+  login, setClass, rename, publicView, enhance, ascend, attend, mine, mineSwing, hunt, buyProtect, fight, fightList, fightOdds, fightPower,
   ITEMS, useItem, buyInvPack, invView, ascendReq, ascendProgress,
   partyCreate, partyJoin, partyLeave, partyList, partyView, raidStart,
   partyInvite, partyAccept, partyReject, myInvites, raidState,

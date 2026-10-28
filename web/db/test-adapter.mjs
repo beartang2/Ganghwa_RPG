@@ -112,6 +112,8 @@ async function main() {
   ok(rowA.wins + rowA.losses === 1 && rowB.wins + rowB.losses === 1, '양쪽 전적 +1 영속화(data JSONB)');
   const sumAfter = Number((await q('SELECT sum(gold)::bigint AS s FROM players'))[0].s);
   ok(sumBefore === sumAfter, '골드 약탈은 제로섬(총합 보존 ' + sumAfter + ')');
+  const fls = (await req('GET', '/api/fight-list', { token: tok })).body;
+  ok(fls.ok && fls.list.some(x => x.nick === '궁수' && typeof x.odds === 'number'), '싸움 목록 API — 상대별 내 승률(' + (fls.list.find(x => x.nick === '궁수') || {}).odds + '%)');
   let d2 = (await q('SELECT fights_used FROM player_daily WHERE player_id=(SELECT id FROM players WHERE nick=$1) AND day=(SELECT max(day) FROM player_daily)', ['검사']))[0];
   ok(d2 && d2.fights_used === 1, 'player_daily.fights_used=1 영속화');
 
@@ -554,6 +556,24 @@ async function main() {
     A.fightsUsed = 0; const seq = [0.95, 0]; Math.random = () => (seq.length ? seq.shift() : 0.5);
     const fl = GAME.fight(fdb, 'a', '방어러'); Math.random = realRandom;
     ok(fl.ok && !fl.iWon && !fl.broke && A.level === 44, '건 사람이 지면 무기 손상 없음(골드만)');
+    // 🛡️ 방어자에게 방지권이 있으면 손상을 1장으로 막는다(추모에도 안 올라감)
+    A.fightsUsed = 0; GAME.norm(D); D.inv.items.protect = 2; const lvB = D.level, cB = D.destroysToday;
+    Math.random = () => 0; const fg = GAME.fight(fdb, 'a', '방어러'); Math.random = realRandom;
+    ok(fg.ok && fg.iWon && !fg.broke && fg.guarded && D.level === lvB && D.inv.items.protect === 1 && D.destroysToday === cB, '방어자 방지권 → 손상 막음 · 방지권 −1 · 추모 그대로');
+    D.ascend = 1; A.fightsUsed = 0; Math.random = () => 0; const fs = GAME.fight(fdb, 'a', '방어러'); Math.random = realRandom;
+    ok(fs.ok && fs.broke && !fs.guarded && D.inv.items.protect === 1, '★1+ 무기는 방지권 무효(강화와 같은 규칙) → 손상');
+  }
+  // ⚔️ 싸움 승률 — 전투력(강화·★) 비율: 같으면 50% · 차이가 클수록 이긴다 · ★ 반영 · 2~98%
+  {
+    const o = (a, as, d, ds) => GAME.fightOdds({ level: a, ascend: as }, { level: d, ascend: ds });
+    ok(Math.abs(o(99, 0, 99, 0) - 0.5) < 1e-9, '같은 전투력 → 50%');
+    ok(o(99, 0, 44, 0) === 0.98 && o(44, 0, 99, 0) === 0.02, '+99 vs +44 → 98% (예전 90%) · 반대로 2%');
+    ok(o(99, 0, 95, 0) < o(99, 0, 90, 0) && o(99, 0, 90, 0) < o(99, 0, 80, 0), '강화 차이가 클수록 승률↑ (' + [95, 90, 80].map(d => Math.round(o(99, 0, d, 0) * 100) + '%').join(' · ') + ')');
+    ok(o(99, 1, 99, 0) > 0.6 && o(99, 3, 99, 0) > o(99, 1, 99, 0), '같은 +99 라도 ★ 이 높으면 유리 (★1 ' + Math.round(o(99, 1, 99, 0) * 100) + '% · ★3 ' + Math.round(o(99, 3, 99, 0) * 100) + '%)');
+    const ldb = { players: {}, parties: {}, log: [] };
+    [['나', 99, 0], ['약한이', 44, 0], ['동급', 99, 0], ['초월자', 99, 2]].forEach(([n, l, a], i) => { const q = GAME.makePlayer(n); GAME.norm(q); Object.assign(q, { class: 'warrior', level: l, ascend: a }); ldb.players['k' + i] = q; });
+    const fl = GAME.fightList(ldb, 'k0');
+    ok(fl.ok && fl.list.length === 3 && fl.list[0].nick === '초월자' && fl.list.find(x => x.nick === '약한이').odds === 98 && fl.list.find(x => x.nick === '동급').odds === 50, '싸움 목록: 전투력 높은 순 + 상대별 내 승률');
   }
   // ⚗️ 연금술 확률표 — 합이 1 · 꽝은 불이 셀수록 낮다
   {

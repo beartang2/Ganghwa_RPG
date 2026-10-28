@@ -10,7 +10,7 @@ const PATCH = {
   version: '6',
   title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
-    '⚔️ <b>싸움 규칙 변경</b> — 내가 먼저 건 싸움은 져도 골드만 잃고 <b>무기는 안전</b>해요. 무기 손상(10% 확률 −1강)은 걸려 온 싸움에서 진 쪽만',
+    '⚔️ <b>싸움 규칙 변경</b> — 승률을 <b>강화 수치와 ★초월</b>로 다시 계산해요(같으면 50% · +99 vs +90 72% · vs +44 98% · 같은 +99에 ★1 68%). 싸움 탭에서 상대마다 내 승률이 보여요. 그리고 내가 먼저 건 싸움은 져도 골드만 잃고 <b>무기는 안전</b>, 무기 손상(10% 확률 −1강)은 걸려 온 싸움에서 진 쪽만 · 🛡️ <b>파괴방지권</b>이 있으면 싸움 손상도 1장으로 막아요(★0 무기)',
     '🕯️ <b>추모</b> — 싸움에서 져서 손상된 무기(−1강)도 오늘의 추모에 올라가요',
     '⚗️ <b>연금술 꽝 확률 인하</b> — 잿더미가 약불 62→40% · 중불 52→30% · 강불 52→20%. 불이 셀수록 덜 꽝이고, 기대 💎도 약불 0.82 · 중불 3.04 · 강불 10.05로 올랐어요',
     '🛠️ <b>고침</b> — 휴대폰에서 강공격 궤적이 손가락보다 아래에 그려지던 문제(주소창이 보일 때)',
@@ -1861,8 +1861,9 @@ async function doFight(target) {
   const r = await api('fight', 'POST', { target });
   if (!r.ok) return toast(r.error, 'bad');
   applyMe(r.me); render();
-  let msg = (r.iWon ? '🏆 승리! ' : '😢 패배... ') + r.winner + ' 승 (💰' + r.steal + ' 이동)';
+  let msg = (r.iWon ? '🏆 승리! ' : '😢 패배... ') + r.winner + ' 승 (💰' + r.steal + ' 이동' + (r.pWin != null ? ' · 승률 ' + Math.round(r.pWin * 100) + '%' : '') + ')';
   if (r.broke) msg += ' · 💢' + r.broke.who + ' 무기 +' + r.broke.from + '→+' + r.broke.to;
+  if (r.guarded) msg += ' · 🛡️' + r.guarded.who + ' 방지권으로 무기 손상 방어';
   toast(msg, r.iWon ? 'ok' : 'bad');
   loadTab();
 }
@@ -2512,12 +2513,15 @@ async function loadTab() {
     const { list } = await api('log'); if (stale()) return;
     panel.innerHTML = list.length ? list.map(l => `<div class="logline">${esc(l.text)}</div>`).join('') : emptyMsg('기록 없음');
   } else if (currentTab === 'fight') {
-    const { list } = await api('players'); if (stale()) return;
-    const others = list.filter(n => n !== me.nick);
-    panel.innerHTML = `<p class="hint" style="margin:0 0 8px">이기면 상대 골드 20% 획득 · 져도 내 무기는 안전(걸려 온 싸움에서 지면 10% 확률로 −1강). (남은 싸움 ${me.fightsLeft}/${me.dailyFights})</p>` +
-      (others.length ? others.map(n =>
-        `<div class="fightrow"><div class="nm" data-nick="${esc(n)}">${nmLine(n)}</div>
-          <button class="btn sm primary" data-fight="${esc(n)}" ${me.fightsLeft <= 0 ? 'disabled' : ''}>싸움</button></div>`).join('') : emptyMsg('상대가 없어요'));
+    // 상대마다 지금 내 승률을 서버가 계산해 보낸다(전투력 = 강화·★ — 직업은 안 봄)
+    const r = await api('fight-list'); if (stale()) return;
+    const others = (r && r.ok && r.list) || [];
+    panel.innerHTML = `<p class="hint" style="margin:0 0 8px">승률은 <b>강화 수치와 ★초월</b>로 정해져요(같으면 50% · 2~98%). 이기면 상대 골드 20% 획득 · 져도 내 무기는 안전(걸려 온 싸움에서 지면 10% 확률로 −1강 · 🛡️방지권이 있으면 1장으로 막아요). (남은 싸움 ${me.fightsLeft}/${me.dailyFights})</p>` +
+      (others.length ? others.map(o =>
+        `<div class="fightrow"><div class="nm" data-nick="${esc(o.nick)}">${nmLine(o.nick, o.nickColor, o.title, o.classEmoji)}
+            <div class="w">${o.ascend ? '★' + o.ascend + ' ' : ''}+${o.level}</div></div>
+          <span class="fodds ${o.odds >= 70 ? 'hi' : o.odds <= 30 ? 'lo' : 'mid'}">승률 ${o.odds}%</span>
+          <button class="btn sm primary" data-fight="${esc(o.nick)}" ${me.fightsLeft <= 0 ? 'disabled' : ''}>싸움</button></div>`).join('') : emptyMsg('상대가 없어요'));
   }
   // 렌더 완료분을 캐시 — 다음에 그 탭 누르면 즉시 표시(뒤에서 갱신)
   if (cacheableTab(currentTab)) tabHtmlCache[currentTab] = panel.innerHTML;

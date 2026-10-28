@@ -397,6 +397,10 @@ body.loading-on #globalLoading{opacity:1}
 .fightrow:last-child{border-bottom:0}
 .fightrow .btn{flex-shrink:0}
 .fightrow .w{color:var(--muted);font-size:12px}
+.fodds{flex-shrink:0;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;padding:2px 8px;border-radius:999px;background:rgba(255,240,220,.06)}
+.fodds.hi{color:var(--success)}
+.fodds.mid{color:var(--gold)}
+.fodds.lo{color:var(--danger)}
 
 /* ---------- 토스트 — 화면 위쪽에 잠깐 뜨는 반투명(70%) 유리판 ----------
  * 아래쪽(버튼이 몰린 곳)을 가리지 않도록 위로 올리고, pointer-events:none 으로 밑의 버튼 클릭을 막지 않는다.
