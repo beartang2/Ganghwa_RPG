@@ -32,7 +32,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@600;800;900&display=swap">
-<link rel="stylesheet" href="/style.css?v=83">
+<link rel="stylesheet" href="/style.css?v=84">
 </head>
 <body>
 <!--
@@ -96,7 +96,7 @@
           <div id="weaponName" class="weapon-name">+0 ⚪ 일반</div>
           <div id="weaponElem" class="weapon-elem"></div>
           <div class="odds-row">
-            <span class="odds success">성공 <b id="oddsS">-</b></span>
+            <span class="odds success">성공 <b id="oddsS">-</b> <small id="oddsLuck" class="odds-luck"></small></span>
             <span class="odds destroy">파괴 <b id="oddsD">-</b></span>
           </div>
           <div id="nextCost" class="next-cost">다음 강화 비용 20G</div>
@@ -193,7 +193,7 @@
 
     <div class="guide-pane" data-g="forge" role="tabpanel">
       <ul class="guide-list">
-        <li>⚒️ <b>강화</b> — 골드로 무기 강화(+0~99). 고레벨일수록 성공률이 급감하고 대부분 <b>실패</b>해요. 실패가 쌓이면 🔨<b>장인의 기운</b>이 차고 <b>100%면 확정 성공!</b></li>
+        <li>⚒️ <b>강화</b> — 골드로 무기 강화(+0~99). 고레벨일수록 성공률이 급감하고 대부분 <b>실패</b>해요. 실패가 쌓이면 🔨<b>장인의 기운</b>이 차고 <b>100%면 확정 성공!</b> 기운이 찰수록 성공률도 조금씩 올라가요(🔥 기운 보정, 최대 +0.6%p)</li>
         <li>💥 <b>파괴</b> — 파괴되면 뒤로 밀려나요(한 등급 아래 시작점 또는 최대 −15레벨 중 덜 떨어지는 쪽). +0까지 떨어지면 속성도 새로 받아요. 🛡️<b>방지권</b>으로 결정적 순간을 지키세요!</li>
         <li>🌈 <b>초월</b> — +99에 닿으면 재료(💠사냥 <b>파편</b> · 🌟레이드 <b>정수</b>)로 초월! 무기는 +0으로 돌아가지만 영구 <b>★</b>을 얻어요(골드·레이드 공격력·장인의 기운↑). 대신 ★1부터는 강화가 더 어렵고 <b>방지권이 통하지 않아요</b></li>
         <li>🗡️ <b>장비 칸</b> — 무기를 여러 자루 가질 수 있어요(직업당 한 자루). 무기를 <b>+99</b>까지 키울 때마다 💎 프리즘 상점에서 칸을 하나씩 열 수 있어요. 화로 위 장비 칸을 눌러 바꿔 들면 <b>직업과 강공격 커맨드</b>도 같이 바뀌어요</li>
@@ -409,10 +409,10 @@
 
 <!-- Supabase Realtime (선택) — 로드 실패해도 게임은 폴링으로 동작 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/fx.js?v=83"></script>
-<script src="/gesture.js?v=83"></script>
-<script src="/weapon-art.js?v=83"></script>
-<script src="/prism-art.js?v=83"></script>
-<script src="/app.js?v=83"></script>
+<script src="/fx.js?v=84"></script>
+<script src="/gesture.js?v=84"></script>
+<script src="/weapon-art.js?v=84"></script>
+<script src="/prism-art.js?v=84"></script>
+<script src="/app.js?v=84"></script>
 </body>
 </html>

@@ -46,6 +46,7 @@ const CONFIG = {
   // 강화(로스트아크식) — 파괴 시 완전 초기화(+0)
   pityBase: 0.015,      // 장인의 기운 기본 상승폭(실패당) — 저확률에서도 결국 참
   pityScale: 0.34,      // + 성공률 비례분(성공률 높을수록 살짝 더 빨리 참)
+  pityLuckMax: 0.006,   // 🔥 기운 보정 — 장인의 기운이 찰수록 성공률 +(기운 × 0.6%p). 연속 실패 중에도 가끔 '그냥' 붙게(+98 에서 자연 성공 9~11% → 약 25%)
   // 사냥
   atkReportMaxN: 20,        // 사냥 공격 기록 보고 한 번에 인정하는 일반 공격 수(몬스터 1마리 최대 7타 + 여유)
   atkReportMaxS: 4,         //            〃               강공격 수
@@ -494,6 +495,13 @@ function destroyRate(level) {
 function odds(level, ascend) {
   const s = successRate(level, ascend), d = destroyRate(level);
   return { success: s, destroy: d, fail: Math.max(0, 1 - s - d) };
+}
+// 🔥 기운 보정 — 실패가 이어져 장인의 기운이 찰수록 성공률을 조금씩 더한다(성공·파괴로 기운이 0 이 되면 같이 사라짐).
+// 절대값(%p)으로 더해서 고강(성공 0.1~0.3%)에서는 체감이 크고, 저강(성공률 높음)에서는 거의 그대로다.
+function luckBonus(p) { return Math.max(0, Math.min(1, (p && p.pity) || 0)) * CONFIG.pityLuckMax; }
+function withLuck(o, p) {
+  const s = Math.min(0.97, o.success + luckBonus(p));
+  return { success: s, destroy: o.destroy, fail: Math.max(0, 1 - s - o.destroy) };
 }
 // 장인의 기운 상승폭(실패당): 저확률에서도 결국 100% 도달하도록 최소치 보장
 function pityGain(success, ascend) { return (CONFIG.pityBase + success * CONFIG.pityScale) * (1 + starsOf(ascend) * CONFIG.ascendPityBonus); }
@@ -1542,6 +1550,7 @@ function publicView(db, id) {
   const em = elementOf(p.element);
   let od = odds(p.level, p.ascend);
   if (itemCount(p, 'boost') > 0) { const s = Math.min(0.97, od.success * CONFIG.boostMult); od = { success: s, destroy: od.destroy, fail: Math.max(0, 1 - s - od.destroy) }; }
+  od = withLuck(od, p);   // 🔥 기운 보정까지 넣은 '지금 누르면' 확률
   let party = null;
   if (p.party && db.parties[p.party]) {
     const pt = db.parties[p.party];
@@ -1576,7 +1585,7 @@ function publicView(db, id) {
     canAscend: p.level >= CONFIG.maxLevel && ascendReady(p),
     ascendNext: ascendProgress(p),
     ascendBonus: { gold: starsOf(p) * CONFIG.ascendGoldBonus, atk: starsOf(p) * CONFIG.ascendAtkBonus, cost: starsOf(p) * CONFIG.ascendCostMult, succ: 1 - ascendSuccMult(p) },
-    odds: od, enhanceBoost: itemCount(p, 'boost'), pity: p.pity || 0, nickColor: p.nickColor || null,
+    odds: od, luck: luckBonus(p), enhanceBoost: itemCount(p, 'boost'), pity: p.pity || 0, nickColor: p.nickColor || null,
     inv: invView(p), protectBuyLeft: protectBuyLeft(p), protectDailyBuy: CONFIG.protectDailyBuy,
     huntsLeft: huntsLeft(p), dailyHunts: limitOf(p, 'dailyHunts'),
     fightsLeft: fightsLeft(p), dailyFights: limitOf(p, 'dailyFights'),
@@ -1735,8 +1744,11 @@ function enhance(db, id) {
   }
 
   // 장인의 기운 상승폭 — 부스트권 사용 시 더 크게 오른다(성공률↑ + 실패해도 pity 빨리 참)
-  const pg = pityGain(o.success, p.ascend) * (boosted ? CONFIG.boostPityMult : 1);
+  const pg = pityGain(o.success, p.ascend) * (boosted ? CONFIG.boostPityMult : 1);   // (기운 보정 전 성공률 기준 — 보정이 기운을 더 빨리 채우진 않게)
+  const sPre = o.success;
+  o = withLuck(o, p);   // 🔥 기운 보정
   const r = Math.random();
+  const luckHit = r < o.success && r >= sPre;   // 보정분 덕에 붙었다 — 화면에서 따로 터뜨린다
   let result, msg, egg = null, d44First = false;
   if (r < o.success) {
     const gain = successGain(before);
@@ -1747,7 +1759,7 @@ function enhance(db, id) {
     p.pity = 0;
     bumpRank(db);
     result = 'success';
-    msg = (gain > 1 ? '💫 대성공! +' + gain + '  ' : '강화 성공! ') + '+' + before + ' → +' + p.level;
+    msg = (luckHit ? '🔥 기운이 밀어줬다! ' : '') + (gain > 1 ? '💫 대성공! +' + gain + '  ' : '강화 성공! ') + '+' + before + ' → +' + p.level;
     if (p.level === 77 && setEgg(p, 'l77')) { egg = 'l77'; msg = '🎰 럭키 세븐! ' + msg; }   // 처음 한 번만
     addLog(db, '✅ ' + p.nick + ' +' + before + '→+' + p.level + (gain > 1 ? ' (+' + gain + ')' : ''));
   } else if (r < o.success + o.destroy) {
@@ -1785,7 +1797,7 @@ function enhance(db, id) {
     msg = '❌ 실패... +' + before + ' 유지 · 🔨 장인의 기운 ' + Math.round(p.pity * 100) + '%';
   }
   if (d44First) msg += '\n…사(死)의 숫자였다.';   // 처음 한 번만
-  return { ok: true, result, msg, cost, boosted, boostLeft: itemCount(p, 'boost'), pity: p.pity, egg };
+  return { ok: true, result, msg, cost, boosted, boostLeft: itemCount(p, 'boost'), pity: p.pity, egg, luckHit: result === 'success' && luckHit };
 }
 /* 초월 실행 — +99 에서만. 무기를 +0 으로 되돌리고 ★을 하나 얻는다.
  * 골드·방지권·부스트·칭호·최고기록(best)·채굴 레벨은 전부 유지된다. */

@@ -423,7 +423,8 @@ async function main() {
     r = await req('POST', '/api/enhance', { token: tokX });
     ok(r.body.result === 'success' && r.body.me.level === 77 && r.body.egg === 'l77' && r.body.me.titles.some(t => t.id === 'egg_77'), '딱 +77 도착 → 「럭키 세븐」');
     await q("UPDATE players SET level = 44, data = jsonb_set(data, '{pity}', '0.995') WHERE nick='이스터'");
-    Math.random = () => 0.149;   // +44 에서 성공 14.6% 다음 파괴 0.5% 구간
+    { const o44 = GAME.odds(44, 0), s44 = o44.success + 0.995 * GAME.CONFIG.pityLuckMax;   // 🔥 기운 보정까지 넣은 성공 구간 바로 다음 = 파괴 구간
+      Math.random = () => s44 + o44.destroy / 2; }
     r = await req('POST', '/api/enhance', { token: tokX });
     Math.random = realRandom;
     const t44 = r.body.me.titles.map(t => t.id);
@@ -574,6 +575,20 @@ async function main() {
     [['나', 99, 0], ['약한이', 44, 0], ['동급', 99, 0], ['초월자', 99, 2]].forEach(([n, l, a], i) => { const q = GAME.makePlayer(n); GAME.norm(q); Object.assign(q, { class: 'warrior', level: l, ascend: a }); ldb.players['k' + i] = q; });
     const fl = GAME.fightList(ldb, 'k0');
     ok(fl.ok && fl.list.length === 3 && fl.list[0].nick === '초월자' && fl.list.find(x => x.nick === '약한이').odds === 98 && fl.list.find(x => x.nick === '동급').odds === 50, '싸움 목록: 전투력 높은 순 + 상대별 내 승률');
+  }
+  // 🔥 기운 보정 — 장인의 기운이 찰수록 성공률 + 기운 × pityLuckMax (보정분 안에서 붙으면 luckHit)
+  {
+    const edb = { players: {}, parties: {}, log: [] }, ep = GAME.makePlayer('강화러'); GAME.norm(ep);
+    Object.assign(ep, { class: 'warrior', level: 98, ascend: 1, ascendMax: 1, gold: 1e9, pity: 0.5 }); edb.players.e = ep;
+    const base = GAME.odds(98, 1).success, bonus = 0.5 * GAME.CONFIG.pityLuckMax;
+    const pv = GAME.publicView(edb, 'e');
+    ok(Math.abs(pv.odds.success - (base + bonus)) < 1e-12 && Math.abs(pv.luck - bonus) < 1e-12, '화면 성공률에 기운 보정 포함 (' + (base * 100).toFixed(2) + '% → ' + (pv.odds.success * 100).toFixed(2) + '%)');
+    const realRandom = Math.random; Math.random = () => base + bonus / 2;   // 원래라면 실패, 보정분 안
+    const er = GAME.enhance(edb, 'e'); Math.random = realRandom;
+    ok(er.ok && er.result === 'success' && er.luckHit && ep.level === 99 && /기운이 밀어줬다/.test(er.msg), '보정분 덕에 성공 → luckHit · +98 → +99');
+    Object.assign(ep, { level: 98, pity: 0 }); Math.random = () => base + bonus / 2;
+    const er0 = GAME.enhance(edb, 'e'); Math.random = realRandom;
+    ok(er0.ok && er0.result !== 'success', '기운 0 이면 보정 없음(같은 난수로 실패)');
   }
   // ⚗️ 연금술 확률표 — 합이 1 · 꽝은 불이 셀수록 낮다
   {

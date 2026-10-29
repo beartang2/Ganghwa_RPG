@@ -1376,3 +1376,4 @@ body.halloween{background:
 body.sudo-flash::after{content:'';position:fixed;inset:0;z-index:200;pointer-events:none;
   background:radial-gradient(circle at 50% 40%,rgba(126,240,197,.28),rgba(126,240,197,0) 60%);animation:sudoFlash .9s ease-out forwards}
 @keyframes sudoFlash{from{opacity:1}to{opacity:0}}
+.odds-luck{font-size:11px;font-weight:800;color:#ffb38a;margin-left:2px}
