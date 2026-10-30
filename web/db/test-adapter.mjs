@@ -601,6 +601,7 @@ async function main() {
     ok(v.grade.key === 'prism' && /프리즘/.test(v.weapon) && v.combatLevel === 100, '★1 +0 = 💎 프리즘 등급 · 전투 레벨 100 (' + v.weapon + ')');
     const r99 = GAME.makePlayer('99강'); GAME.norm(r99); Object.assign(r99, { class: 'warrior', level: 99 }); pdb.players.q = r99;
     ok(GAME.fightPower(pp) > GAME.fightPower(r99), '★1 +0 전투력이 +99 보다 크다(힘이 이어진다)');
+    ok(GAME.enhanceCost(99, 0) === 1010 && GAME.enhanceCost(0, 1) === 1020 && GAME.enhanceCost(99, 1) === 2010 && GAME.enhanceCost(0, 2) === 2020, '강화 비용도 전투 레벨: +99 1,010G · ★1 +0 1,020G · ★1 +99 2,010G');
     ok(GAME.odds(0, 1).success === GAME.CONFIG.prismSucc && GAME.odds(80, 3).success === GAME.CONFIG.prismSucc && GAME.CONFIG.prismSucc > GAME.odds(99, 0).success, '프리즘 무기 성공률 고정(+99 보다 조금 높고 ★ 로 안 낮아짐)');
     Object.assign(pp, { level: 60, pity: 0.4 });
     const sP = GAME.CONFIG.prismSucc + 0.4 * GAME.CONFIG.pityLuckMax, d60 = GAME.odds(60, 1).destroy;

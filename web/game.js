@@ -72,7 +72,7 @@ const CONFIG = {
   ascendGoldBonus: 0.05,     // ★당 골드 획득 증가(+5%/★)
   ascendAtkBonus: 0.08,      // ★당 레이드 공격력 증가(+8%/★)
   ascendPityBonus: 0.03,     // ★당 장인의 기운 상승폭 증가(+3%/★)
-  ascendCostMult: 0.8,       // ★당 강화 비용 증가(+80%/★, 선형)
+  ascendCostMult: 0,         // (예전 ★당 강화 비용 +80% — 지금은 비용이 전투 레벨(강화 + 100×★)을 따라 오르므로 0)
   ascendSuccPenalty: 0,      // (예전 ★당 성공률 ×0.82 — 지금은 ★ 무기가 prismSucc 고정이라 쓰지 않는다)
   prismSucc: 0.005,          // 💎 프리즘(★) 무기 강화 성공률 — 강화 수치·★ 무관 고정(+99 0.18% 보다 조금 높게)
                              // ★0 앵커를 살짝 완화한 대신 초월 회차는 그보다 확실히 낮게 잡는다.
@@ -179,8 +179,8 @@ const CLASS_ATK = { archer: 1.35, warrior: 1.2, tanker: 0.6, healer: 0.5 };   //
 /* ⚔️ 전투 레벨 = 강화 수치 + 100 × ★ — 초월하면 무기가 +0 으로 돌아가도 힘은 이어진다.
  *  +99 에서 초월하면 ★1 +0 = 100레벨(+99 다음 칸), ★1 +99 = 199, ★2 +0 = 200 … (★ 보너스 8% 는 따로 곱한다)
  *  다시 올리는 강화가 곧 '더 세지는' 길이다.
- *  레이드·던전 공격력(memberStats) · 싸움 전투력(fightPower) · 보스 입장 레벨(bossLock)이 이걸 본다.
- *  사냥(몬스터 희귀도·골드)과 강화(확률·비용)는 그대로 지금 강화 수치를 본다(경제는 건드리지 않는다). */
+ *  레이드·던전 공격력(memberStats) · 싸움 전투력(fightPower) · 보스 입장 레벨(bossLock) · 강화 비용(enhanceCost) ·
+ *  사냥 몬스터·골드(hunt)가 이걸 본다. 강화 성공률만 따로 — 프리즘 무기는 prismSucc 고정. */
 function combatLevel(p) { return (p.level || 0) + (CONFIG.maxLevel + 1) * starsOf(p); }
 /* 💥 치명타 — 사냥·파티 레이드·초월 던전의 일반 공격·강공격에 붙는다(스킬은 고정 피해라 제외).
  *  확률 순위: 전사 > 힐러 > 궁수 > 탱커 · 피해 순위: 궁수 > 전사 > 힐러 > 탱커
@@ -518,7 +518,9 @@ function withLuck(o, p) {
 }
 // 장인의 기운 상승폭(실패당): 저확률에서도 결국 100% 도달하도록 최소치 보장
 function pityGain(success, ascend) { return (CONFIG.pityBase + success * CONFIG.pityScale) * (1 + starsOf(ascend) * CONFIG.ascendPityBonus); }
-function enhanceCost(level, ascend) { return Math.round((20 + level * 10) * ascendCostMult(ascend)); }
+// 강화 비용 = 20 + 10 × (강화 + 100×★) — 💎 프리즘(★) 무기는 '100레벨 위' 비용(★1 +0 = 1,020G · ★1 +99 = 2,010G · ★2 +0 = 2,020G …).
+// (예전엔 강화 수치만 봐서 ★1 +0 이 36G 였다.) ★ 별도 배율(ascendCostMult)은 전투 레벨이 이미 올려 주므로 0.
+function enhanceCost(level, ascend) { return Math.round((20 + (level + (CONFIG.maxLevel + 1) * starsOf(ascend)) * 10) * ascendCostMult(ascend)); }
 function successGain(level) {
   if (level < 20) { const r = Math.random(); if (r < 0.60) return 1; if (r < 0.90) return 2; return 3; }
   return 1;
@@ -1934,8 +1936,9 @@ function hunt(db, id, atk) {
   // 일일 사냥(20회)은 풀보상 + 희귀 드랍. 소진 후엔 '무한 사냥'(보상↓·가끔 채광 물약)으로 계속 가능
   const overtime = p.huntsUsed >= limitOf(p, 'dailyHunts');
   p.huntsUsed++;
-  const m = huntSpawn(p.level);
-  let dmg = huntDamage(p.level);
+  // 사냥도 전투 레벨(강화 + 100×★) — 프리즘 무기는 '100레벨 위' 몬스터·골드(강화 비용이 그만큼 오르니 수입도 맞춘다)
+  const m = huntSpawn(combatLevel(p));
+  let dmg = huntDamage(combatLevel(p));
   const cc = critOf(p.class);
   const crit = Math.random() < cc.p;      // 💥 치명타: 직업마다 확률·배율이 다르다(CLASS_CRIT)
   if (crit) dmg = Math.round(dmg * cc.m);
