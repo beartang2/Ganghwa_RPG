@@ -10,7 +10,8 @@ const PATCH = {
   version: '6',
   title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
-    '🔥 <b>기운 보정</b> — 강화가 연속으로 실패해 <b>장인의 기운</b>이 찰수록 성공률이 조금씩 올라요(기운 100% 직전 +0.6%p). 고강에서도 기운이 다 차기 전에 \'그냥\' 붙는 순간이 더 자주 와요 🔥',
+    '💎 <b>프리즘 무기</b> — 초월(★)하면 무기가 <b>💎 프리즘 등급</b>으로 다시 태어나요! +0부터 다시 올리지만 <b>힘은 이어져요</b>(+99에서 초월 = 100레벨, ★당 100레벨 — 레이드·던전·싸움 모두). 속성도 그대로. 강화 성공률은 강화 수치와 상관없이 <b>0.5% 고정</b>, 실패해서 금이 가도 <b>−1강</b>만(장인의 기운 유지)',
+    '🔥 <b>기운 보정</b> — 강화가 연속으로 실패해 <b>장인의 기운</b>이 찰수록 성공률이 올라요(기운 100% 직전 <b>+2%p</b>). 고강에서도 기운이 다 차기 전에 \'그냥\' 붙는 순간이 자주 와요 🔥',
     '⚔️ <b>싸움 규칙 변경</b> — 승률을 <b>강화 수치와 ★초월</b>로 다시 계산해요(같으면 50% · +99 vs +90 72% · vs +44 98% · 같은 +99에 ★1 68%). 싸움 탭에서 상대마다 내 승률이 보여요. 그리고 내가 먼저 건 싸움은 져도 골드만 잃고 <b>무기는 안전</b>, 무기 손상(10% 확률 −1강)은 걸려 온 싸움에서 진 쪽만 · 🛡️ <b>파괴방지권</b>이 있으면 싸움 손상도 1장으로 막아요(★0 무기)',
     '🕯️ <b>추모</b> — 싸움에서 져서 손상된 무기(−1강)도 오늘의 추모에 올라가요',
     '⚗️ <b>연금술 꽝 확률 인하</b> — 잿더미가 약불 62→40% · 중불 52→30% · 강불 52→20%. 불이 셀수록 덜 꽝이고, 기대 💎도 약불 0.82 · 중불 3.04 · 강불 10.05로 올랐어요',
@@ -110,6 +111,7 @@ const FX = (() => {
 const GRADE_FLOW = {
   legend: ['#fff1c1', '#ffb347', '#f7971e', '#ffd27a'],
   transcend: ['#ffd27a', '#ff5d6c', '#c471ed', '#7df9ff'],
+  prism: ['#ffffff', '#9fe8ff', '#c9b8ff', '#ffb8e6', '#b8ffd9', '#fff3a8'],   // 💎 프리즘(★) — 흰빛 위로 무지갯빛이 흐른다
 };
 let lastEnhDisabled = null;
 
@@ -161,7 +163,7 @@ async function pollMe() {
 }
 
 /* ---------- 무기 SVG (직업별 모양 + 등급별 장식 업그레이드) ---------- */
-const GRADE_TIERS = { common: 0, rare: 1, epic: 2, legend: 3, transcend: 4 };
+const GRADE_TIERS = { common: 0, rare: 1, epic: 2, legend: 3, transcend: 4, prism: 4 };
 // 서버가 내려준 등급 key 로 판정한다(경계가 maxLevel 비율이라 레벨로 재계산하면 어긋난다)
 function gradeTier(gradeKey) { return GRADE_TIERS[gradeKey] || 0; }
 function sparkle(x, y, c) { return `<path d="M${x} ${y - 3.2} L${x + 1.8} ${y} L${x} ${y + 3.2} L${x - 1.8} ${y} Z" fill="${c}"/>`; }
@@ -427,6 +429,7 @@ function render() {
   // 🔥 기운 보정 — 장인의 기운이 찰수록 성공률에 더해지는 몫(이미 oddsS 에 들어 있다)
   const lk = el('oddsLuck'); if (lk) { lk.textContent = me.luck >= 0.0001 ? '🔥+' + fmtPct(me.luck) : ''; lk.title = me.luck ? '장인의 기운 보정 — 실패가 이어질수록 성공률이 조금씩 올라요' : ''; }
   el('oddsD').textContent = fmtPct(me.odds.destroy);
+  const dl = el('oddsDLabel'); if (dl) dl.textContent = me.grade && me.grade.key === 'prism' ? '금 가기(−1강)' : '파괴';   // 💎 프리즘 무기는 깨지지 않고 금만 간다
   const pity = Math.round((me.pity || 0) * 100);
   const guaranteed = pity >= 100;
   el('pityPct').textContent = guaranteed ? '100% · 다음 강화 확정' : pity + '%';
@@ -2114,7 +2117,7 @@ function paintParty(panel) {
       html += `<p class="hint" style="margin:0 0 8px">실패하면 보상은 없지만 <b>횟수도 깎이지 않아요</b>. 보스 체력·화력은 <b>참여 인원(${n}명)</b>에 맞춰 올라갑니다. 전투 시간 ⏱ <b>${n <= 1 ? RAID_SEC.solo + '초 (혼자 도전 +' + (RAID_SEC.solo - RAID_SEC.party) + '초)' : RAID_SEC.party + '초'}</b></p>`;
       html += BOSS_CACHE.map(b => {
         // 입장 조건은 파티 전원이 만족해야 하지만, 목록에서는 내 기준으로 잠금을 보여준다
-        const why = me.level < b.reqLevel ? '무기 +' + b.reqLevel + ' 필요'
+        const why = (me.combatLevel != null ? me.combatLevel : me.level) < b.reqLevel ? '무기 +' + b.reqLevel + ' 필요'   // ★ 무기는 전투 레벨(강화 + 100×★)
           : me.ascend < b.reqAscend ? '초월 ★' + b.reqAscend + ' 필요' : null;
         const sc = 1 + (n - 1) * BOSS_HPSCALE;   // 서버 raidScale 과 같은 식(표시용)
         return `<div class="raid-boss ${why ? 'locked' : ''}"><span class="bemoji">${b.emoji}</span>

@@ -272,6 +272,12 @@ body.loading-on #globalLoading{opacity:1}
 @keyframes waBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
 .wa .wa-spin{animation:waSpin 22s linear infinite}
 @keyframes waSpin{to{transform:rotate(360deg)}}
+/* 💎 프리즘(★) 무기 — 반대로 도는 고리 · 색이 흐르는 후광 · 표면을 훑는 홀로그램 광택 */
+.wa .wa-spin-r{animation:waSpin 30s linear infinite reverse}
+.wa .wa-hue{animation:waHue 7s linear infinite}
+@keyframes waHue{to{filter:hue-rotate(360deg)}}
+.wa .wa-holo{animation:waHolo 3.6s cubic-bezier(.45,.05,.35,1) infinite}
+@keyframes waHolo{0%{transform:translateX(-40px)}100%{transform:translateX(200px)}}
 .wa .wa-twinkle{transform-box:fill-box;transform-origin:center;animation:waTwinkle 1.9s ease-in-out infinite;animation-delay:var(--d,0s)}
 @keyframes waTwinkle{0%,100%{opacity:.2;transform:scale(.55)}50%{opacity:1;transform:scale(1)}}
 .wa .wa-zap{animation:waZap 1.7s steps(1,end) infinite;animation-delay:var(--d,0s)}

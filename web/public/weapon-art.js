@@ -1,7 +1,7 @@
 /*!
  * weapon-art.js — 무기 그림 생성기. 이미지 파일 없이 SVG 부품을 겹쳐 그린다.
  *
- *   직업 형태 4종(검·활·방패·지팡이) × 속성 9종 × 등급 5단계 = 180가지
+ *   직업 형태 4종(검·활·방패·지팡이) × 속성 9종 × 등급 6단계(+💎 프리즘 = 초월한 ★ 무기) = 216가지
  *   WeaponArt.svg({ cls: 'warrior', element: 'fire', grade: 'legend' }) → '<svg …>' 문자열
  *
  * 레이어 순서(뒤 → 앞):
@@ -15,7 +15,7 @@
 
   const W = 160, H = 220, CX = 80, TAU = Math.PI * 2;
   const OUT = '#170f0a';            // 외곽선 — 아이콘처럼 또렷하게 읽히도록 진한 테두리
-  const TIERS = { common: 0, rare: 1, epic: 2, legend: 3, transcend: 4 };
+  const TIERS = { common: 0, rare: 1, epic: 2, legend: 3, transcend: 4, prism: 5 };
 
   // 등급 = 금속. 낮을수록 무쇠, 높을수록 귀금속·결정
   const METALS = [
@@ -24,7 +24,9 @@
     { hi: '#eef0f7', mid: '#98a1b8', lo: '#383f54', trim: '#8b6fc4', trimHi: '#e6d9ff', trimLo: '#3f2c6e' },   // 에픽: 흑강 + 자수정 장식
     { hi: '#fff7de', mid: '#efc46a', lo: '#9a6418', trim: '#e0aa45', trimHi: '#fff1bd', trimLo: '#7a4a10' },   // 전설: 황금
     { hi: '#ffffff', mid: '#dfd2ff', lo: '#7d62c7', trim: '#f0c56a', trimHi: '#fffbe6', trimLo: '#8a5c1c' },   // 초월: 결정 + 금
+    { hi: '#ffffff', mid: '#d6f4ff', lo: '#7d8ee0', trim: '#cbbcff', trimHi: '#ffffff', trimLo: '#6656c4' },   // 💎 프리즘: 무지갯빛 결정 + 백금
   ];
+  const RAINBOW = ['#ff9ad5', '#ffd27a', '#fff3a8', '#b8ffd9', '#9fe8ff', '#c9b8ff'];
   // 속성 = 빛깔. main 은 본색, light 는 빛나는 부분, dark 는 그늘·바탕
   const ELEMENTS = {
     fire: { main: '#ff6a2b', light: '#ffd27a', dark: '#9e220c', name: '불' },
@@ -867,23 +869,51 @@
     c.front.push(s);
   }
 
+  /* ---------- 💎 프리즘(초월한 ★ 무기) ----------
+   * 모양은 초월 등급 그대로 쓰고(가장 화려한 실루엣), 그 위에
+   *  ① 무지개 고리 3겹(서로 다른 속도로 돈다) ② 무기 표면을 훑고 지나가는 홀로그램 광택(몸체 모양으로 가린다)
+   *  ③ 무지갯빛 반짝이 를 얹는다. 속성 색 오라는 그대로 둬서 '어떤 속성의 프리즘인지' 는 보인다. */
+  function prismLayers(c) {
+    const { id, rnd } = c, [cx, cy] = [f(c.core[0]), f(c.core[1])];
+    c.under.push(`<g class="wa-spin" style="transform-origin:${cx}px ${cy}px">` +
+      RAINBOW.map((col, i) => `<circle cx="${cx}" cy="${cy}" r="72" fill="none" stroke="${col}" stroke-width="2.2" stroke-dasharray="18 ${f(18 * (RAINBOW.length - 1))}" stroke-dashoffset="${f(-18 * i)}" opacity=".75"/>`).join('') + '</g>' +
+      `<g class="wa-spin-r" style="transform-origin:${cx}px ${cy}px"><circle cx="${cx}" cy="${cy}" r="80" fill="none" stroke="#ffffff" stroke-width="1" stroke-dasharray="1 9" opacity=".7"/></g>` +
+      `<ellipse cx="${cx}" cy="${cy}" rx="70" ry="88" fill="url(#${id}-holoGlow)" class="wa-hue"/>`);
+    c.defs.push(
+      `<radialGradient id="${id}-holoGlow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffffff" stop-opacity=".35"/><stop offset=".5" stop-color="#9fe8ff" stop-opacity=".18"/><stop offset="1" stop-color="#ff9ad5" stop-opacity="0"/></radialGradient>`,
+      `<linearGradient id="${id}-holo" x1="0" y1="0" x2="1" y2="1">` +
+        `<stop offset="0" stop-color="#ffffff" stop-opacity="0"/>` + RAINBOW.map((col, i) => `<stop offset="${f((.3 + i * .07) * 100) / 100}" stop-color="${col}" stop-opacity=".9"/>`).join('') +
+        `<stop offset=".78" stop-color="#ffffff" stop-opacity="0"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient>`,
+      // 몸체 그림을 밝기 마스크로 — 밝은 금속면에만 광택이 지나간다(검은 외곽선은 가려짐)
+      `<mask id="${id}-holoM" maskUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}"><g>${c.body.join('')}</g></mask>`);
+    c.front.push(`<g mask="url(#${id}-holoM)" style="mix-blend-mode:screen"><rect class="wa-holo" x="${-W}" y="0" width="${W * 2}" height="${H}" fill="url(#${id}-holo)" opacity=".85"/></g>`);
+    let sp = '';
+    for (let i = 0; i < 9; i++) {
+      const x = 14 + rnd() * (W - 28), y = 14 + rnd() * (H - 28);
+      sp += sparkle(x, y, 2.4 + rnd() * 2.6, RAINBOW[i % RAINBOW.length], `class="wa-twinkle" style="--d:${f(-rnd() * 3)}s"`);
+    }
+    c.front.push(sp);
+  }
+
   /* ---------- 진입점 ---------- */
   function svg(opts) {
     const o = opts || {};
-    const t = TIERS[o.grade] ?? 0;
+    const tier = TIERS[o.grade] ?? 0, prism = tier === 5;
+    const t = Math.min(tier, 4);   // 모양·장식은 초월(4)까지 — 프리즘은 그 위에 무지갯빛을 더 얹는다
     const element = ELEMENTS[o.element] ? o.element : 'fire';
     const cls = SHAPES[o.cls] ? o.cls : 'warrior';
     const c = {
-      t, element, el: ELEMENTS[element], m: METALS[t], id: 'wa' + (++uid),
-      rnd: rng(cls + '|' + element + '|' + t), sid: 0, defs: [], under: [], back: [], body: [], front: [], anchors: [], core: [CX, H / 2], tip: [CX, 12],
+      t, prism, element, el: ELEMENTS[element], m: METALS[tier], id: 'wa' + (++uid),
+      rnd: rng(cls + '|' + element + '|' + tier), sid: 0, defs: [], under: [], back: [], body: [], front: [], anchors: [], core: [CX, H / 2], tip: [CX, 12],
     };
     defs(c);
     SHAPES[cls](c);
     aura(c, f(c.core[0]), f(c.core[1]));
     motif(c);
     particles(c);
+    if (prism) prismLayers(c);
     const label = (o.label || '') || `${ELEMENTS[element].name} 속성 무기`;
-    return `<svg class="wa wa-t${t}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${label.replace(/"/g, '&quot;')}">` +
+    return `<svg class="wa wa-t${tier}${prism ? ' wa-prism' : ''}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${label.replace(/"/g, '&quot;')}">` +
       `<defs>${c.defs.join('')}</defs>${c.under.join('')}${c.back.join('')}${c.body.join('')}${c.front.join('')}</svg>`;
   }
 

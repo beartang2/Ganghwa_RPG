@@ -441,7 +441,8 @@ async function main() {
     ok(r.body.me.titles.some(t => t.id === 'egg_air'), '빈 캡슐 3연속 → 「공기 수집가」');
   } finally { Math.random = realRandom; }
   mx = (await req('GET', '/api/me', { token: tokX })).body.me;
-  ok(mx.titleRoster.filter(t => t.hidden).length === 8 && mx.titleRoster.find(t => t.id === 'egg_heart').desc.includes('하트'), '찾은 건 이름·설명 공개, 나머지 8개는 여전히 ❓');
+  const halToday = mx.titles.some(t => t.id === 'egg_halloween') ? 1 : 0;   // 10/31(KST)에 돌리면 사냥에서 🎃 할로윈 칭호도 열린다
+  ok(mx.titleRoster.filter(t => t.hidden).length === 8 - halToday && mx.titleRoster.find(t => t.id === 'egg_heart').desc.includes('하트'), '찾은 건 이름·설명 공개, 나머지 ' + (8 - halToday) + '개는 여전히 ❓');
   // 🔨 개발자 이스터에그 — 콘솔·sudo 는 /api/egg, 헤더 탐정·찻주전자는 서버 주소로만
   ok((await req('POST', '/api/egg', { token: tokX, body: { id: 'console' } })).body.found === 'console', '콘솔 강화(forge.enhance) → 「콘솔 강화」');
   ok((await req('POST', '/api/egg', { token: tokX, body: { id: 'sudo' } })).body.found === 'sudo', '키보드 sudo → 「sudo 초월」');
@@ -570,7 +571,7 @@ async function main() {
     ok(Math.abs(o(99, 0, 99, 0) - 0.5) < 1e-9, '같은 전투력 → 50%');
     ok(o(99, 0, 44, 0) === 0.98 && o(44, 0, 99, 0) === 0.02, '+99 vs +44 → 98% (예전 90%) · 반대로 2%');
     ok(o(99, 0, 95, 0) < o(99, 0, 90, 0) && o(99, 0, 90, 0) < o(99, 0, 80, 0), '강화 차이가 클수록 승률↑ (' + [95, 90, 80].map(d => Math.round(o(99, 0, d, 0) * 100) + '%').join(' · ') + ')');
-    ok(o(99, 1, 99, 0) > 0.6 && o(99, 3, 99, 0) > o(99, 1, 99, 0), '같은 +99 라도 ★ 이 높으면 유리 (★1 ' + Math.round(o(99, 1, 99, 0) * 100) + '% · ★3 ' + Math.round(o(99, 3, 99, 0) * 100) + '%)');
+    ok(o(0, 1, 99, 0) > 0.6 && o(0, 3, 99, 0) > o(0, 1, 99, 0), '★ 은 전투 레벨 100씩 — ★1 +0 이 +99 를 이긴다 (★1 +0 ' + Math.round(o(0, 1, 99, 0) * 100) + '% · ★3 +0 ' + Math.round(o(0, 3, 99, 0) * 100) + '%)');
     const ldb = { players: {}, parties: {}, log: [] };
     [['나', 99, 0], ['약한이', 44, 0], ['동급', 99, 0], ['초월자', 99, 2]].forEach(([n, l, a], i) => { const q = GAME.makePlayer(n); GAME.norm(q); Object.assign(q, { class: 'warrior', level: l, ascend: a }); ldb.players['k' + i] = q; });
     const fl = GAME.fightList(ldb, 'k0');
@@ -589,6 +590,23 @@ async function main() {
     Object.assign(ep, { level: 98, pity: 0 }); Math.random = () => base + bonus / 2;
     const er0 = GAME.enhance(edb, 'e'); Math.random = realRandom;
     ok(er0.ok && er0.result !== 'success', '기운 0 이면 보정 없음(같은 난수로 실패)');
+  }
+  // 💎 프리즘(★) 무기 — 등급·전투 레벨·고정 성공률·금 감(−1)·속성 유지
+  {
+    const pdb = { players: {}, parties: {}, log: [] }, pp = GAME.makePlayer('프리즘러'); GAME.norm(pp);
+    Object.assign(pp, { class: 'warrior', level: 99, best: 99, element: 'water', gold: 1e9 }); pp.inv.items = { shard: 200, essence: 20 }; pdb.players.p = pp;
+    const ar = GAME.ascend(pdb, 'p');
+    ok(ar.ok && pp.ascend === 1 && pp.level === 0 && pp.element === 'water', '초월해도 속성 유지(💧) · ★1 +0');
+    const v = GAME.publicView(pdb, 'p');
+    ok(v.grade.key === 'prism' && /프리즘/.test(v.weapon) && v.combatLevel === 100, '★1 +0 = 💎 프리즘 등급 · 전투 레벨 100 (' + v.weapon + ')');
+    const r99 = GAME.makePlayer('99강'); GAME.norm(r99); Object.assign(r99, { class: 'warrior', level: 99 }); pdb.players.q = r99;
+    ok(GAME.fightPower(pp) > GAME.fightPower(r99), '★1 +0 전투력이 +99 보다 크다(힘이 이어진다)');
+    ok(GAME.odds(0, 1).success === GAME.CONFIG.prismSucc && GAME.odds(80, 3).success === GAME.CONFIG.prismSucc && GAME.CONFIG.prismSucc > GAME.odds(99, 0).success, '프리즘 무기 성공률 고정(+99 보다 조금 높고 ★ 로 안 낮아짐)');
+    Object.assign(pp, { level: 60, pity: 0.4 });
+    const sP = GAME.CONFIG.prismSucc + 0.4 * GAME.CONFIG.pityLuckMax, d60 = GAME.odds(60, 1).destroy;
+    const realRandom = Math.random; Math.random = () => sP + d60 / 2;   // 파괴 구간
+    const er = GAME.enhance(pdb, 'p'); Math.random = realRandom;
+    ok(er.ok && er.result === 'destroy' && pp.level === 59 && pp.pity > 0.4 && pp.element === 'water', '프리즘 무기 파괴 구간 = 금 감(−1강) · 기운 유지·상승 · 속성 유지');
   }
   // ⚗️ 연금술 확률표 — 합이 1 · 꽝은 불이 셀수록 낮다
   {
