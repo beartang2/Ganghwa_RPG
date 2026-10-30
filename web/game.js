@@ -13,7 +13,8 @@ const CONFIG = {
   destroyDropRatio: 0.15,    // 파괴 시 떨어지는 폭(만렙 대비). 99 기준 -15레벨
   stealPct: 0.2, protectPrice: 8000,
   protectDailyBuy: 3,        // 🛡️ 상점 일일 구매 상한 — 나머지는 사냥 드랍으로 얻는다
-  fightBreakChance: 0.10,    // 싸움 패배 시 무기 1단계 하락 확률(진 사람만, 확률적)
+  fightOddsK: 10, fightOddsMin: 0.02,   // 싸움 승률 = 1/(1+(상대 전투력/내 전투력)^K), 2%~98% (fightOdds)
+  fightBreakChance: 0.10,    // 싸움 패배 시 무기 1단계 하락 확률 — '걸려 온 싸움'에서 진 방어자만(건 사람은 져도 골드만 잃는다) · 방지권(★0)이 있으면 1장으로 막는다
   dropProtectChance: 0.05, dropGoldChance: 0.07,   // 방지권 주 공급원이 사냥이라 확률을 올림
   mineRate: 12, mineCap: 3000, partyMax: 5, raidMinMembers: 1,   // 1=혼자도 레이드 가능(고레벨 솔로 딜로 잡힘, 난이도는 보스 danger가 담당)
   raidAtkBuffCap: 0.15,      // 힐러 아군 공격 버프 상한
@@ -45,6 +46,7 @@ const CONFIG = {
   // 강화(로스트아크식) — 파괴 시 완전 초기화(+0)
   pityBase: 0.015,      // 장인의 기운 기본 상승폭(실패당) — 저확률에서도 결국 참
   pityScale: 0.34,      // + 성공률 비례분(성공률 높을수록 살짝 더 빨리 참)
+  pityLuckMax: 0.02,    // 🔥 기운 보정 — 장인의 기운이 찰수록 성공률 +(기운 × 2%p). 연속 실패 중에도 '그냥' 붙게(+98 자연 성공 12% → 약 53% · 프리즘 무기 약 59%)
   // 사냥
   atkReportMaxN: 20,        // 사냥 공격 기록 보고 한 번에 인정하는 일반 공격 수(몬스터 1마리 최대 7타 + 여유)
   atkReportMaxS: 4,         //            〃               강공격 수
@@ -71,7 +73,8 @@ const CONFIG = {
   ascendAtkBonus: 0.08,      // ★당 레이드 공격력 증가(+8%/★)
   ascendPityBonus: 0.03,     // ★당 장인의 기운 상승폭 증가(+3%/★)
   ascendCostMult: 0.8,       // ★당 강화 비용 증가(+80%/★, 선형)
-  ascendSuccPenalty: 0.18,   // ★당 성공률 감소(×0.82^★ — 곱연산이라 0 이 되지 않는다).
+  ascendSuccPenalty: 0,      // (예전 ★당 성공률 ×0.82 — 지금은 ★ 무기가 prismSucc 고정이라 쓰지 않는다)
+  prismSucc: 0.005,          // 💎 프리즘(★) 무기 강화 성공률 — 강화 수치·★ 무관 고정(+99 0.18% 보다 조금 높게)
                              // ★0 앵커를 살짝 완화한 대신 초월 회차는 그보다 확실히 낮게 잡는다.
                              // 고레벨은 장인의 기운이 지배해서 체감이 약하므로, 실질 난이도는
                              // 비용(★당 +80%)과 방지권 무효가 함께 만든다.
@@ -173,6 +176,12 @@ function classOf(p) { return CLASSES[p && p.class] || CLASSES.warrior; }
 //  - 탱커: 낮은 공격, 높은 체력 + 방어(flat armor) + 아군 피해감소(dr)
 //  - 힐러: 낮은 공격, 아군 회복(heal) + 아군 공격버프(atkBuff)
 const CLASS_ATK = { archer: 1.35, warrior: 1.2, tanker: 0.6, healer: 0.5 };   // 직업 공격 계수
+/* ⚔️ 전투 레벨 = 강화 수치 + 100 × ★ — 초월하면 무기가 +0 으로 돌아가도 힘은 이어진다.
+ *  +99 에서 초월하면 ★1 +0 = 100레벨(+99 다음 칸), ★1 +99 = 199, ★2 +0 = 200 … (★ 보너스 8% 는 따로 곱한다)
+ *  다시 올리는 강화가 곧 '더 세지는' 길이다.
+ *  레이드·던전 공격력(memberStats) · 싸움 전투력(fightPower) · 보스 입장 레벨(bossLock)이 이걸 본다.
+ *  사냥(몬스터 희귀도·골드)과 강화(확률·비용)는 그대로 지금 강화 수치를 본다(경제는 건드리지 않는다). */
+function combatLevel(p) { return (p.level || 0) + (CONFIG.maxLevel + 1) * starsOf(p); }
 /* 💥 치명타 — 사냥·파티 레이드·초월 던전의 일반 공격·강공격에 붙는다(스킬은 고정 피해라 제외).
  *  확률 순위: 전사 > 힐러 > 궁수 > 탱커 · 피해 순위: 궁수 > 전사 > 힐러 > 탱커
  *  기대 배율(1 + p×(m−1)): 전사 1.20 · 궁수 1.17 · 힐러 1.12 · 탱커 1.04 (예전 사냥 공통 15%·×2 = 1.15)
@@ -187,7 +196,7 @@ function critOf(cls) { return CLASS_CRIT[cls] || CLASS_CRIT.warrior; }
 // n 타 중 치명타 수(타마다 따로 굴린다 — 한 번에 받는 연타는 최대 40)
 function rollCrits(n, cls) { const c = critOf(cls); let k = 0; for (let i = 0; i < n; i++) if (Math.random() < c.p) k++; return k; }
 function memberStats(p) {
-  const L = p.level || 0;
+  const L = combatLevel(p);
   const base = (12 + L * 8) * (1 + starsOf(p) * CONFIG.ascendAtkBonus);   // 초월 ★당 공격력 +8%
   switch (p.class) {
     case 'archer': return { atk: base * CLASS_ATK.archer, hp: 80 + L * 10,  heal: 0, armor: 0, dr: 0, atkBuff: 0 };
@@ -210,6 +219,10 @@ const GRADES = [
 ];
 function gradeMin(g) { return Math.round(CONFIG.maxLevel * g.r); }
 function grade(level) { for (const g of GRADES) { if (level >= gradeMin(g)) return g; } return GRADES[GRADES.length - 1]; }
+// 💎 프리즘 — 초월한(★1+) 무기의 등급. 강화 수치(+0~99)와 상관없이 프리즘이다(이름·색·그림).
+// 파괴 바닥·재련 조건 같은 규칙은 그대로 강화 수치 등급(grade)을 본다.
+const PRISM_GRADE = { r: 1, name: '프리즘', key: 'prism', emoji: '💎', color: '#9fe8ff' };
+function weaponGrade(level, ascend) { return starsOf(ascend) >= 1 ? PRISM_GRADE : grade(level); }
 /* 파괴 시 떨어지는 지점 = max(한 등급 아래 시작 레벨, 현재 -15).
  * 등급 바닥만 쓰면 +85 파괴가 +50 으로 48레벨을 날려서, 고레벨 구간의
  * '레벨당 시도 20~65회 × 파괴율' 이 1 을 넘어 진행이 역행한다(며칠치가 증발).
@@ -459,7 +472,7 @@ function buyIntoInv(p, itemId, qty, price) {
   return { ok: true, item: itemId, qty, spent: price, msg: it.emoji + ' ' + it.name + ' ' + qty + '개 구매! (-' + price.toLocaleString() + 'G)' };
 }
 function weaponName(level, cls, ascend) {
-  const g = grade(level);
+  const g = weaponGrade(level, ascend);
   const base = (CLASSES[cls] || CLASSES.warrior).weapon;
   return stars(ascend) + '+' + level + ' ' + g.emoji + ' ' + g.name + ' ' + base;
 }
@@ -485,7 +498,9 @@ function interpAnchor(A, L, log) {
   return A[A.length - 1][1];
 }
 function levelRatio(level) { return CONFIG.maxLevel > 0 ? level / CONFIG.maxLevel : 0; }
-function successRate(level, ascend) { return interpAnchor(SUCC_ANCHORS, levelRatio(level), true) * ascendSuccMult(ascend); }
+// 💎 프리즘(★) 무기는 '100레벨 위' 라서 강화 수치와 상관없이 고정 성공률(prismSucc — +99 의 0.18% 보다 조금 높게).
+// ★ 이 올라도 더 낮아지지 않는다. 대신 🔥 기운 보정(pityLuckMax)과 장인의 기운으로 올린다.
+function successRate(level, ascend) { return starsOf(ascend) >= 1 ? CONFIG.prismSucc : interpAnchor(SUCC_ANCHORS, levelRatio(level), true); }
 function destroyRate(level) {
   const r = levelRatio(level);
   return r <= DESTROY_FREE_RATIO ? 0 : interpAnchor(DESTROY_ANCHORS, r, false);
@@ -493,6 +508,13 @@ function destroyRate(level) {
 function odds(level, ascend) {
   const s = successRate(level, ascend), d = destroyRate(level);
   return { success: s, destroy: d, fail: Math.max(0, 1 - s - d) };
+}
+// 🔥 기운 보정 — 실패가 이어져 장인의 기운이 찰수록 성공률을 조금씩 더한다(성공·파괴로 기운이 0 이 되면 같이 사라짐).
+// 절대값(%p)으로 더해서 고강(성공 0.1~0.3%)에서는 체감이 크고, 저강(성공률 높음)에서는 거의 그대로다.
+function luckBonus(p) { return Math.max(0, Math.min(1, (p && p.pity) || 0)) * CONFIG.pityLuckMax; }
+function withLuck(o, p) {
+  const s = Math.min(0.97, o.success + luckBonus(p));
+  return { success: s, destroy: o.destroy, fail: Math.max(0, 1 - s - o.destroy) };
 }
 // 장인의 기운 상승폭(실패당): 저확률에서도 결국 100% 도달하도록 최소치 보장
 function pityGain(success, ascend) { return (CONFIG.pityBase + success * CONFIG.pityScale) * (1 + starsOf(ascend) * CONFIG.ascendPityBonus); }
@@ -743,7 +765,7 @@ function rankCmp(a, b) {
   return (y.asc - x.asc) || (y.lv - x.lv) || ((b.best || 0) - (a.best || 0));
 }
 function weaponCard(w) {
-  const c = CLASSES[w.cls] || CLASSES.warrior, g = grade(w.lv), em = elementOf(w.el);
+  const c = CLASSES[w.cls] || CLASSES.warrior, g = weaponGrade(w.lv, w.asc || 0), em = elementOf(w.el);
   return { cls: w.cls, classEmoji: c.emoji, className: c.name, base: c.weapon, level: w.lv, ascend: w.asc || 0,
     name: weaponName(w.lv, w.cls, w.asc), grade: { key: g.key, emoji: g.emoji, name: g.name, color: g.color },
     element: w.el, elementEmoji: em.emoji, elementName: em.name, pity: w.pity || 0, equipped: !!w.equipped };
@@ -1023,14 +1045,16 @@ const DUNGEON = {
   swapCooldown: 1200,                 // 전투 중 무기 교체 쿨타임(ms)
   baseDuration: 15000, phaseDuration: 5000,   // 전투 시간 = 15초 + 5초 × (단계 − 1)
   /* 보스 HP = 구간 시작값 × 성장률^(층 − 구간 첫 층).
-   * 무기 공격력은 +99 에서 멈추고 ★ 당 +8% 뿐이라, 깊은 층의 난이도는 HP 보다 '상성 맞추기(단계마다 약점 무기)'
+   * ★0 무기 공격력은 +99 에서 멈추고 ★ 무기는 전투 레벨로 계속 세지므로, 깊은 층은 'HP(★ 진행)' 와 '상성 맞추기(단계마다 약점 무기)'
    * 와 위험도(회복·피해감소 필요)가 만든다. 입구는 가파르게 — 무상성 +99 가 10층 근처에서 막히고 약점 무기로 15층까지.
    * tools/sim-dungeon.js 로 장비별 도달 층을 확인할 것. */
   bands: [
-    { from: 1,  to: 15, weapons: 1, phases: 1, name: '입구', hp0: 22000,  g: 1.149 },
-    { from: 16, to: 30, weapons: 2, phases: 2, name: '중층', hp0: 140000, g: 1.04 },
-    { from: 31, to: 45, weapons: 3, phases: 3, name: '심층', hp0: 260000, g: 1.027 },
-    { from: 46, to: 50, weapons: 4, phases: 4, name: '심연', hp0: 420000, g: 1.054 },
+    // ★ 무기는 전투 레벨(강화 + 100×★)로 2~6배 세져서 HP 를 다시 맞췄다(예전 22000 · 140000 · 260000 · 420000).
+    // ★1 한 자루 + ★0 무기들은 예전과 비슷한 깊이, ★ 무기가 늘수록 더 깊이 — 시뮬: ★1·0·0 최적 35층 · ★2·2·1·1 50층 근처 · ★3 전부 무상성으로도 46층
+    { from: 1,  to: 15, weapons: 1, phases: 1, name: '입구', hp0: 44000,  g: 1.149 },
+    { from: 16, to: 30, weapons: 2, phases: 2, name: '중층', hp0: 210000, g: 1.055 },
+    { from: 31, to: 45, weapons: 3, phases: 3, name: '심층', hp0: 400000, g: 1.05 },
+    { from: 46, to: 50, weapons: 4, phases: 4, name: '심연', hp0: 900000, g: 1.08 },
   ],
   danger1: 40, dangerStep: 2.5,       // 보스가 전투 동안 넣는 총 피해(HP %). 100 을 넘으면 회복·감소가 필요
   attacksBase: 3,                     // 보스 공격 횟수 = 3 + 단계 수
@@ -1391,9 +1415,10 @@ const BOSSES = [
   { id: 'golem',  name: '스톤 골렘',   emoji: '🗿', tier: '보통',   hp: 20000, atk: 340,  reward: 15000,  dropChance: 0.18, danger: 80,  essence: 3,  reqLevel: 30, reqAscend: 0 },
   { id: 'dragon', name: '고대 드래곤', emoji: '🐲', tier: '어려움', hp: 38000, atk: 600,  reward: 40000,  dropChance: 0.28, danger: 100, essence: 7,  reqLevel: 60, reqAscend: 0 },
   { id: 'demon',  name: '마계 군주',   emoji: '😈', tier: '지옥',   hp: 60000, atk: 780,  reward: 90000,  dropChance: 0.40, danger: 115, essence: 10, reqLevel: 85, reqAscend: 0 },
-  // 초월 전용 — ★ 가 있어야 입장 가능
-  { id: 'titan',  name: '초월의 거인', emoji: '🌋', tier: '초월',   hp: 43000, atk: 900,  reward: 150000, dropChance: 0.45, danger: 110, essence: 20, reqLevel: 50, reqAscend: 1 },
-  { id: 'void',   name: '공허의 군주', emoji: '🌌', tier: '초월',   hp: 76000, atk: 1200, reward: 300000, dropChance: 0.60, danger: 125, essence: 30, reqLevel: 80, reqAscend: 3 },
+  // 초월 전용 — ★ 가 있어야 입장 가능. reqLevel 은 전투 레벨(강화 + 100×★) 기준 — 거인 ★1 +0(100), 공허 ★3 +0(300)에서
+  // 마계 군주를 +99 로 잡는 정도의 난이도가 되게 HP 를 맞췄다(전투 레벨로 ★ 무기가 강해져서 예전 43000·76000 은 몇 초 컷이었다).
+  { id: 'titan',  name: '초월의 거인', emoji: '🌋', tier: '초월',   hp: 65000, atk: 900,  reward: 150000, dropChance: 0.45, danger: 110, essence: 20, reqLevel: 100, reqAscend: 1 },
+  { id: 'void',   name: '공허의 군주', emoji: '🌌', tier: '초월',   hp: 230000, atk: 1200, reward: 300000, dropChance: 0.60, danger: 125, essence: 30, reqLevel: 300, reqAscend: 3 },
 ];
 function bossById(id) { return BOSSES.find(b => b.id === id); }
 // 참여 인원에 맞춘 난이도 스케일. 체력은 인원수보다 가파르게, 화력은 완만하게 올라간다
@@ -1410,7 +1435,7 @@ function raidAtk(p, raid) { return memberStats(p).atk * (1 + ((raid && raid.atkB
 function soloSupportMult(cls) { const c = CLASS_ATK[cls], to = CONFIG.raidSoloSupportAtk[cls]; return c && to > c ? to / c : 1; }
 // 입장 조건 미달 사유. 만족하면 null.
 function bossLock(p, boss) {
-  if ((p.level || 0) < boss.reqLevel) return '무기 +' + boss.reqLevel + ' 이상 필요';
+  if (combatLevel(p) < boss.reqLevel) return '무기 +' + boss.reqLevel + ' 이상 필요';   // ★ 무기는 전투 레벨(+100×★)로 본다
   if (starsOf(p) < boss.reqAscend) return '초월 ★' + boss.reqAscend + ' 이상 필요';
   return null;
 }
@@ -1536,11 +1561,12 @@ function pendingMine(p) { return Math.min(CONFIG.mineCap, Math.floor((Date.now()
 
 function publicView(db, id) {
   const p = norm(db.players[id]);
-  const g = grade(p.level);
+  const g = weaponGrade(p.level, p);
   const c = classOf(p);
   const em = elementOf(p.element);
   let od = odds(p.level, p.ascend);
   if (itemCount(p, 'boost') > 0) { const s = Math.min(0.97, od.success * CONFIG.boostMult); od = { success: s, destroy: od.destroy, fail: Math.max(0, 1 - s - od.destroy) }; }
+  od = withLuck(od, p);   // 🔥 기운 보정까지 넣은 '지금 누르면' 확률
   let party = null;
   if (p.party && db.parties[p.party]) {
     const pt = db.parties[p.party];
@@ -1575,7 +1601,7 @@ function publicView(db, id) {
     canAscend: p.level >= CONFIG.maxLevel && ascendReady(p),
     ascendNext: ascendProgress(p),
     ascendBonus: { gold: starsOf(p) * CONFIG.ascendGoldBonus, atk: starsOf(p) * CONFIG.ascendAtkBonus, cost: starsOf(p) * CONFIG.ascendCostMult, succ: 1 - ascendSuccMult(p) },
-    odds: od, enhanceBoost: itemCount(p, 'boost'), pity: p.pity || 0, nickColor: p.nickColor || null,
+    odds: od, luck: luckBonus(p), combatLevel: combatLevel(p), enhanceBoost: itemCount(p, 'boost'), pity: p.pity || 0, nickColor: p.nickColor || null,
     inv: invView(p), protectBuyLeft: protectBuyLeft(p), protectDailyBuy: CONFIG.protectDailyBuy,
     huntsLeft: huntsLeft(p), dailyHunts: limitOf(p, 'dailyHunts'),
     fightsLeft: fightsLeft(p), dailyFights: limitOf(p, 'dailyFights'),
@@ -1734,8 +1760,11 @@ function enhance(db, id) {
   }
 
   // 장인의 기운 상승폭 — 부스트권 사용 시 더 크게 오른다(성공률↑ + 실패해도 pity 빨리 참)
-  const pg = pityGain(o.success, p.ascend) * (boosted ? CONFIG.boostPityMult : 1);
+  const pg = pityGain(o.success, p.ascend) * (boosted ? CONFIG.boostPityMult : 1);   // (기운 보정 전 성공률 기준 — 보정이 기운을 더 빨리 채우진 않게)
+  const sPre = o.success;
+  o = withLuck(o, p);   // 🔥 기운 보정
   const r = Math.random();
+  const luckHit = r < o.success && r >= sPre;   // 보정분 덕에 붙었다 — 화면에서 따로 터뜨린다
   let result, msg, egg = null, d44First = false;
   if (r < o.success) {
     const gain = successGain(before);
@@ -1746,7 +1775,7 @@ function enhance(db, id) {
     p.pity = 0;
     bumpRank(db);
     result = 'success';
-    msg = (gain > 1 ? '💫 대성공! +' + gain + '  ' : '강화 성공! ') + '+' + before + ' → +' + p.level;
+    msg = (luckHit ? '🔥 기운이 밀어줬다! ' : '') + (gain > 1 ? '💫 대성공! +' + gain + '  ' : '강화 성공! ') + '+' + before + ' → +' + p.level;
     if (p.level === 77 && setEgg(p, 'l77')) { egg = 'l77'; msg = '🎰 럭키 세븐! ' + msg; }   // 처음 한 번만
     addLog(db, '✅ ' + p.nick + ' +' + before + '→+' + p.level + (gain > 1 ? ' (+' + gain + ')' : ''));
   } else if (r < o.success + o.destroy) {
@@ -1755,6 +1784,18 @@ function enhance(db, id) {
       p.pity = Math.min(1, p.pity + pg); // 방지도 시도로 치고 기운 상승
       msg = '🛡️ 파괴 방지 발동! +' + before + ' 유지 (남은 방지권 ' + itemCount(p, 'protect') + ')';
       addLog(db, '🛡️ ' + p.nick + ' +' + before + ' 파괴방지');
+    } else if (starsOf(p) >= 1) {
+      // 💎 프리즘 무기는 금만 간다 — −1강 · 장인의 기운·속성 유지(성공률이 +99 수준이라 −15 강등이면 다시 오를 수가 없다)
+      p.level = Math.max(0, before - 1); p.breaks++;
+      bumpRank(db);
+      if (p.destroyDay !== today()) { p.destroyDay = today(); p.destroysToday = 0; }
+      p.destroysToday++;
+      result = 'destroy';
+      if (before === 44 && setEgg(p, 'd44')) { egg = 'd44'; d44First = true; }
+      if (pityBefore >= 0.99 && setEgg(p, 'pity99')) egg = egg || 'pity99';
+      p.pity = Math.min(1, p.pity + pg);   // 시도로 치고 기운은 계속 찬다
+      msg = '💥 프리즘에 금이 갔어요! +' + before + ' → +' + p.level + ' (장인의 기운·속성 유지)';
+      addLog(db, '💥 ' + p.nick + ' 프리즘 무기 금 감 +' + before + '→+' + p.level);
     } else {
       const floor = destroyFloor(before);   // 한 등급 아래 시작 레벨로 강등(안전선)
       p.level = floor; p.breaks++; p.pity = 0; // 파괴 = 강등 · 장인의 기운 초기화
@@ -1784,7 +1825,7 @@ function enhance(db, id) {
     msg = '❌ 실패... +' + before + ' 유지 · 🔨 장인의 기운 ' + Math.round(p.pity * 100) + '%';
   }
   if (d44First) msg += '\n…사(死)의 숫자였다.';   // 처음 한 번만
-  return { ok: true, result, msg, cost, boosted, boostLeft: itemCount(p, 'boost'), pity: p.pity, egg };
+  return { ok: true, result, msg, cost, boosted, boostLeft: itemCount(p, 'boost'), pity: p.pity, egg, luckHit: result === 'success' && luckHit };
 }
 /* 초월 실행 — +99 에서만. 무기를 +0 으로 되돌리고 ★을 하나 얻는다.
  * 골드·방지권·부스트·칭호·최고기록(best)·채굴 레벨은 전부 유지된다. */
@@ -1812,13 +1853,13 @@ function ascend(db, id) {
   p.ascendMax = Math.max(p.ascendMax || 0, to);   // 최고 ★ — 무기를 바꿔 들어도 칭호 기준은 유지
   p.level = 0;
   p.pity = 0;
-  p.element = randomElementKey();          // 새 회차 = 새 속성
+  // 속성은 그대로 — 키워 온 무기의 정체성(예전엔 새 회차마다 다시 뽑아서 상성 덱이 흐트러졌다)
   bumpRank(db);
   const em = elementOf(p.element);
-  addLog(db, '🌈 ' + p.nick + ' 초월! ★' + to + ' — 무기가 +0 으로 돌아갔습니다 (새속성 ' + em.name + ')');
+  addLog(db, '💎 ' + p.nick + ' 초월! ★' + to + ' — 프리즘 무기로 다시 태어났습니다 (' + em.name + ' 속성 유지)');
   return {
     ok: true, ascend: to, element: p.element, spent: req,
-    msg: '🌈 초월 ★' + to + ' 달성!\n무기 +0 · 새 속성 ' + em.emoji + ' ' + em.name +
+    msg: '💎 초월 ★' + to + ' 달성! 프리즘 무기로 다시 태어났어요\n+0부터 다시 올리지만 힘은 이어져요(전투 레벨 ' + combatLevel(p) + ') · ' + em.emoji + ' ' + em.name + ' 속성 유지' +
       '\n영구 보너스 — 골드 +' + Math.round(to * CONFIG.ascendGoldBonus * 100) + '% · 레이드 공격 +' + Math.round(to * CONFIG.ascendAtkBonus * 100) + '%' +
       '\n⚠️ 이제부터 🛡️ 파괴방지권은 통하지 않습니다.',
   };
@@ -1982,6 +2023,25 @@ function buyDye(db, id) {
 function buyClassChange(db, id) {
   return { ok: false, error: '직업 변경권은 판매가 끝났어요 — 💎 프리즘 상점의 장비 칸으로 새 직업 무기를 따로 키울 수 있어요. (갖고 있는 변경권은 가방에서 그대로 쓸 수 있어요)' };
 }
+/* ⚔️ 싸움 전투력 — 레이드 기본 공격력과 같은 식(직업 계수는 빼서 직업끼리 공평하게): (12 + 8 × 강화) × (1 + 8% × ★).
+ * 승률은 전투력 '비율' 로 정한다: 1 / (1 + (상대/나)^K). 같으면 50%, 2%~98% 로 묶는다.
+ *  예) +99 vs +95 60% · +90 72% · +80 89% · +44 98% / 같은 +99 에 ★1 68% · ★3 90%
+ * (예전 50% + 강화 차 × 5%, 10~90% 는 +44 에게도 10% 로 지고 ★ 을 전혀 보지 않았다.) */
+function fightPower(p) { return (12 + combatLevel(p) * 8) * (1 + starsOf(p) * CONFIG.ascendAtkBonus); }
+function fightOdds(a, d) {
+  const r = fightPower(d) / fightPower(a), m = CONFIG.fightOddsMin;
+  return Math.max(m, Math.min(1 - m, 1 / (1 + Math.pow(r, CONFIG.fightOddsK))));
+}
+// 싸움 탭 목록 — 상대마다 지금 내 승률을 미리 보여 준다(전투력 높은 순)
+function fightList(db, id) {
+  const me = norm(db.players[id]);
+  const list = Object.keys(db.players).filter(k => k !== id && db.players[k].class).map(k => {
+    const q = norm(db.players[k]);
+    return { nick: q.nick, level: q.level || 0, ascend: starsOf(q), classEmoji: classOf(q).emoji, nickColor: q.nickColor || null,
+      title: equippedTitleView(q), power: fightPower(q), odds: Math.round(fightOdds(me, q) * 100) };
+  }).sort((a, b) => b.power - a.power || a.nick.localeCompare(b.nick));
+  return { ok: true, list, fightsLeft: fightsLeft(me), dailyFights: limitOf(me, 'dailyFights') };
+}
 function fight(db, id, targetNick) {
   targetNick = (targetNick || '').trim();
   const targetId = findByNick(db, targetNick);
@@ -1993,8 +2053,7 @@ function fight(db, id, targetNick) {
   if (atk.fightsUsed >= limitOf(atk, 'dailyFights')) return { ok: false, error: '오늘 싸움 횟수를 다 썼어요!' };
   atk.fightsUsed++;
   atk.fightsTotal = (atk.fightsTotal || 0) + 1;    // 도전과제: 싸움 도전 횟수(광견)
-  let pWin = 0.5 + (atk.level - def.level) * 0.05;
-  pWin = Math.max(0.1, Math.min(0.9, pWin));
+  const pWin = fightOdds(atk, def);
   const atkWin = Math.random() < pWin;
   bumpMstat(atk, 'fight'); if (atkWin) bumpMstat(atk, 'fightWin');   // 미션: 싸움/승리
   const winP = atkWin ? atk : def, loseP = atkWin ? def : atk;
@@ -2003,14 +2062,24 @@ function fight(db, id, targetNick) {
   const steal = Math.floor(loseP.gold * CONFIG.stealPct);
   loseP.gold -= steal;
   gainGold(winP, steal, true);   // 약탈 = 이전이라 초월 배수 미적용(골드 총량 보존)
-  let broke = null;
-  if (loseP.level > 0 && Math.random() < CONFIG.fightBreakChance) {
-    const b = loseP.level; loseP.level--; broke = { who: loser, from: b, to: loseP.level };
-    bumpRank(db);
-    addLog(db, '💢 ' + loser + ' 무기 손상 +' + b + '→+' + loseP.level);
+  let broke = null, guarded = null;
+  // 💢 무기 손상은 방어자만 — 먼저 건 사람이 골드도 잃고 무기까지 깨지면 아무도 싸움을 걸지 않는다
+  if (loseP === def && loseP.level > 0 && Math.random() < CONFIG.fightBreakChance) {
+    if (protectWorks(loseP) && takeItem(loseP, 'protect', 1)) {
+      // 🛡️ 파괴방지권 1장으로 막는다 — 강화 파괴와 같은 규칙(★1+ 무기는 방지권 무효)
+      guarded = { who: loser, level: loseP.level, left: itemCount(loseP, 'protect') };
+      addLog(db, '🛡️ ' + loser + ' 파괴방지권으로 무기 손상을 막았어요 (+' + loseP.level + ' 유지)');
+    } else {
+      const b = loseP.level; loseP.level--; broke = { who: loser, from: b, to: loseP.level };
+      // 🕯️ 추모 — 싸움에서 손상된 무기도 오늘 떠나보낸 무기로 센다(강화 파괴와 같은 일일 카운터 destroysToday)
+      if (loseP.destroyDay !== today()) { loseP.destroyDay = today(); loseP.destroysToday = 0; }
+      loseP.destroysToday++;
+      bumpRank(db);
+      addLog(db, '💢 ' + loser + ' 무기 손상 +' + b + '→+' + loseP.level);
+    }
   }
   addLog(db, '⚔️ ' + winner + ' 승 vs ' + loser + ' (' + steal + 'G 약탈)');
-  return { ok: true, iWon: winner === atk.nick, winner, loser, steal, broke, atk: { nick: atk.nick, level: atk.level }, def: { nick: def.nick, level: def.level } };
+  return { ok: true, iWon: winner === atk.nick, winner, loser, steal, broke, guarded, pWin, atk: { nick: atk.nick, level: atk.level }, def: { nick: def.nick, level: def.level } };
 }
 
 /* ---------- 파티 / 레이드 (멤버는 accountId 로 저장, 표시만 nick) ---------- */
@@ -2627,7 +2696,7 @@ module.exports = {
   devEgg, raidStrong, dunStrong, STRONG_ATTACKS, CLASS_CRIT, eggFound, atkReport, reportAtk, ACHIEVEMENTS,
   CONFIG, GRADES, RARITIES, CLASSES, BOSSES, odds, enhanceCost, weaponName, grade,
   missionView, missionClaim, bpView, bpClaim, bpBuyPremium,
-  login, setClass, rename, publicView, enhance, ascend, attend, mine, mineSwing, hunt, buyProtect, fight,
+  login, setClass, rename, publicView, enhance, ascend, attend, mine, mineSwing, hunt, buyProtect, fight, fightList, fightOdds, fightPower,
   ITEMS, useItem, buyInvPack, invView, ascendReq, ascendProgress,
   partyCreate, partyJoin, partyLeave, partyList, partyView, raidStart,
   partyInvite, partyAccept, partyReject, myInvites, raidState,

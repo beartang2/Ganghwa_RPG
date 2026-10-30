@@ -152,6 +152,12 @@ async function handle(method, pathname, ctx) {
     const db = await store.readDb(q);
     return ok(game.raidState(db, id));
   }
+  if (method === 'GET' && pathname === '/api/fight-list') {   // 싸움 탭 — 상대별 내 승률
+    if (!id) return bad({ ok: false, error: '로그인이 필요합니다.' }, 401);
+    const db = await store.readDb(q);
+    if (!db.players[id]) return bad({ ok: false, error: '로그인이 필요합니다.' }, 401);
+    return ok(game.fightList(db, id));
+  }
   if (method === 'GET' && pathname === '/api/missions') {
     if (!id) return bad({ ok: false, error: '로그인이 필요합니다.' }, 401);
     const db = await store.readDb(q);

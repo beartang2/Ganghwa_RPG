@@ -32,7 +32,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@600;800;900&display=swap">
-<link rel="stylesheet" href="/style.css?v=79">
+<link rel="stylesheet" href="/style.css?v=86">
 </head>
 <body>
 <!--
@@ -96,8 +96,8 @@
           <div id="weaponName" class="weapon-name">+0 ⚪ 일반</div>
           <div id="weaponElem" class="weapon-elem"></div>
           <div class="odds-row">
-            <span class="odds success">성공 <b id="oddsS">-</b></span>
-            <span class="odds destroy">파괴 <b id="oddsD">-</b></span>
+            <span class="odds success">성공 <b id="oddsS">-</b> <small id="oddsLuck" class="odds-luck"></small></span>
+            <span class="odds destroy"><span id="oddsDLabel">파괴</span> <b id="oddsD">-</b></span>
           </div>
           <div id="nextCost" class="next-cost">다음 강화 비용 20G</div>
         </div>
@@ -193,9 +193,9 @@
 
     <div class="guide-pane" data-g="forge" role="tabpanel">
       <ul class="guide-list">
-        <li>⚒️ <b>강화</b> — 골드로 무기 강화(+0~99). 고레벨일수록 성공률이 급감하고 대부분 <b>실패</b>해요. 실패가 쌓이면 🔨<b>장인의 기운</b>이 차고 <b>100%면 확정 성공!</b></li>
+        <li>⚒️ <b>강화</b> — 골드로 무기 강화(+0~99). 고레벨일수록 성공률이 급감하고 대부분 <b>실패</b>해요. 실패가 쌓이면 🔨<b>장인의 기운</b>이 차고 <b>100%면 확정 성공!</b> 기운이 찰수록 성공률도 올라가요(🔥 기운 보정, 최대 +2%p)</li>
         <li>💥 <b>파괴</b> — 파괴되면 뒤로 밀려나요(한 등급 아래 시작점 또는 최대 −15레벨 중 덜 떨어지는 쪽). +0까지 떨어지면 속성도 새로 받아요. 🛡️<b>방지권</b>으로 결정적 순간을 지키세요!</li>
-        <li>🌈 <b>초월</b> — +99에 닿으면 재료(💠사냥 <b>파편</b> · 🌟레이드 <b>정수</b>)로 초월! 무기는 +0으로 돌아가지만 영구 <b>★</b>을 얻어요(골드·레이드 공격력·장인의 기운↑). 대신 ★1부터는 강화가 더 어렵고 <b>방지권이 통하지 않아요</b></li>
+        <li>🌈 <b>초월</b> — +99에 닿으면 재료(💠사냥 <b>파편</b> · 🌟레이드 <b>정수</b>)로 초월! 무기가 <b>💎 프리즘 등급</b>으로 다시 태어나요. 강화 수치는 +0부터 다시지만 <b>힘은 이어져요</b>(★당 100레벨: ★1 +0 = 100레벨 · ★1 +99 = 199레벨 — 레이드·던전·싸움). 속성도 그대로. 프리즘 무기 강화는 <b>0.5% 고정</b>(🔥 기운 보정·장인의 기운으로 올려요)이고 실패해서 금이 가도 <b>−1강</b>만이에요. ★1부터는 <b>방지권이 통하지 않아요</b></li>
         <li>🗡️ <b>장비 칸</b> — 무기를 여러 자루 가질 수 있어요(직업당 한 자루). 무기를 <b>+99</b>까지 키울 때마다 💎 프리즘 상점에서 칸을 하나씩 열 수 있어요. 화로 위 장비 칸을 눌러 바꿔 들면 <b>직업과 강공격 커맨드</b>도 같이 바뀌어요</li>
         <li>🔥 <b>무기 속성</b> — 물→불→얼음→바람→독→대지→번개→물 순서로 앞이 뒤를 이기고, 빛⇄어둠은 서로 강해요. 🔁 <b>속성 재련권</b>(에픽 이상·강화 10%)으로 다시 뽑을 수 있어요</li>
       </ul>
@@ -218,8 +218,8 @@
     <div class="guide-pane" data-g="fight" role="tabpanel" hidden>
       <ul class="guide-list">
         <li>⚔️ <b>싸움</b> — 다른 유저에게 도전해요(하루 5회). 이기면 진 사람 골드의 <b>20%</b>를 가져오고, 지면 내 골드 20%를 내줘요</li>
-        <li>🎲 <b>자동 승부</b> — 누르는 즉시 결과가 나와요. 기본 승률 50%에 <b>강화 수치가 1 높을 때마다 +5%</b>(최소 10% · 최대 90%). 연타나 <b>강공격 커맨드는 쓰지 않아요</b> — 무기를 키우는 게 곧 실력!</li>
-        <li>💢 <b>무기 손상</b> — 진 사람은 10% 확률로 무기 강화 수치가 1 떨어져요</li>
+        <li>🎲 <b>자동 승부</b> — 누르는 즉시 결과가 나와요. 승률은 <b>전투력</b>(강화 수치 + ★초월, 직업은 안 봐요) 비율로 정해져요 — 같으면 50%, +99가 +90에게 72% · +80에게 89% · +44에게 98%, 같은 +99라도 ★1이면 68%(최소 2% · 최대 98%). 싸움 탭에서 상대마다 <b>내 승률</b>이 보여요. 연타나 <b>강공격 커맨드는 쓰지 않아요</b> — 무기를 키우는 게 곧 실력!</li>
+        <li>💢 <b>무기 손상</b> — <b>걸려 온 싸움</b>에서 지면 10% 확률로 무기 강화 수치가 1 떨어져요. 내가 먼저 건 싸움은 져도 골드만 잃고 무기는 안전해요. 🛡️ <b>파괴방지권</b>이 있으면 1장을 써서 손상을 막아요(★1+ 무기는 강화 때처럼 방지권 무효)</li>
       </ul>
     </div>
 
@@ -409,10 +409,10 @@
 
 <!-- Supabase Realtime (선택) — 로드 실패해도 게임은 폴링으로 동작 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/fx.js?v=79"></script>
-<script src="/gesture.js?v=79"></script>
-<script src="/weapon-art.js?v=79"></script>
-<script src="/prism-art.js?v=79"></script>
-<script src="/app.js?v=79"></script>
+<script src="/fx.js?v=86"></script>
+<script src="/gesture.js?v=86"></script>
+<script src="/weapon-art.js?v=86"></script>
+<script src="/prism-art.js?v=86"></script>
+<script src="/app.js?v=86"></script>
 </body>
 </html>

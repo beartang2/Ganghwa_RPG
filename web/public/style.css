@@ -272,6 +272,12 @@ body.loading-on #globalLoading{opacity:1}
 @keyframes waBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
 .wa .wa-spin{animation:waSpin 22s linear infinite}
 @keyframes waSpin{to{transform:rotate(360deg)}}
+/* 💎 프리즘(★) 무기 — 반대로 도는 고리 · 색이 흐르는 후광 · 표면을 훑는 홀로그램 광택 */
+.wa .wa-spin-r{animation:waSpin 30s linear infinite reverse}
+.wa .wa-hue{animation:waHue 7s linear infinite}
+@keyframes waHue{to{filter:hue-rotate(360deg)}}
+.wa .wa-holo{animation:waHolo 3.6s cubic-bezier(.45,.05,.35,1) infinite}
+@keyframes waHolo{0%{transform:translateX(-40px)}100%{transform:translateX(200px)}}
 .wa .wa-twinkle{transform-box:fill-box;transform-origin:center;animation:waTwinkle 1.9s ease-in-out infinite;animation-delay:var(--d,0s)}
 @keyframes waTwinkle{0%,100%{opacity:.2;transform:scale(.55)}50%{opacity:1;transform:scale(1)}}
 .wa .wa-zap{animation:waZap 1.7s steps(1,end) infinite;animation-delay:var(--d,0s)}
@@ -397,6 +403,10 @@ body.loading-on #globalLoading{opacity:1}
 .fightrow:last-child{border-bottom:0}
 .fightrow .btn{flex-shrink:0}
 .fightrow .w{color:var(--muted);font-size:12px}
+.fodds{flex-shrink:0;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;padding:2px 8px;border-radius:999px;background:rgba(255,240,220,.06)}
+.fodds.hi{color:var(--success)}
+.fodds.mid{color:var(--gold)}
+.fodds.lo{color:var(--danger)}
 
 /* ---------- 토스트 — 화면 위쪽에 잠깐 뜨는 반투명(70%) 유리판 ----------
  * 아래쪽(버튼이 몰린 곳)을 가리지 않도록 위로 올리고, pointer-events:none 으로 밑의 버튼 클릭을 막지 않는다.
@@ -1372,3 +1382,4 @@ body.halloween{background:
 body.sudo-flash::after{content:'';position:fixed;inset:0;z-index:200;pointer-events:none;
   background:radial-gradient(circle at 50% 40%,rgba(126,240,197,.28),rgba(126,240,197,0) 60%);animation:sudoFlash .9s ease-out forwards}
 @keyframes sudoFlash{from{opacity:1}to{opacity:0}}
+.odds-luck{font-size:11px;font-weight:800;color:#ffb38a;margin-left:2px}

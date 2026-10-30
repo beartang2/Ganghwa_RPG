@@ -23,15 +23,17 @@ function makeAccount(weapons) {
   return { db, p };
 }
 const ATK = { archer: 1.35, warrior: 1.2, tanker: 0.6, healer: 0.5 };
+// 무기 한 자루의 공격력(전투 레벨 = 강화 + 100×★, ★ 보너스 8%)
+const pow = w => ATK[w.cls] * (12 + ((w.lv || 0) + (C.maxLevel + 1) * (w.asc || 0)) * 8) * (1 + (w.asc || 0) * C.ascendAtkBonus);
 function bestFor(p, el) {
   const ws = G.dungeonView({ players: { x: p }, parties: {} }, 'x').weapons;
-  return ws.map(w => ({ w, s: G.elemMult(w.el, el) * ATK[w.cls] * (12 + w.lv * 8) * (1 + w.asc * C.ascendAtkBonus) }))
+  return ws.map(w => ({ w, s: G.elemMult(w.el, el) * pow(w) }))
     .sort((a, b) => b.s - a.s)[0].w;
 }
 // ideal: 단계마다 아직 안 쓴 무기 중 가장 센 것을 약점 속성으로 '재련해 둔' 것처럼 맞춘다(재련을 다 한 상한선)
 function tuneIdeal(p, phases) {
   const ws = [{ ref: p, cls: p.class, lv: p.level, asc: p.ascend }].concat(p.armory.map(w => ({ ref: w, cls: w.cls, lv: w.lv, asc: w.asc })))
-    .sort((a, b) => ATK[b.cls] * (1 + b.asc * .08) - ATK[a.cls] * (1 + a.asc * .08));
+    .sort((a, b) => pow(b) - pow(a));
   phases.forEach((ph, i) => { const w = ws[i % ws.length]; const el = ph.weakTo[0]; if (w.ref === p) p.element = el; else w.ref.el = el; });
 }
 function fight(db, p, ideal) {

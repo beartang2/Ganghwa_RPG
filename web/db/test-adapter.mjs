@@ -112,6 +112,8 @@ async function main() {
   ok(rowA.wins + rowA.losses === 1 && rowB.wins + rowB.losses === 1, '양쪽 전적 +1 영속화(data JSONB)');
   const sumAfter = Number((await q('SELECT sum(gold)::bigint AS s FROM players'))[0].s);
   ok(sumBefore === sumAfter, '골드 약탈은 제로섬(총합 보존 ' + sumAfter + ')');
+  const fls = (await req('GET', '/api/fight-list', { token: tok })).body;
+  ok(fls.ok && fls.list.some(x => x.nick === '궁수' && typeof x.odds === 'number'), '싸움 목록 API — 상대별 내 승률(' + (fls.list.find(x => x.nick === '궁수') || {}).odds + '%)');
   let d2 = (await q('SELECT fights_used FROM player_daily WHERE player_id=(SELECT id FROM players WHERE nick=$1) AND day=(SELECT max(day) FROM player_daily)', ['검사']))[0];
   ok(d2 && d2.fights_used === 1, 'player_daily.fights_used=1 영속화');
 
@@ -421,7 +423,8 @@ async function main() {
     r = await req('POST', '/api/enhance', { token: tokX });
     ok(r.body.result === 'success' && r.body.me.level === 77 && r.body.egg === 'l77' && r.body.me.titles.some(t => t.id === 'egg_77'), '딱 +77 도착 → 「럭키 세븐」');
     await q("UPDATE players SET level = 44, data = jsonb_set(data, '{pity}', '0.995') WHERE nick='이스터'");
-    Math.random = () => 0.149;   // +44 에서 성공 14.6% 다음 파괴 0.5% 구간
+    { const o44 = GAME.odds(44, 0), s44 = o44.success + 0.995 * GAME.CONFIG.pityLuckMax;   // 🔥 기운 보정까지 넣은 성공 구간 바로 다음 = 파괴 구간
+      Math.random = () => s44 + o44.destroy / 2; }
     r = await req('POST', '/api/enhance', { token: tokX });
     Math.random = realRandom;
     const t44 = r.body.me.titles.map(t => t.id);
@@ -438,7 +441,8 @@ async function main() {
     ok(r.body.me.titles.some(t => t.id === 'egg_air'), '빈 캡슐 3연속 → 「공기 수집가」');
   } finally { Math.random = realRandom; }
   mx = (await req('GET', '/api/me', { token: tokX })).body.me;
-  ok(mx.titleRoster.filter(t => t.hidden).length === 8 && mx.titleRoster.find(t => t.id === 'egg_heart').desc.includes('하트'), '찾은 건 이름·설명 공개, 나머지 8개는 여전히 ❓');
+  const halToday = mx.titles.some(t => t.id === 'egg_halloween') ? 1 : 0;   // 10/31(KST)에 돌리면 사냥에서 🎃 할로윈 칭호도 열린다
+  ok(mx.titleRoster.filter(t => t.hidden).length === 8 - halToday && mx.titleRoster.find(t => t.id === 'egg_heart').desc.includes('하트'), '찾은 건 이름·설명 공개, 나머지 ' + (8 - halToday) + '개는 여전히 ❓');
   // 🔨 개발자 이스터에그 — 콘솔·sudo 는 /api/egg, 헤더 탐정·찻주전자는 서버 주소로만
   ok((await req('POST', '/api/egg', { token: tokX, body: { id: 'console' } })).body.found === 'console', '콘솔 강화(forge.enhance) → 「콘솔 강화」');
   ok((await req('POST', '/api/egg', { token: tokX, body: { id: 'sudo' } })).body.found === 'sudo', '키보드 sudo → 「sudo 초월」');
@@ -538,6 +542,71 @@ async function main() {
     const skc = GAME.raidStrong(sdb, 's', 1);   // (보스가 여기서 쓰러질 수 있어 남은 HP 대신 이번 피해량을 본다)
     ok(skc.ok && skc.crit && skc.dmg === Math.round((12 + 99 * 8) * 0.8 * GAME.CONFIG.raidHitDmgMult * 22 * (1 + GAME.CONFIG.raidAtkBuffCap) * GAME.CLASS_CRIT.healer.m) && /치명타/.test(skc.strongText), '강공격 치명타 → 피해 ×배율 · 기록에 💥치명타');
     Math.random = realRandom;
+  }
+  // 🕯️ 싸움에서 손상된 무기도 추모(오늘 파괴 수)에 들어간다 — 진 쪽이 공격자든 방어자든
+  {
+    const fdb = { players: {}, parties: {}, log: [] };
+    const A = GAME.makePlayer('공격러'), D = GAME.makePlayer('방어러'); GAME.norm(A); GAME.norm(D);
+    Object.assign(A, { class: 'warrior', level: 44 }); Object.assign(D, { class: 'healer', level: 99 });
+    fdb.players.a = A; fdb.players.d = D;
+    const realRandom = Math.random; Math.random = () => 0;   // 공격자 승리(0 < pWin) · 손상 발동(0 < 10%)
+    const fr = GAME.fight(fdb, 'a', '방어러'); Math.random = realRandom;
+    ok(fr.ok && fr.iWon && fr.broke && fr.broke.who === '방어러' && D.level === 98, '싸움 패배 손상: 방어자 +99 → +98');
+    const hl = GAME.hogu(fdb);
+    ok(hl.some(x => x.nick === '방어러' && x.c === 1), '싸움 손상도 추모 목록에 1번 파괴로 올라감');
+    // 먼저 건 사람이 지면 골드만 잃고 무기는 안전 — 손상 판정이 '터지는' 난수(0)를 줘도 그대로
+    A.fightsUsed = 0; const seq = [0.95, 0]; Math.random = () => (seq.length ? seq.shift() : 0.5);
+    const fl = GAME.fight(fdb, 'a', '방어러'); Math.random = realRandom;
+    ok(fl.ok && !fl.iWon && !fl.broke && A.level === 44, '건 사람이 지면 무기 손상 없음(골드만)');
+    // 🛡️ 방어자에게 방지권이 있으면 손상을 1장으로 막는다(추모에도 안 올라감)
+    A.fightsUsed = 0; GAME.norm(D); D.inv.items.protect = 2; const lvB = D.level, cB = D.destroysToday;
+    Math.random = () => 0; const fg = GAME.fight(fdb, 'a', '방어러'); Math.random = realRandom;
+    ok(fg.ok && fg.iWon && !fg.broke && fg.guarded && D.level === lvB && D.inv.items.protect === 1 && D.destroysToday === cB, '방어자 방지권 → 손상 막음 · 방지권 −1 · 추모 그대로');
+    D.ascend = 1; A.fightsUsed = 0; Math.random = () => 0; const fs = GAME.fight(fdb, 'a', '방어러'); Math.random = realRandom;
+    ok(fs.ok && fs.broke && !fs.guarded && D.inv.items.protect === 1, '★1+ 무기는 방지권 무효(강화와 같은 규칙) → 손상');
+  }
+  // ⚔️ 싸움 승률 — 전투력(강화·★) 비율: 같으면 50% · 차이가 클수록 이긴다 · ★ 반영 · 2~98%
+  {
+    const o = (a, as, d, ds) => GAME.fightOdds({ level: a, ascend: as }, { level: d, ascend: ds });
+    ok(Math.abs(o(99, 0, 99, 0) - 0.5) < 1e-9, '같은 전투력 → 50%');
+    ok(o(99, 0, 44, 0) === 0.98 && o(44, 0, 99, 0) === 0.02, '+99 vs +44 → 98% (예전 90%) · 반대로 2%');
+    ok(o(99, 0, 95, 0) < o(99, 0, 90, 0) && o(99, 0, 90, 0) < o(99, 0, 80, 0), '강화 차이가 클수록 승률↑ (' + [95, 90, 80].map(d => Math.round(o(99, 0, d, 0) * 100) + '%').join(' · ') + ')');
+    ok(o(0, 1, 99, 0) > 0.6 && o(0, 3, 99, 0) > o(0, 1, 99, 0), '★ 은 전투 레벨 100씩 — ★1 +0 이 +99 를 이긴다 (★1 +0 ' + Math.round(o(0, 1, 99, 0) * 100) + '% · ★3 +0 ' + Math.round(o(0, 3, 99, 0) * 100) + '%)');
+    const ldb = { players: {}, parties: {}, log: [] };
+    [['나', 99, 0], ['약한이', 44, 0], ['동급', 99, 0], ['초월자', 99, 2]].forEach(([n, l, a], i) => { const q = GAME.makePlayer(n); GAME.norm(q); Object.assign(q, { class: 'warrior', level: l, ascend: a }); ldb.players['k' + i] = q; });
+    const fl = GAME.fightList(ldb, 'k0');
+    ok(fl.ok && fl.list.length === 3 && fl.list[0].nick === '초월자' && fl.list.find(x => x.nick === '약한이').odds === 98 && fl.list.find(x => x.nick === '동급').odds === 50, '싸움 목록: 전투력 높은 순 + 상대별 내 승률');
+  }
+  // 🔥 기운 보정 — 장인의 기운이 찰수록 성공률 + 기운 × pityLuckMax (보정분 안에서 붙으면 luckHit)
+  {
+    const edb = { players: {}, parties: {}, log: [] }, ep = GAME.makePlayer('강화러'); GAME.norm(ep);
+    Object.assign(ep, { class: 'warrior', level: 98, ascend: 1, ascendMax: 1, gold: 1e9, pity: 0.5 }); edb.players.e = ep;
+    const base = GAME.odds(98, 1).success, bonus = 0.5 * GAME.CONFIG.pityLuckMax;
+    const pv = GAME.publicView(edb, 'e');
+    ok(Math.abs(pv.odds.success - (base + bonus)) < 1e-12 && Math.abs(pv.luck - bonus) < 1e-12, '화면 성공률에 기운 보정 포함 (' + (base * 100).toFixed(2) + '% → ' + (pv.odds.success * 100).toFixed(2) + '%)');
+    const realRandom = Math.random; Math.random = () => base + bonus / 2;   // 원래라면 실패, 보정분 안
+    const er = GAME.enhance(edb, 'e'); Math.random = realRandom;
+    ok(er.ok && er.result === 'success' && er.luckHit && ep.level === 99 && /기운이 밀어줬다/.test(er.msg), '보정분 덕에 성공 → luckHit · +98 → +99');
+    Object.assign(ep, { level: 98, pity: 0 }); Math.random = () => base + bonus / 2;
+    const er0 = GAME.enhance(edb, 'e'); Math.random = realRandom;
+    ok(er0.ok && er0.result !== 'success', '기운 0 이면 보정 없음(같은 난수로 실패)');
+  }
+  // 💎 프리즘(★) 무기 — 등급·전투 레벨·고정 성공률·금 감(−1)·속성 유지
+  {
+    const pdb = { players: {}, parties: {}, log: [] }, pp = GAME.makePlayer('프리즘러'); GAME.norm(pp);
+    Object.assign(pp, { class: 'warrior', level: 99, best: 99, element: 'water', gold: 1e9 }); pp.inv.items = { shard: 200, essence: 20 }; pdb.players.p = pp;
+    const ar = GAME.ascend(pdb, 'p');
+    ok(ar.ok && pp.ascend === 1 && pp.level === 0 && pp.element === 'water', '초월해도 속성 유지(💧) · ★1 +0');
+    const v = GAME.publicView(pdb, 'p');
+    ok(v.grade.key === 'prism' && /프리즘/.test(v.weapon) && v.combatLevel === 100, '★1 +0 = 💎 프리즘 등급 · 전투 레벨 100 (' + v.weapon + ')');
+    const r99 = GAME.makePlayer('99강'); GAME.norm(r99); Object.assign(r99, { class: 'warrior', level: 99 }); pdb.players.q = r99;
+    ok(GAME.fightPower(pp) > GAME.fightPower(r99), '★1 +0 전투력이 +99 보다 크다(힘이 이어진다)');
+    ok(GAME.odds(0, 1).success === GAME.CONFIG.prismSucc && GAME.odds(80, 3).success === GAME.CONFIG.prismSucc && GAME.CONFIG.prismSucc > GAME.odds(99, 0).success, '프리즘 무기 성공률 고정(+99 보다 조금 높고 ★ 로 안 낮아짐)');
+    Object.assign(pp, { level: 60, pity: 0.4 });
+    const sP = GAME.CONFIG.prismSucc + 0.4 * GAME.CONFIG.pityLuckMax, d60 = GAME.odds(60, 1).destroy;
+    const realRandom = Math.random; Math.random = () => sP + d60 / 2;   // 파괴 구간
+    const er = GAME.enhance(pdb, 'p'); Math.random = realRandom;
+    ok(er.ok && er.result === 'destroy' && pp.level === 59 && pp.pity > 0.4 && pp.element === 'water', '프리즘 무기 파괴 구간 = 금 감(−1강) · 기운 유지·상승 · 속성 유지');
   }
   // ⚗️ 연금술 확률표 — 합이 1 · 꽝은 불이 셀수록 낮다
   {
