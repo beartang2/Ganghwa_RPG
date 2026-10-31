@@ -10,6 +10,7 @@ const PATCH = {
   version: '6',
   title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
+    '📜 <b>알림 위치 변경</b> — 알림이 화면 위를 가려 골드·💎가 안 보이던 문제. 이제 왼쪽에 로그처럼 쌓여 올라가요(휴대폰은 화면 왼쪽 가운데 · 넓은 화면은 빈 여백이나 무기 그림 판 안)',
     '💰 <b>프리즘 무기 강화 비용·사냥</b> — ★당 100레벨로 계산해요. ★1 +0 강화 1회 1,020G(예전 36G) · ★1 +99 2,010G. 대신 사냥 몬스터·골드도 100레벨 위로 나와요(★1 하루 사냥 약 10만G)',
     '💎 <b>프리즘 무기</b> — 초월(★)하면 무기가 <b>💎 프리즘 등급</b>으로 다시 태어나요! +0부터 다시 올리지만 <b>힘은 이어져요</b>(+99에서 초월 = 100레벨, ★당 100레벨 — 레이드·던전·싸움 모두). 속성도 그대로. 강화 성공률은 강화 수치와 상관없이 <b>0.5% 고정</b>, 실패해서 금이 가도 <b>−1강</b>만(장인의 기운 유지)',
     '🔥 <b>기운 보정</b> — 강화가 연속으로 실패해 <b>장인의 기운</b>이 찰수록 성공률이 올라요(기운 100% 직전 <b>+2%p</b>). 고강에서도 기운이 다 차기 전에 \'그냥\' 붙는 순간이 자주 와요 🔥',
@@ -1023,12 +1024,37 @@ async function doUseItem(itemId) {
 
 
 /* ---------- 토스트 ---------- */
-let toastTimer = null;
-function toast(msg, kind) {
-  const t = el('toast');
-  t.textContent = msg; t.className = 'toast ' + (kind || ''); t.hidden = false;
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 4000);
+/* ---------- 알림 로그 ----------
+ * 예전엔 화면 맨 위 가운데에 한 장씩 떠서 상단바(골드·💎)를 가렸다. 이제 로그처럼 줄이 쌓여 위로 밀려 올라간다.
+ *  · 휴대폰: 왼쪽 세로 가운데, 가로 1/3 안쪽(.toast-log CSS) — 줄은 왼쪽에서 미끄러져 들어온다
+ *  · 넓은 화면: 남는 자리 — 화면 왼쪽 여백이 넉넉하면(240px+) 그 여백, 아니면 무기 그림 위(그림 아래쪽부터 쌓임), 둘 다 아니면 왼쪽 아래
+ * 최대 4줄, 줄마다 3.8초 뒤 사라진다. 누르는 걸 막지 않는다(pointer-events:none). */
+const TOAST_MAX = 4, TOAST_MS = 3800;
+function placeToastLog() {
+  const box = el('toastLog'); if (!box) return;
+  const s = box.style;
+  if (window.innerWidth < 880) { s.left = s.width = s.top = s.bottom = s.maxHeight = ''; return; }   // 휴대폰은 CSS 자리 그대로
+  const g = el('game'), gr = g && g.offsetParent ? g.getBoundingClientRect() : null;
+  if (gr && gr.left >= 240) { s.left = '16px'; s.width = Math.min(320, Math.floor(gr.left - 32)) + 'px'; s.top = 'auto'; s.bottom = '50%'; s.maxHeight = ''; return; }
+  // 무기 그림 판(.hearth) — 그림 말고는 비어 있는 곳이라 알림이 잠깐 덮어도 괜찮다. 판 안에서만 쌓이고 넘치면 오래된 줄이 잘린다.
+  const hearth = document.querySelector('.hearth'), a = hearth && hearth.offsetParent ? hearth.getBoundingClientRect() : null;
+  if (a && a.width > 200 && a.bottom > 120 && a.top < window.innerHeight * 0.6) {
+    s.left = Math.round(a.left + 8) + 'px'; s.width = Math.round(a.width - 16) + 'px'; s.top = 'auto';
+    s.bottom = Math.round(window.innerHeight - a.bottom + 8) + 'px'; s.maxHeight = Math.round(a.height - 16) + 'px'; return;
+  }
+  s.left = '16px'; s.width = '300px'; s.top = 'auto'; s.bottom = '16px'; s.maxHeight = '';
 }
+function toast(msg, kind) {
+  const box = el('toastLog'); if (!box || !msg) return;
+  placeToastLog();
+  const line = document.createElement('div');
+  line.className = 'toast-line ' + (kind || 'info');
+  line.textContent = msg;
+  box.appendChild(line);
+  while (box.children.length > TOAST_MAX) box.firstElementChild.remove();
+  setTimeout(() => { line.classList.add('out'); setTimeout(() => line.remove(), 360); }, TOAST_MS);
+}
+window.addEventListener('resize', placeToastLog);
 
 /* ---------- 📳 진동 ----------
  * 안드로이드(크롬·삼성 인터넷): 표준 Vibration API(navigator.vibrate) — 결과별 패턴 그대로.
