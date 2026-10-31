@@ -408,22 +408,24 @@ body.loading-on #globalLoading{opacity:1}
 .fodds.mid{color:var(--gold)}
 .fodds.lo{color:var(--danger)}
 
-/* ---------- 토스트 — 화면 위쪽에 잠깐 뜨는 반투명(70%) 유리판 ----------
- * 아래쪽(버튼이 몰린 곳)을 가리지 않도록 위로 올리고, pointer-events:none 으로 밑의 버튼 클릭을 막지 않는다.
- * 배경 뒤를 블러로 뭉개서 반투명이어도 글자가 아래 화면과 섞이지 않게 한다. */
-/* 색으로 종류를 바로 알아보게: 성공 초록 · 안내 주황 · 실패/경고 빨강 (70% + 블러, 글자는 흰색) */
-.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top, 0px) + 10px);transform:translateX(-50%);
-  width:max-content;max-width:min(calc(100% - 32px),440px);z-index:130;pointer-events:none;
-  border-radius:14px;padding:10px 15px;font-size:14px;font-weight:800;line-height:1.45;text-align:center;word-break:keep-all;
-  border:0;background:rgba(236,122,26,.7);color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.35);
-  box-shadow:0 10px 28px rgba(0,0,0,.35),0 0 18px rgba(236,122,26,.3);
-  -webkit-backdrop-filter:blur(14px) saturate(1.3);backdrop-filter:blur(14px) saturate(1.3);
-  animation:toastIn .2s ease-out}
-.toast.ok{background:rgba(30,168,96,.7);box-shadow:0 10px 28px rgba(0,0,0,.35),0 0 18px rgba(30,168,96,.32)}
-.toast.info{background:rgba(236,122,26,.7);box-shadow:0 10px 28px rgba(0,0,0,.35),0 0 18px rgba(236,122,26,.3)}
-.toast.bad{background:rgba(226,56,50,.72);box-shadow:0 10px 28px rgba(0,0,0,.35),0 0 18px rgba(226,56,50,.32)}
-@keyframes toastIn{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
-@media (prefers-reduced-motion:reduce){.toast{animation:none}}
+/* ---------- 알림 로그 — 로그처럼 줄이 쌓여 위로 올라가는 반투명 줄들 ----------
+ * 휴대폰: 왼쪽 세로 가운데(맨 아래 줄이 화면 가운데), 가로 1/3 안쪽, 작은 글씨 — 상단바(골드·💎)와 아래 버튼을 가리지 않게.
+ * 넓은 화면: 자리는 app.js placeToastLog() 가 정한다(왼쪽 여백 → 무기 그림 위 → 왼쪽 아래).
+ * 색은 왼쪽 띠로만: 성공 초록 · 안내 주황 · 실패/경고 빨강. 누르는 걸 막지 않는다. */
+.toast-log{position:fixed;z-index:130;pointer-events:none;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;gap:4px;overflow:hidden;
+  left:calc(env(safe-area-inset-left, 0px) + 8px);bottom:50%;width:34vw}
+.toast-line{max-width:100%;padding:4px 8px 4px 8px;border-radius:7px;border-left:3px solid #ec7a1a;
+  font-size:11px;font-weight:700;line-height:1.4;color:#fff;white-space:pre-line;word-break:keep-all;overflow-wrap:anywhere;
+  background:rgba(18,14,11,.5);text-shadow:0 1px 2px rgba(0,0,0,.7);
+  -webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px);animation:tlIn .22s ease-out both}
+.toast-line.ok{border-left-color:#2ecf7d}
+.toast-line.info{border-left-color:#ec7a1a}
+.toast-line.bad{border-left-color:#ff5a4f}
+.toast-line.out{animation:tlOut .35s ease-in forwards}
+@keyframes tlIn{from{opacity:0;transform:translateX(-22px)}to{opacity:1;transform:none}}
+@keyframes tlOut{to{opacity:0;transform:translateY(-6px)}}
+@media (min-width:880px){ .toast-log{width:300px} .toast-line{font-size:12.5px;padding:5px 10px;background:rgba(18,14,11,.55)} }
+@media (prefers-reduced-motion:reduce){.toast-line,.toast-line.out{animation:none}}
 
 /* ---------- 닉네임 염색 ---------- */
 .nick-glow{text-shadow:0 0 7px currentColor}
