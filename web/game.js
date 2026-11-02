@@ -1044,7 +1044,7 @@ function elementSkillView(el) { const s = ELEMENT_SKILLS[el]; const e = elementO
  * 상태는 players.data.dun 에 실린다(⚠️ level/gold/nick·일일 필드 이름은 저장 때 빠지므로 쓰지 않는다). */
 const DUNGEON = {
   floors: 50, sweepBack: 5, firstClearPrism: 3,
-  swapCooldown: 1200,                 // 전투 중 무기 교체 쿨타임(ms)
+  swapCooldown: 400,                  // 전투 중 무기 교체 쿨타임(ms) — 짧게(피지컬로 단계마다 약점 무기 바꾸며 깨게)
   baseDuration: 15000, phaseDuration: 5000,   // 전투 시간 = 15초 + 5초 × (단계 − 1)
   /* 보스 HP = 구간 시작값 × 성장률^(층 − 구간 첫 층).
    * ★0 무기 공격력은 +99 에서 멈추고 ★ 무기는 전투 레벨로 계속 세지므로, 깊은 층은 'HP(★ 진행)' 와 '상성 맞추기(단계마다 약점 무기)'
