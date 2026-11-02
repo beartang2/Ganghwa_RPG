@@ -10,7 +10,7 @@ const PATCH = {
   version: '6',
   title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
-    '🛠️ <b>고침 · 다듬기</b> — 탭을 옮길 때마다 직전 강화 연출이 다시 재생되던 문제 · 🌌 초월 던전 <b>무기 교체·스킬이 훨씬 빨라져요</b>(교체 쿨 1.2초→0.4초 + 교체 직후 다음 동작이 막히던 지연 제거 — 피지컬로 콤보!) · 같은 알림이 줄줄이 쌓이면 <b>×N</b>으로 합쳐요',
+    '🛠️ <b>고침 · 다듬기</b> — 🔨 <b>장인의 기운 100%인데 실패</b>하던 문제(99.6%도 반올림돼 100%로 보였어요 — 이제 진짜 100%일 때만 100%·확정) · 탭을 옮길 때마다 직전 강화 연출이 다시 재생되던 문제 · 🌌 초월 던전 <b>무기 교체·스킬이 훨씬 빨라져요</b>(교체 쿨 1.2초→0.4초 + 교체 직후 다음 동작이 막히던 지연 제거 — 피지컬로 콤보!) · 같은 알림이 줄줄이 쌓이면 <b>×N</b>으로 합쳐요',
     '🔑 <b>PIN 변경</b> — ⚙️설정 → 🔑 PIN 변경에서 로그인 PIN을 바꿀 수 있어요. 현재 PIN을 확인하고 새 PIN(숫자 8자리)으로 교체해요. 캐릭터·기록은 그대로, 다른 기기는 새 PIN으로 다시 로그인해요',
     '📜 <b>알림 위치 변경</b> — 알림이 화면 위를 가려 골드·💎가 안 보이던 문제. 이제 왼쪽에 로그처럼 쌓여 올라가요(휴대폰은 화면 왼쪽 가운데 · 넓은 화면은 빈 여백이나 무기 그림 판 안)',
     '💰 <b>프리즘 무기 강화 비용·사냥</b> — ★당 100레벨로 계산해요. ★1 +0 강화 1회 1,020G(예전 36G) · ★1 +99 2,010G. 대신 사냥 몬스터·골드도 100레벨 위로 나와요(★1 하루 사냥 약 10만G)',
@@ -434,8 +434,10 @@ function render() {
   const lk = el('oddsLuck'); if (lk) { lk.textContent = me.luck >= 0.0001 ? '🔥+' + fmtPct(me.luck) : ''; lk.title = me.luck ? '장인의 기운 보정 — 실패가 이어질수록 성공률이 조금씩 올라요' : ''; }
   el('oddsD').textContent = fmtPct(me.odds.destroy);
   const dl = el('oddsDLabel'); if (dl) dl.textContent = me.grade && me.grade.key === 'prism' ? '금 가기(−1강)' : '파괴';   // 💎 프리즘 무기는 깨지지 않고 금만 간다
-  const pity = Math.round((me.pity || 0) * 100);
-  const guaranteed = pity >= 100;
+  // 확정(100%)은 서버가 p.pity >= 1 일 때만 보장한다. 반올림(Math.round)하면 99.6% 도 100%로 보여
+  // '100%인데 실패'가 났다 → floor 로 깎아, 진짜 1.0 이 됐을 때만 100%·확정을 표시한다.
+  const guaranteed = (me.pity || 0) >= 1;
+  const pity = guaranteed ? 100 : Math.floor((me.pity || 0) * 100);
   el('pityPct').textContent = guaranteed ? '100% · 다음 강화 확정' : pity + '%';
   panel.classList.toggle('guaranteed', guaranteed);
   if (FX && FX.electric) FX.electric.setActive(guaranteed);
