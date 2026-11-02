@@ -10,6 +10,8 @@ const PATCH = {
   version: '6',
   title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
+    '🛠️ <b>고침 · 다듬기</b> — 🔨 <b>장인의 기운 100%인데 실패</b>하던 문제(99.6%도 반올림돼 100%로 보였어요 — 이제 진짜 100%일 때만 100%·확정) · 탭을 옮길 때마다 직전 강화 연출이 다시 재생되던 문제 · 🌌 초월 던전 <b>무기 교체·스킬이 훨씬 빨라져요</b>(교체 쿨 1.2초→0.4초 + 교체 직후 다음 동작이 막히던 지연 제거 — 피지컬로 콤보!) · 같은 알림이 줄줄이 쌓이면 <b>×N</b>으로 합쳐요',
+    '🔑 <b>PIN 변경</b> — ⚙️설정 → 🔑 PIN 변경에서 로그인 PIN을 바꿀 수 있어요. 현재 PIN을 확인하고 새 PIN(숫자 8자리)으로 교체해요. 캐릭터·기록은 그대로, 다른 기기는 새 PIN으로 다시 로그인해요',
     '📜 <b>알림 위치 변경</b> — 알림이 화면 위를 가려 골드·💎가 안 보이던 문제. 이제 왼쪽에 로그처럼 쌓여 올라가요(휴대폰은 화면 왼쪽 가운데 · 넓은 화면은 빈 여백이나 무기 그림 판 안)',
     '💰 <b>프리즘 무기 강화 비용·사냥</b> — ★당 100레벨로 계산해요. ★1 +0 강화 1회 1,020G(예전 36G) · ★1 +99 2,010G. 대신 사냥 몬스터·골드도 100레벨 위로 나와요(★1 하루 사냥 약 10만G)',
     '💎 <b>프리즘 무기</b> — 초월(★)하면 무기가 <b>💎 프리즘 등급</b>으로 다시 태어나요! +0부터 다시 올리지만 <b>힘은 이어져요</b>(+99에서 초월 = 100레벨, ★당 100레벨 — 레이드·던전·싸움 모두). 속성도 그대로. 강화 성공률은 강화 수치와 상관없이 <b>0.5% 고정</b>, 실패해서 금이 가도 <b>−1강</b>만(장인의 기운 유지)',
@@ -432,8 +434,10 @@ function render() {
   const lk = el('oddsLuck'); if (lk) { lk.textContent = me.luck >= 0.0001 ? '🔥+' + fmtPct(me.luck) : ''; lk.title = me.luck ? '장인의 기운 보정 — 실패가 이어질수록 성공률이 조금씩 올라요' : ''; }
   el('oddsD').textContent = fmtPct(me.odds.destroy);
   const dl = el('oddsDLabel'); if (dl) dl.textContent = me.grade && me.grade.key === 'prism' ? '금 가기(−1강)' : '파괴';   // 💎 프리즘 무기는 깨지지 않고 금만 간다
-  const pity = Math.round((me.pity || 0) * 100);
-  const guaranteed = pity >= 100;
+  // 확정(100%)은 서버가 p.pity >= 1 일 때만 보장한다. 반올림(Math.round)하면 99.6% 도 100%로 보여
+  // '100%인데 실패'가 났다 → floor 로 깎아, 진짜 1.0 이 됐을 때만 100%·확정을 표시한다.
+  const guaranteed = (me.pity || 0) >= 1;
+  const pity = guaranteed ? 100 : Math.floor((me.pity || 0) * 100);
   el('pityPct').textContent = guaranteed ? '100% · 다음 강화 확정' : pity + '%';
   panel.classList.toggle('guaranteed', guaranteed);
   if (FX && FX.electric) FX.electric.setActive(guaranteed);
@@ -1047,12 +1051,21 @@ function placeToastLog() {
 function toast(msg, kind) {
   const box = el('toastLog'); if (!box || !msg) return;
   placeToastLog();
+  // 바로 직전과 같은 메시지면 새 줄 대신 ×N 으로 합친다(연속 실패가 줄줄이 쌓여 읽기 어렵지 않게)
+  const last = box.lastElementChild;
+  if (last && !last.classList.contains('out') && last.dataset.msg === msg) {
+    const n = (+last.dataset.n || 1) + 1; last.dataset.n = n;
+    last.textContent = msg + '  ×' + n;
+    clearTimeout(+last.dataset.t);
+    last.dataset.t = setTimeout(() => { last.classList.add('out'); setTimeout(() => last.remove(), 360); }, TOAST_MS);
+    return;
+  }
   const line = document.createElement('div');
   line.className = 'toast-line ' + (kind || 'info');
-  line.textContent = msg;
+  line.textContent = msg; line.dataset.msg = msg;
   box.appendChild(line);
   while (box.children.length > TOAST_MAX) box.firstElementChild.remove();
-  setTimeout(() => { line.classList.add('out'); setTimeout(() => line.remove(), 360); }, TOAST_MS);
+  line.dataset.t = setTimeout(() => { line.classList.add('out'); setTimeout(() => line.remove(), 360); }, TOAST_MS);
 }
 window.addEventListener('resize', placeToastLog);
 
@@ -1221,6 +1234,10 @@ function weaponResult(kind) {   // 'success' | 'protect' | 'fail' | 'destroy'
   const good = kind === 'success' || kind === 'protect';
   art.classList.add(good ? 'pop' : 'crack');
   panel.classList.add(good ? 'ok' : 'bad');
+  // 한 번만 재생되는 결과 연출 — 끝나면 클래스를 지운다. 안 지우면 탭을 다시 열 때(숨김→표시)
+  // CSS 애니메이션이 처음부터 다시 돌아서 '직전 강화 연출'이 재생된다.
+  clearTimeout(weaponResult._t);
+  weaponResult._t = setTimeout(() => { art.classList.remove('pop', 'crack'); panel.classList.remove('ok', 'bad'); }, 650);
   if (FX && FX.sparks) return forgeBurst(kind);
   if (kind === 'success') spawnEnhParticles(['✨', '💫', '⭐', '🌟'], 9);
   else if (kind === 'protect') spawnEnhParticles(['🛡️', '✨'], 6);
@@ -2378,19 +2395,31 @@ async function flushDunHits(force) {
   const r = await api('dun-hit', 'POST', { hits });
   if (r && r.ok && r.fight) { setDunFight(r.fight); updateDunUI(); if (r.crits > 0) critFx(el('dBoss'), r.dmg); }
 }
+// 던전 전투 액션(교체·스킬) 전용 — 전역 busy 락 대신 짧은 자체 가드. 로딩 스피너 없이 즉각 반응.
+let dunActBusy = false;
+function dunAct(fn, btn) {
+  if (dunActBusy) return;
+  dunActBusy = true;
+  if (btn) { btn.classList.add('acting'); btn.disabled = true; }   // 즉시 눌린 느낌(서버 응답 전에)
+  Promise.resolve(fn()).finally(() => {
+    if (btn) btn.classList.remove('acting');
+    setTimeout(() => { dunActBusy = false; }, 90);   // 연타 오발만 막는 아주 짧은 간격
+  });
+}
 async function doDunSwap(cls) {
+  sfx('pang'); vibe(12);   // 피드백 먼저(체감 지연↓)
   if (dunLocalHits) { if (dunFlushT) { clearTimeout(dunFlushT); dunFlushT = null; } await flushDunHits(); }   // 바꾸기 전 연타는 원래 무기로
   const r = await api('dun-swap', 'POST', { class: cls });
   if (!r.ok) return toast(r.error, 'bad');
   if (r.fight) { setDunFight(r.fight); updateDunUI(); }
-  sfx('pang'); vibe(12);
 }
 async function doDunSkill(kind) {
+  sfx('crit'); vibe([15, 30, 20]);
   if (dunLocalHits) { if (dunFlushT) { clearTimeout(dunFlushT); dunFlushT = null; } await flushDunHits(); }
   const r = await api('dun-skill', 'POST', { kind });
   if (!r.ok) return toast(r.error, 'bad');
   if (r.fight) { setDunFight(r.fight); updateDunUI(); }
-  if (r.skillText) { toast(r.skillText, 'info'); sfx('crit'); vibe([15, 30, 20]); }
+  if (r.skillText) toast(r.skillText, 'info');
 }
 async function maybeFinishDun() {
   if (dunFinishing || !dunF || dunF.status !== 'active') return;
@@ -2771,8 +2800,9 @@ el('panel').addEventListener('click', e => {
   if (e.target.closest('[data-battle-min]')) { battleMin = true; document.body.classList.remove('in-battle'); return el('panel').scrollIntoView({ block: 'start' }); }
   const ds = e.target.closest('[data-dun-start]'); if (ds) return act(doDunStart, ds);
   const dl = e.target.closest('[data-dun-leave]'); if (dl) return act(doDunLeave, dl);
-  const dw = e.target.closest('[data-dswap]'); if (dw) return act(() => doDunSwap(dw.dataset.dswap), dw);
-  const dk = e.target.closest('[data-dskill]'); if (dk) return act(() => doDunSkill(dk.dataset.dskill), dk);
+  // 던전 교체·스킬은 전역 act() busy 락(450ms)을 쓰지 않는다 — 안 그러면 교체 직후 스킬/교체가 반 초간 막혀 피지컬 콤보가 안 된다.
+  const dw = e.target.closest('[data-dswap]'); if (dw) return dunAct(() => doDunSwap(dw.dataset.dswap), dw);
+  const dk = e.target.closest('[data-dskill]'); if (dk) return dunAct(() => doDunSkill(dk.dataset.dskill), dk);
   const pk = e.target.closest('[data-pick]'); if (pk) return act(() => doOpenBox(+pk.dataset.pick), pk, { quiet: true });
   if (e.target.closest('[data-box-again]')) { boxReveal = null; boxEnter = true; return paintPrism(); }
   const at = e.target.closest('[data-alch-tier]');
@@ -2893,6 +2923,35 @@ el('delGo').onclick = () => act(async () => {
   el('pin').value = '';       // 지운 계정의 PIN 이 입력칸에 남지 않게
   toast(r.msg, 'ok');
 }, el('delGo'));
+
+/* 🔑 PIN 변경 — 서버가 새 토큰을 돌려주면 이 기기는 그대로 유지되고(토큰 교체), 다른 기기는 끊긴다. */
+const onlyDigits = e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 8); checkPinForm(); };
+function checkPinForm() {
+  const cur = el('pinCur').value, nw = el('pinNew').value, nw2 = el('pinNew2').value, msg = el('pinMsg');
+  let why = '';
+  if (nw && !/^\d{8}$/.test(nw)) why = '새 PIN은 숫자 8자리예요.';
+  else if (nw && nw2 && nw !== nw2) why = '새 PIN 확인이 일치하지 않아요.';
+  else if (nw && cur && nw === cur) why = '지금 쓰는 PIN과 같아요.';
+  msg.textContent = why; msg.hidden = !why;
+  el('pinGo').disabled = !(/^\d{8}$/.test(cur) && /^\d{8}$/.test(nw) && nw === nw2 && nw !== cur);
+}
+el('pinItem').onclick = () => {
+  closeMenu(); if (!me) return;
+  el('pinCur').value = el('pinNew').value = el('pinNew2').value = '';
+  el('pinMsg').hidden = true; el('pinGo').disabled = true;
+  el('pinModal').hidden = false; setTimeout(() => el('pinCur').focus(), 60);
+};
+['pinCur', 'pinNew', 'pinNew2'].forEach(k => el(k).addEventListener('input', onlyDigits));
+el('pinCancel').onclick = el('pinClose').onclick = () => { el('pinModal').hidden = true; };
+el('pinGo').onclick = () => act(async () => {
+  const r = await api('change-pin', 'POST', { curPin: el('pinCur').value, newPin: el('pinNew').value });
+  if (!r.ok) return toast(r.error, 'bad');
+  if (r.token) { token = r.token; localStorage.setItem('token', token); }   // 옛 토큰은 서버에서 무효화됨 → 새 토큰으로 교체
+  if (r.me) applyMe(r.me);
+  el('pinModal').hidden = true;
+  el('pinCur').value = el('pinNew').value = el('pinNew2').value = '';
+  toast(r.msg, 'ok');
+}, el('pinGo'));
 updateSoundBtn();
 
 /* ---------- 이메일 계정 (Supabase Auth) ----------

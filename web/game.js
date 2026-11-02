@@ -1044,7 +1044,7 @@ function elementSkillView(el) { const s = ELEMENT_SKILLS[el]; const e = elementO
  * 상태는 players.data.dun 에 실린다(⚠️ level/gold/nick·일일 필드 이름은 저장 때 빠지므로 쓰지 않는다). */
 const DUNGEON = {
   floors: 50, sweepBack: 5, firstClearPrism: 3,
-  swapCooldown: 1200,                 // 전투 중 무기 교체 쿨타임(ms)
+  swapCooldown: 400,                  // 전투 중 무기 교체 쿨타임(ms) — 짧게(피지컬로 단계마다 약점 무기 바꾸며 깨게)
   baseDuration: 15000, phaseDuration: 5000,   // 전투 시간 = 15초 + 5초 × (단계 − 1)
   /* 보스 HP = 구간 시작값 × 성장률^(층 − 구간 첫 층).
    * ★0 무기 공격력은 +99 에서 멈추고 ★ 무기는 전투 레벨로 계속 세지므로, 깊은 층은 'HP(★ 진행)' 와 '상성 맞추기(단계마다 약점 무기)'
@@ -1698,6 +1698,36 @@ function authLink(db, playerId, uid, email) {
   p.email = (email || '').trim().toLowerCase() || null;
   if (!already) addLog(db, '🔗 ' + p.nick + ' 님이 이메일 계정을 연결했어요.');
   return { ok: true, id: playerId, linked: true };
+}
+// 🔑 PIN 변경 — 계정 식별값(id)이 PIN 해시(pinKey)라서, 사실상 '플레이어 행의 키를 바꾸는' 작업이다.
+//   메모리에선 플레이어를 새 키로 옮기고 닉 색인·파티(파티장·멤버·대기 초대)의 id 를 바꾼다.
+//   DB(세션·일일·상한·옛 플레이어 행) 정리와 새 세션 발급은 저장 계층이 oldId/newId 로 처리한다.
+//   현재 PIN 을 확인받아야 바꿀 수 있다(임시 PIN 을 받은 유저가 자기 PIN 으로 교체하는 흐름).
+function changePin(db, id, curPin, newPin) {
+  const p = db.players[id] && norm(db.players[id]);
+  if (!p) return { ok: false, error: '로그인이 필요합니다.' };
+  curPin = (curPin || '').trim(); newPin = (newPin || '').trim();
+  if (pinKey(curPin) !== id) return { ok: false, error: '현재 PIN이 올바르지 않아요.' };
+  if (!/^\d{8}$/.test(newPin)) return { ok: false, error: '새 PIN은 숫자 8자리여야 해요.' };
+  const newId = pinKey(newPin);
+  if (newId === id) return { ok: false, error: '지금 쓰는 PIN과 같아요. 다른 PIN을 입력하세요.' };
+  if (db.players[newId]) return { ok: false, error: '이 PIN은 이미 다른 캐릭터가 쓰고 있어요. 다른 PIN을 입력하세요.' };
+  // 전투 중이면 raid.participants[].id / 던전 상태가 꼬인다 — 끝난 뒤에
+  const pt = p.party && db.parties[p.party];
+  if (pt && pt.raid && pt.raid.status === 'active') return { ok: false, error: '레이드가 끝난 뒤에 PIN을 바꿀 수 있어요.' };
+  if (inDungeonFight(p)) return { ok: false, error: '던전 전투 중에는 PIN을 바꿀 수 없어요.' };
+  // 메모리에서 새 키로 이사 + 닉 색인 갱신(같은 닉 → 새 id)
+  db.players[newId] = p; delete db.players[id];
+  indexNick(db, p.nick, newId);
+  // 파티 안의 id 전부 교체(내 파티뿐 아니라 남이 보낸 대기 초대까지)
+  for (const pid in db.parties) {
+    const q = db.parties[pid]; if (!q) continue;
+    if (q.leader === id) q.leader = newId;
+    if (Array.isArray(q.members)) q.members = q.members.map(x => (x === id ? newId : x));
+    if (Array.isArray(q.pending)) q.pending = q.pending.map(x => (x === id ? newId : x));
+  }
+  // 공개 로그에는 남기지 않는다(보안 행위를 모두에게 알릴 필요 없음)
+  return { ok: true, oldId: id, newId, msg: '🔑 PIN을 바꿨어요! 다른 기기는 새 PIN으로 다시 로그인해야 해요.' };
 }
 function setClass(db, id, cls) {
   const p = norm(db.players[id]);
@@ -2711,7 +2741,7 @@ module.exports = {
   ELEMENTS, elemMult, elementChart, ELEMENT_SKILLS, DUNGEON, dunFloor, dunHp, weekKey, buyReroll,
   dungeonView, dunStart, dunHit, dunSkill, dunSwap, dunFinish, dunLeave,
   profile, ranking, goldRanking, hogu, recentLog, playerList, findByNick,
-  findByAuthUid, authLink, deleteAccount,
+  findByAuthUid, authLink, deleteAccount, changePin,
   // 저장 계층(server.js)용 — 일일 카운터 / 유저별 상한
   today, normalizeDay, LIMIT_KEYS, DAILY_FIELDS, limitOf, setLimits, dailyUsage, applyDaily, norm,
   // 서버리스(Vercel/Supabase) 어댑터용
