@@ -210,6 +210,24 @@ async function handle(method, pathname, ctx) {
       await store.deletePlayerRows(q, id);
       return ok({ ok: true, msg: r.msg, wasLinked: r.wasLinked });
     }
+    // 🔑 PIN 변경 — id(=PIN 해시)를 바꾼다. 삭제처럼 파티까지 잠그고, 성공 시 옛 행 정리 + 새 세션 발급.
+    if (pathname === '/api/change-pin') {
+      const b = ctx.body || {};
+      if (ctx.rateLimit !== false && !await store.rateAllow(q, 'act:' + id, RL.action.cap, RL.action.refill)) return tooFast();
+      const prow = await q("SELECT data->>'party' AS pid FROM players WHERE id = $1", [id]);
+      const pid = prow.length ? prow[0].pid : null;
+      let memberIds = [];
+      if (pid) {
+        const prt = await q('SELECT data FROM parties WHERE id = $1', [pid]);
+        if (prt.length) { const d = typeof prt[0].data === 'string' ? JSON.parse(prt[0].data) : prt[0].data; memberIds = (d && d.members) || []; }
+      }
+      const { r, db } = await store.runGame(q, { lockId: id, lockPlayerIds: memberIds, lockPartyIds: pid ? [pid] : [] }, (d) => game.changePin(d, id, b.curPin, b.newPin));
+      if (!r.ok) return bad(r);
+      await store.rekeyPlayerRows(q, r.oldId, r.newId);   // 옛 세션 전부 끊김 → 이 기기도 새 토큰으로 유지
+      const token = newToken();
+      await store.putSession(q, token, r.newId);
+      return ok({ ok: true, token, msg: r.msg, me: game.publicView(db, r.newId) });
+    }
     if (ctx.rateLimit !== false && !await store.rateAllow(q, 'act:' + id, RL.action.cap, RL.action.refill)) return tooFast();
     if (NOT_YET.has(pathname)) return bad({ ok: false, error: '이 기능은 아직 서버리스 버전으로 이식 중이에요. (곧 지원)' }, 501);
 

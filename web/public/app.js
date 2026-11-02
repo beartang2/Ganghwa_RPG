@@ -10,6 +10,7 @@ const PATCH = {
   version: '6',
   title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
+    '🔑 <b>PIN 변경</b> — ⚙️설정 → 🔑 PIN 변경에서 로그인 PIN을 바꿀 수 있어요. 현재 PIN을 확인하고 새 PIN(숫자 8자리)으로 교체해요. 캐릭터·기록은 그대로, 다른 기기는 새 PIN으로 다시 로그인해요',
     '📜 <b>알림 위치 변경</b> — 알림이 화면 위를 가려 골드·💎가 안 보이던 문제. 이제 왼쪽에 로그처럼 쌓여 올라가요(휴대폰은 화면 왼쪽 가운데 · 넓은 화면은 빈 여백이나 무기 그림 판 안)',
     '💰 <b>프리즘 무기 강화 비용·사냥</b> — ★당 100레벨로 계산해요. ★1 +0 강화 1회 1,020G(예전 36G) · ★1 +99 2,010G. 대신 사냥 몬스터·골드도 100레벨 위로 나와요(★1 하루 사냥 약 10만G)',
     '💎 <b>프리즘 무기</b> — 초월(★)하면 무기가 <b>💎 프리즘 등급</b>으로 다시 태어나요! +0부터 다시 올리지만 <b>힘은 이어져요</b>(+99에서 초월 = 100레벨, ★당 100레벨 — 레이드·던전·싸움 모두). 속성도 그대로. 강화 성공률은 강화 수치와 상관없이 <b>0.5% 고정</b>, 실패해서 금이 가도 <b>−1강</b>만(장인의 기운 유지)',
@@ -2893,6 +2894,35 @@ el('delGo').onclick = () => act(async () => {
   el('pin').value = '';       // 지운 계정의 PIN 이 입력칸에 남지 않게
   toast(r.msg, 'ok');
 }, el('delGo'));
+
+/* 🔑 PIN 변경 — 서버가 새 토큰을 돌려주면 이 기기는 그대로 유지되고(토큰 교체), 다른 기기는 끊긴다. */
+const onlyDigits = e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 8); checkPinForm(); };
+function checkPinForm() {
+  const cur = el('pinCur').value, nw = el('pinNew').value, nw2 = el('pinNew2').value, msg = el('pinMsg');
+  let why = '';
+  if (nw && !/^\d{8}$/.test(nw)) why = '새 PIN은 숫자 8자리예요.';
+  else if (nw && nw2 && nw !== nw2) why = '새 PIN 확인이 일치하지 않아요.';
+  else if (nw && cur && nw === cur) why = '지금 쓰는 PIN과 같아요.';
+  msg.textContent = why; msg.hidden = !why;
+  el('pinGo').disabled = !(/^\d{8}$/.test(cur) && /^\d{8}$/.test(nw) && nw === nw2 && nw !== cur);
+}
+el('pinItem').onclick = () => {
+  closeMenu(); if (!me) return;
+  el('pinCur').value = el('pinNew').value = el('pinNew2').value = '';
+  el('pinMsg').hidden = true; el('pinGo').disabled = true;
+  el('pinModal').hidden = false; setTimeout(() => el('pinCur').focus(), 60);
+};
+['pinCur', 'pinNew', 'pinNew2'].forEach(k => el(k).addEventListener('input', onlyDigits));
+el('pinCancel').onclick = el('pinClose').onclick = () => { el('pinModal').hidden = true; };
+el('pinGo').onclick = () => act(async () => {
+  const r = await api('change-pin', 'POST', { curPin: el('pinCur').value, newPin: el('pinNew').value });
+  if (!r.ok) return toast(r.error, 'bad');
+  if (r.token) { token = r.token; localStorage.setItem('token', token); }   // 옛 토큰은 서버에서 무효화됨 → 새 토큰으로 교체
+  if (r.me) applyMe(r.me);
+  el('pinModal').hidden = true;
+  el('pinCur').value = el('pinNew').value = el('pinNew2').value = '';
+  toast(r.msg, 'ok');
+}, el('pinGo'));
 updateSoundBtn();
 
 /* ---------- 이메일 계정 (Supabase Auth) ----------

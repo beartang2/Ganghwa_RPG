@@ -155,6 +155,20 @@ async function deletePlayerRows(q, id) {
   await q('DELETE FROM rate_buckets WHERE key = $1', ['act:' + id]);
   await q('DELETE FROM players WHERE id = $1', [id]);
 }
+// 🔑 PIN 변경(= id 교체) 뒤처리: 새 플레이어 행은 persistDiff 가 이미 INSERT 했다.
+//   일일/상한은 새 id 로 옮기고(이미 새 id 행이 있으면 건너뜀 — persist 가 오늘치를 넣었을 수 있다),
+//   옛 세션은 모두 끊고(다른 기기 재로그인 유도), 옛 플레이어·레이트 행을 지운다.
+async function rekeyPlayerRows(q, oldId, newId) {
+  await q(`UPDATE player_daily SET player_id = $2 WHERE player_id = $1
+             AND NOT EXISTS (SELECT 1 FROM player_daily d WHERE d.player_id = $2 AND d.day = player_daily.day)`, [oldId, newId]);
+  await q('DELETE FROM player_daily WHERE player_id = $1', [oldId]);
+  await q(`UPDATE player_limits SET player_id = $2 WHERE player_id = $1
+             AND NOT EXISTS (SELECT 1 FROM player_limits WHERE player_id = $2)`, [oldId, newId]);
+  await q('DELETE FROM player_limits WHERE player_id = $1', [oldId]);
+  await q('DELETE FROM sessions WHERE player_id = $1', [oldId]);
+  await q('DELETE FROM rate_buckets WHERE key = $1', ['act:' + oldId]);
+  await q('DELETE FROM players WHERE id = $1', [oldId]);
+}
 
 /* ---------- 속도제한 (Postgres 토큰버킷) ----------
  * 같은 key 는 FOR UPDATE 로 직렬화(요청 트랜잭션 안에서 원자적 소모).
@@ -181,4 +195,4 @@ async function rateAllow(q, key, cap, refillPerSec) {
   return !!(rows[0] && rows[0].allowed);
 }
 
-module.exports = { loadAllDb, readDb, runGame, snapshot, persistDiff, lockPlayer, getSession, putSession, deleteSession, deletePlayerRows, playerData, rateAllow };
+module.exports = { loadAllDb, readDb, runGame, snapshot, persistDiff, lockPlayer, getSession, putSession, deleteSession, deletePlayerRows, rekeyPlayerRows, playerData, rateAllow };

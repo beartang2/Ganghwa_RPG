@@ -562,6 +562,24 @@ const server = http.createServer(async (req, res) => {
       save(); invalidateReads(); markRefresh();   // 파티 해산 등은 다음 persist 가 반영
       return sendJson(res, 200, { ok: true, msg: r.msg, wasLinked: r.wasLinked });
     }
+    if (req.method === 'POST' && p === '/api/change-pin') {
+      if (!allowAction(id)) return sendJson(res, 429, { ok: false, error: '너무 빠릅니다. 잠시 후 다시 시도하세요.' });
+      const b = await readBody(req);
+      const r = game.changePin(db, id, b.curPin, b.newPin);
+      if (!r.ok) return sendJson(res, 400, r);
+      // 🔑 id 교체 — 새 플레이어·일일 행은 다음 save() 가 넣는다. 옛 행은 직접 정리하고(일일·상한은 옮김), 새 세션을 발급.
+      sqlite.prepare(`UPDATE player_daily SET player_id=@n WHERE player_id=@o
+                        AND NOT EXISTS (SELECT 1 FROM player_daily d WHERE d.player_id=@n AND d.day=player_daily.day)`).run({ n: r.newId, o: r.oldId });
+      sqlite.prepare(`UPDATE player_limits SET player_id=@n WHERE player_id=@o
+                        AND NOT EXISTS (SELECT 1 FROM player_limits WHERE player_id=@n)`).run({ n: r.newId, o: r.oldId });
+      deletePlayerStmt.run(r.oldId); deleteDailyStmt.run(r.oldId); deleteLimits.run(r.oldId);
+      writtenPlayer.delete(r.oldId); writtenDaily.delete(r.oldId); buckets.delete(r.oldId);
+      for (const [t, sv] of sessions) if (sv.id === r.oldId) sessions.delete(t);   // 모든 기기 로그아웃
+      const set = clients.get(r.oldId); if (set) { for (const c of set) c.end(); clients.delete(r.oldId); }
+      save(); invalidateReads(); markRefresh();
+      const token = newToken(); putSession(token, r.newId);   // 이 기기는 새 토큰으로 유지
+      return sendJson(res, 200, { ok: true, token, msg: r.msg, me: game.publicView(db, r.newId) });
+    }
     if (req.method === 'POST') {
       if (!allowAction(id)) return sendJson(res, 429, { ok: false, error: '너무 빠릅니다. 잠시 후 다시 시도하세요.' });
       let r;

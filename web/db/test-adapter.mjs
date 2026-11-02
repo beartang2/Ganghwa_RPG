@@ -638,6 +638,37 @@ async function main() {
     ok(best * GAME.CONFIG.dailyRaids >= need, '★' + n + ' → ★' + (n + 1) + ': 하루 ' + GAME.CONFIG.dailyRaids + '회 × 🌟' + best + ' = ' + best * GAME.CONFIG.dailyRaids + ' ≥ ' + need);
   }
 
+  // 🔑 PIN 변경 — id(해시) 교체: 새 PIN 으로 로그인되고 옛 PIN 은 막히며 진행도·세션이 이어진다
+  console.log('\n[PIN 변경]');
+  {
+    let lr = await req('POST', '/api/login', { body: { nick: '핀변경', pin: '12121212' } });
+    const pt = lr.body.token;
+    await req('POST', '/api/setclass', { token: pt, body: { class: 'warrior' } });
+    await q("UPDATE players SET gold = 777777 WHERE nick = '핀변경'");
+    const oldId = GAME.pinKey('12121212'), newId = GAME.pinKey('34343434');
+    let cr = await req('POST', '/api/change-pin', { token: pt, body: { curPin: '00000000', newPin: '34343434' } });
+    ok(!cr.body.ok && /현재 PIN/.test(cr.body.error), '현재 PIN 틀리면 거부');
+    cr = await req('POST', '/api/change-pin', { token: pt, body: { curPin: '12121212', newPin: '999' } });
+    ok(!cr.body.ok && /8자리/.test(cr.body.error), '새 PIN 8자리 아니면 거부');
+    cr = await req('POST', '/api/change-pin', { token: pt, body: { curPin: '12121212', newPin: '34343434' } });
+    ok(cr.body.ok && cr.body.token && cr.body.token !== pt, 'PIN 변경 성공 → 새 토큰 발급');
+    const rows = await q('SELECT id FROM players WHERE nick = $1', ['핀변경']);
+    ok(rows.length === 1 && rows[0].id === newId, 'players 행이 새 id(해시) 하나로만 존재 (옛 id 삭제)');
+    ok((await q('SELECT count(*)::int n FROM players WHERE id = $1', [oldId]))[0].n === 0, '옛 id 플레이어 행 없음');
+    ok((await q('SELECT count(*)::int n FROM sessions WHERE player_id = $1', [oldId]))[0].n === 0, '옛 id 세션 전부 삭제');
+    const meNew = (await req('GET', '/api/me', { token: cr.body.token })).body.me;
+    ok(meNew && Number(meNew.gold) === 777777 && meNew.nick === '핀변경', '새 토큰으로 진행도(골드·닉) 그대로');
+    ok((await req('GET', '/api/me', { token: pt })).status === 401, '옛 토큰은 무효(401)');
+    ok(!(await req('POST', '/api/login', { body: { nick: '핀변경', pin: '12121212' } })).body.ok, '옛 PIN 으로는 로그인 불가');
+    const re = await req('POST', '/api/login', { body: { nick: '핀변경', pin: '34343434' } });
+    ok(re.body.ok && !re.body.isNew && Number(re.body.me.gold) === 777777, '새 PIN 으로 로그인 → 같은 캐릭터 복원');
+    // 이미 쓰는 PIN 으로는 못 바꾼다
+    await req('POST', '/api/login', { body: { nick: '충돌상대', pin: '56565656' } });
+    const ct = (await req('POST', '/api/login', { body: { nick: '핀변경', pin: '34343434' } })).body.token;
+    const dup = await req('POST', '/api/change-pin', { token: ct, body: { curPin: '34343434', newPin: '56565656' } });
+    ok(!dup.body.ok && /이미/.test(dup.body.error), '다른 캐릭터가 쓰는 PIN 으로는 변경 거부');
+  }
+
   console.log('\n결과: ' + pass + ' pass, ' + fail + ' fail');
   process.exit(fail ? 1 : 0);
 }
