@@ -10,7 +10,7 @@ const PATCH = {
   version: '6',
   title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
-    '🎨 <b>닉네임 색 도감</b> — 염색약으로 뽑은 색이 이제 <b>사라지지 않고 모여요</b>! 📇프로필 → 🎨닉네임 색에서 모은 색을 눌러 <b>언제든 무료로 바꿔요</b>(기본 흰색 포함). 이미 가진 색이 또 나오면 💰<b>1,000G 환급</b> · 🫧프리즘 오로라도 영구 보관(중복 시 💎20 환급) · 염색약 값 2,000→<b>3,000G</b>',
+    '🎨 <b>닉네임 색 도감</b> — 염색약으로 뽑은 색이 이제 <b>사라지지 않고 모여요</b>! 📇프로필 → 🎨닉네임 색에서 모은 색을 눌러 <b>언제든 무료로 바꿔요</b>(기본 흰색 포함). 이미 가진 색이 또 나오면 💰<b>1,000G 환급</b> · 🫧프리즘 오로라는 <b>한 번만 사면 영구 소장</b>(이미 있으면 상점에서 \'보유 중\') · 염색약 값 2,000→<b>3,000G</b>',
     '🛠️ <b>고침 · 다듬기</b> — 🔨 <b>장인의 기운 100%인데 실패</b>하던 문제(99.6%도 반올림돼 100%로 보였어요 — 이제 진짜 100%일 때만 100%·확정) · 탭을 옮길 때마다 직전 강화 연출이 다시 재생되던 문제 · 🌌 초월 던전 <b>무기 교체·스킬이 훨씬 빨라져요</b>(교체 쿨 1.2초→0.4초 + 교체 직후 다음 동작이 막히던 지연 제거 — 피지컬로 콤보!) · 같은 알림이 줄줄이 쌓이면 <b>×N</b>으로 합쳐요',
     '🔑 <b>PIN 변경</b> — ⚙️설정 → 🔑 PIN 변경에서 로그인 PIN을 바꿀 수 있어요. 현재 PIN을 확인하고 새 PIN(숫자 8자리)으로 교체해요. 캐릭터·기록은 그대로, 다른 기기는 새 PIN으로 다시 로그인해요',
     '📜 <b>알림 위치 변경</b> — 알림이 화면 위를 가려 골드·💎가 안 보이던 문제. 이제 왼쪽에 로그처럼 쌓여 올라가요(휴대폰은 화면 왼쪽 가운데 · 넓은 화면은 빈 여백이나 무기 그림 판 안)',
@@ -966,7 +966,7 @@ async function doCapsule(times) {
 function pshopHTML(d) {
   return '<p class="hint" style="margin:0 0 10px">💎 프리즘으로만 살 수 있는 물건이에요.</p>' + d.shop.map(it =>
     `<div class="raid-boss"><span class="bemoji">${it.emoji}</span>
-      <div class="binfo"><div class="bname">${it.nickPreview ? `<span class="nick-${it.nickPreview}">${esc(it.name)}</span>` : esc(it.name)} ${it.soldOut ? '<span class="shop-lim off">최대</span>' : `<small class="pprice">💎 ${it.price}</small>`}</div>
+      <div class="binfo"><div class="bname">${it.nickPreview ? `<span class="nick-${it.nickPreview}">${esc(it.name)}</span>` : esc(it.name)} ${it.soldOut ? `<span class="shop-lim off">${esc(it.soldLabel || '최대')}</span>` : `<small class="pprice">💎 ${it.price}</small>`}</div>
         ${it.locked ? `<div class="plock">🔒 ${esc(it.lockMsg)} 필요</div>` : ''}<div class="bstat">${esc(it.desc)}</div></div>
       <button class="btn sm primary" data-pbuy="${it.id}" ${it.soldOut || it.locked || d.prism < it.price ? 'disabled' : ''}>구매</button></div>`).join('');
 }

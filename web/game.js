@@ -44,7 +44,7 @@ const CONFIG = {
   rerollPrice: 100000, rerollLevelPct: 0.10, rerollMinGrade: 'epic',
   dyePrice: 3000,
   dyeRefund: 1000,       // 🎨 이미 가진 색이 또 나오면 골드 환급 — 가격의 1/3이라 순비용(2,000G)은 남아서 가벼운 싱크 유지
-  prismDyeRefund: 20,    // 🫧 프리즘 오로라를 이미 가졌는데 또 쓰면 💎 소액 환급(60의 1/3)
+                         // (🫧 프리즘 오로라는 일회성 소장이라 환급이 아니라 상점에서 '보유 중'으로 판매를 막는다 — prismShopItems)
   // 강화(로스트아크식) — 파괴 시 완전 초기화(+0)
   pityBase: 0.015,      // 장인의 기운 기본 상승폭(실패당) — 저확률에서도 결국 참
   pityScale: 0.34,      // + 성공률 비례분(성공률 높을수록 살짝 더 빨리 참)
@@ -742,20 +742,15 @@ function useItem(db, id, itemId) {
     return { ok: true, used: 'hammer', msg: '🔨 쾅! 장인의 기운 ' + Math.round(p.pity * 100) + '%' };
   }
   if (itemId === 'prismdye') {
-    takeItem(p, 'prismdye', 1);
     // 염색약 뽑기에서는 절대 나오지 않는 프리즘 상점 전용 색 — 칭호 조건(무지개 등)과는 무관
     const color = { kind: 'prism', name: '프리즘 오로라', rarity: '프리즘' };
-    // 이미 오로라를 가졌으면(컬렉션에 있음) 다시 사도 💎 소액 환급 — 비싼 재화가 그냥 날아가지 않게
-    if (ownsColor(p, color)) {
-      p.prism = (p.prism || 0) + CONFIG.prismDyeRefund;
-      addLog(db, '🫧 ' + p.nick + ' 프리즘 오로라 (중복 · 💎' + CONFIG.prismDyeRefund + ' 환급)');
-      return { ok: true, used: 'prismdye', dup: true, refund: CONFIG.prismDyeRefund,
-        msg: '🫧 이미 프리즘 오로라를 가지고 있어요 · 💎' + CONFIG.prismDyeRefund + ' 환급' };
-    }
+    // 오로라는 일회성 소장 — 이미 가졌으면 소모하지 않고 안내만(프로필에서 무료 교체). 손해 0.
+    if (ownsColor(p, color)) return { ok: false, error: '이미 🫧 프리즘 오로라를 가지고 있어요. 📇프로필 → 🎨닉네임 색에서 바로 꺼내 쓰세요.' };
+    takeItem(p, 'prismdye', 1);
     p.colorInv = (p.colorInv || []).concat([color]); // 컬렉션에 영구 추가 — 이후 프로필에서 무료로 꺼내 쓴다
     p.nickColor = color;
     addLog(db, '🫧 ' + p.nick + ' 프리즘 오로라 닉네임!');
-    return { ok: true, used: 'prismdye', dup: false, msg: '🫧 닉네임이 프리즘 오로라색이 됐어요!' };
+    return { ok: true, used: 'prismdye', msg: '🫧 닉네임이 프리즘 오로라색이 됐어요!' };
   }
   if (itemId === 'eltkt') {
     // 🔁 속성 재련 — 에픽 이상 무기만. 강화 수치의 일정 %(내림, 최소 1)를 내고 속성을 무작위로(지금 속성 제외) 다시 뽑는다.
@@ -979,11 +974,14 @@ function capsule(db, id, times) {
 // 💎 프리즘 상점
 function prismShopItems(p) {
   const su = slotUnlock(p || {});
+  const hasAurora = ownsColor(p || {}, { kind: 'prism' });   // 🫧 오로라는 일회성 — 이미 가졌으면 판매 종료(보유 중)
   return [
     { id: 'slot', emoji: '🗡️', name: '장비 칸 +1', price: su.price, soldOut: su.maxed,
       locked: !su.maxed && !su.ok, lockMsg: su.maxed ? '' : slotLockMsg(su),
       desc: '+' + CONFIG.maxLevel + ' 을 찍은 무기 한 자루마다 한 칸(★ 초월 무기 포함). 새 직업 무기를 +0·★0부터 따로 키워요 · 영구 · 최대 ' + CONFIG.weaponSlotsMax + '칸' },
-    { id: 'prismdye', emoji: ITEMS.prismdye.emoji, name: ITEMS.prismdye.name, price: 60, desc: ITEMS.prismdye.desc, nickPreview: 'prism' },
+    { id: 'prismdye', emoji: ITEMS.prismdye.emoji, name: ITEMS.prismdye.name, price: 60, nickPreview: 'prism',
+      soldOut: hasAurora, soldLabel: '보유 중', soldMsg: '이미 🫧 프리즘 오로라를 가지고 있어요 · 📇프로필 → 🎨닉네임 색에서 바로 꺼내 써요',
+      desc: hasAurora ? '보유 중 · 프로필에서 무료 교체' : ITEMS.prismdye.desc + ' · 한 번만 사면 영구 소장' },
     { id: 'hammer', emoji: ITEMS.hammer.emoji, name: ITEMS.hammer.name, price: 8, desc: ITEMS.hammer.desc },
     { id: 'ascpack', emoji: '🎁', name: '초월 꾸러미', price: 25, desc: ITEMS.shard.emoji + ' 초월의 파편 30 + ' + ITEMS.essence.emoji + ' 초월의 정수 3' },
   ];
@@ -998,7 +996,7 @@ function buyPrism(db, id, itemId) {
   const p = norm(db.players[id]);
   const it = prismShopItems(p).find(x => x.id === itemId);
   if (!it) return { ok: false, error: '없는 상품이에요.' };
-  if (it.soldOut) return { ok: false, error: '장비 칸이 이미 최대(' + CONFIG.weaponSlotsMax + '칸)예요.' };
+  if (it.soldOut) return { ok: false, error: it.soldMsg || ('장비 칸이 이미 최대(' + CONFIG.weaponSlotsMax + '칸)예요.') };
   if (it.locked) return { ok: false, error: '🔒 장비 칸은 +' + CONFIG.maxLevel + ' 무기 한 자루마다 하나씩 열려요 (' + it.lockMsg + ')' };
   if ((p.prism || 0) < it.price) return { ok: false, error: '💎 프리즘 부족! (필요 ' + it.price + ' / 보유 ' + (p.prism || 0) + ')' };
   if (itemId === 'prismdye' || itemId === 'hammer') {

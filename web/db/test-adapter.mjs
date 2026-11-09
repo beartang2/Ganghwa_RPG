@@ -626,12 +626,16 @@ async function main() {
     ok(cp.colorInv.length === 1, '기본으로 되돌려도 모은 색은 안 사라진다');
     ok(GAME.equipColor(cdb, 'c', key).ok && GAME.colorKey(cp.nickColor) === key, '보유한 색으로 무료 교체');
     ok(!GAME.equipColor(cdb, 'c', 'rainbow').ok, '가지고 있지 않은 색은 교체 거부');
-    // 🫧 프리즘 오로라 — 영구 보관 · 중복 시 💎 환급(덮어쓰지 않음)
+    // 🫧 프리즘 오로라 — 일회성 소장. 미보유 땐 상점 판매 중, 보유하면 판매 종료(보유 중)
+    ok(GAME.prismShopItems(cp).find(x => x.id === 'prismdye').soldOut === false, '오로라 미보유 → 상점에서 프리즘 염색약 판매 중');
     const q1 = GAME.useItem(cdb, 'c', 'prismdye');
-    ok(q1.ok && !q1.dup && cp.colorInv.some(x => x.kind === 'prism') && cp.nickColor.kind === 'prism', '프리즘 오로라 획득 → 컬렉션 영구 보관');
-    const prAfter = cp.prism;
+    ok(q1.ok && cp.colorInv.some(x => x.kind === 'prism') && cp.nickColor.kind === 'prism', '프리즘 오로라 획득 → 컬렉션 영구 소장');
+    const shopDye = GAME.prismShopItems(cp).find(x => x.id === 'prismdye');
+    ok(shopDye.soldOut === true && shopDye.soldLabel === '보유 중', '오로라 보유 → 상점에서 판매 종료(보유 중)');
+    ok(!GAME.buyPrism(cdb, 'c', 'prismdye').ok, '오로라 보유 중이면 프리즘 염색약 재구매 거부');
+    const dyeLeft = cp.inv.items.prismdye;
     const q2 = GAME.useItem(cdb, 'c', 'prismdye');
-    ok(q2.ok && q2.dup && cp.prism === prAfter + GAME.CONFIG.prismDyeRefund && cp.colorInv.filter(x => x.kind === 'prism').length === 1, '오로라 중복 → 💎' + GAME.CONFIG.prismDyeRefund + ' 환급 · 중복 저장 안 함');
+    ok(!q2.ok && cp.inv.items.prismdye === dyeLeft && cp.colorInv.filter(x => x.kind === 'prism').length === 1, '남은 프리즘 염색약을 또 써도 소모 안 함(손해 0) · 중복 저장 안 함');
     // 기존 유저 이관 — nickColor 만 있고 colorInv 가 없던 데이터
     const op = GAME.makePlayer('옛유저'); op.nickColor = { kind: 'gold', name: '금색', rarity: '금색' }; delete op.colorInv;
     GAME.norm(op);
