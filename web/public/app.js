@@ -10,6 +10,7 @@ const PATCH = {
   version: '6',
   title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
+    '🎨 <b>닉네임 색 도감</b> — 염색약으로 뽑은 색이 이제 <b>사라지지 않고 모여요</b>! 📇프로필 → 🎨닉네임 색에서 모은 색을 눌러 <b>언제든 무료로 바꿔요</b>(기본 흰색 포함). 이미 가진 색이 또 나오면 💰<b>1,000G 환급</b> · 🫧프리즘 오로라도 영구 보관(중복 시 💎20 환급) · 염색약 값 2,000→<b>3,000G</b>',
     '🛠️ <b>고침 · 다듬기</b> — 🔨 <b>장인의 기운 100%인데 실패</b>하던 문제(99.6%도 반올림돼 100%로 보였어요 — 이제 진짜 100%일 때만 100%·확정) · 탭을 옮길 때마다 직전 강화 연출이 다시 재생되던 문제 · 🌌 초월 던전 <b>무기 교체·스킬이 훨씬 빨라져요</b>(교체 쿨 1.2초→0.4초 + 교체 직후 다음 동작이 막히던 지연 제거 — 피지컬로 콤보!) · 같은 알림이 줄줄이 쌓이면 <b>×N</b>으로 합쳐요',
     '🔑 <b>PIN 변경</b> — ⚙️설정 → 🔑 PIN 변경에서 로그인 PIN을 바꿀 수 있어요. 현재 PIN을 확인하고 새 PIN(숫자 8자리)으로 교체해요. 캐릭터·기록은 그대로, 다른 기기는 새 PIN으로 다시 로그인해요',
     '📜 <b>알림 위치 변경</b> — 알림이 화면 위를 가려 골드·💎가 안 보이던 문제. 이제 왼쪽에 로그처럼 쌓여 올라가요(휴대폰은 화면 왼쪽 가운데 · 넓은 화면은 빈 여백이나 무기 그림 판 안)',
@@ -2631,6 +2632,7 @@ async function openProfile(nick) {
      <div class="pf-sub">${titleTag(eq)}<small>${esc(p.className || '')}</small></div>
      ${p.class && p.grade ? `<div class="pf-weapon">${weaponArtHTML(p)}</div>` : ''}
      ${titlesSection(p, isMe, eq)}
+     ${colorSection(p, isMe)}
      <div class="pf-line"><span>무기</span><b>${esc(p.weapon)}</b></div>
      ${p.weapons && p.weapons.list.length > 1 ? `<div class="pf-line"><span>보유 무기</span><b class="pf-arm">${p.weapons.list.filter(w => !w.equipped).map(w => w.classEmoji + ' ' + esc(w.name)).join('<br>')}</b></div>` : ''}
      <div class="pf-line"><span>프리즘</span><b>💎 ${(p.prism || 0).toLocaleString()}</b></div>
@@ -2653,7 +2655,27 @@ async function openProfile(nick) {
     el('modalBody').querySelectorAll('[data-title-id]').forEach(chip => {
       chip.onclick = () => doEquipTitle(chip.dataset.titleId);
     });
+    // 내 프로필: 색 칩 클릭 → 닉네임 색 무료 교체
+    el('modalBody').querySelectorAll('[data-color-key]').forEach(chip => {
+      chip.onclick = () => doEquipColor(chip.dataset.colorKey);
+    });
   }
+}
+// 🎨 닉네임 색 컬렉션 — 내 프로필에서만. 뽑아 모은 색을 칩으로 깔고, 누르면 그 색으로 무료 교체(기본=흰색).
+let keepColorsOpen = false;   // 교체 뒤 다시 그릴 때만 펼친 채로
+function colorSection(p, isMe) {
+  if (!isMe) return '';
+  const inv = p.colorInv || [];
+  if (!inv.length) return '';   // 아직 뽑은 색이 없으면 숨김(상점에서 🎨 염색약부터)
+  const eqKey = p.nickColorKey || '';
+  const open = keepColorsOpen ? ' open' : ''; keepColorsOpen = false;
+  const chip = (key, nc, label) =>
+    `<button class="color-chip${key === eqKey ? ' on' : ''}" data-color-key="${esc(key)}" title="${esc(label)}">${nickSpan(label, nc)}</button>`;
+  const chips = [chip('default', null, '기본')].concat(inv.map(c => chip(c.key, c, c.name))).join('');
+  return `<details class="pf-colors"${open}>
+       <summary>🎨 닉네임 색 <small>${inv.length}종 보유 · 눌러서 교체</small></summary>
+       <div class="color-grid">${chips}</div>
+     </details>`;
 }
 // 프로필 칭호 진열장 — 아코디언(<details>). 프로필을 열면 접혀 있고, 머리줄에 개수·장착 칭호만 보인다.
 // 내 프로필이면 펼쳐서 칭호를 눌러 장착/해제(미획득은 🔒), 남이면 획득한 칭호만.
@@ -2687,6 +2709,14 @@ async function doEquipTitle(titleId) {
   applyMe(r.me); render();
   keepTitlesOpen = true;   // 펼쳐 놓고 고르던 중이니 다시 그려도 펼친 채로
   openProfile(me.nick);  // 모달 새로고침(선택 상태 반영)
+  toast(r.msg, 'ok');
+}
+async function doEquipColor(key) {
+  const r = await withLoad(() => api('equip-color', 'POST', { key }));
+  if (!r.ok) return toast(r.error, 'bad');
+  applyMe(r.me); render();
+  keepColorsOpen = true;   // 색 고르던 중 — 다시 그려도 펼친 채로
+  openProfile(me.nick);    // 모달 새로고침(장착 표시 갱신)
   toast(r.msg, 'ok');
 }
 async function doRename() {

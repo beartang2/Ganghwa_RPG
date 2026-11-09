@@ -42,7 +42,9 @@ const CONFIG = {
   classChangePrice: 30000,   // (판매 종료 — 남은 변경권은 속성 재련권으로 이관)
   // 🔁 속성 재련권: 상점 골드 + 사용할 때 강화 수치의 일정 %. 에픽 이상 무기만.
   rerollPrice: 100000, rerollLevelPct: 0.10, rerollMinGrade: 'epic',
-  dyePrice: 2000,
+  dyePrice: 3000,
+  dyeRefund: 1000,       // 🎨 이미 가진 색이 또 나오면 골드 환급 — 가격의 1/3이라 순비용(2,000G)은 남아서 가벼운 싱크 유지
+  prismDyeRefund: 20,    // 🫧 프리즘 오로라를 이미 가졌는데 또 쓰면 💎 소액 환급(60의 1/3)
   // 강화(로스트아크식) — 파괴 시 완전 초기화(+0)
   pityBase: 0.015,      // 장인의 기운 기본 상승폭(실패당) — 저확률에서도 결국 참
   pityScale: 0.34,      // + 성공률 비례분(성공률 높을수록 살짝 더 빨리 참)
@@ -449,6 +451,23 @@ function rollDye() {
   if (r < 0.40) return { kind: 'glow', color: c.hex, name: c.name + ' 빛나는', rarity: 'glow' };
   return { kind: 'solid', color: c.hex, name: c.name, rarity: '기본' };
 }
+/* 색 하나의 고유 키 — 컬렉션 중복 판정·장착 교체에 쓴다.
+ *  solid·glow 는 8색이 따로라 '종류:이름'(glow 이름엔 ' 빛나는' 이 이미 붙어 유일).
+ *  은·금·무지개·프리즘은 한 가지뿐이라 종류 그대로가 키. */
+function colorKey(c) {
+  if (!c) return '';
+  return (c.kind === 'solid' || c.kind === 'glow') ? c.kind + ':' + c.name : c.kind;
+}
+function ownsColor(p, c) { const k = colorKey(c); return (p.colorInv || []).some(x => colorKey(x) === k); }
+// 프로필에서 보유한 색으로 무료 교체(또는 'default' 로 기본 흰색 복귀). 컬렉션은 그대로 유지된다.
+function equipColor(db, id, key) {
+  const p = norm(db.players[id]);
+  if (!key || key === 'default' || key === 'none') { p.nickColor = null; return { ok: true, nickColor: null, nickColorKey: '', msg: '닉네임 색을 기본으로 되돌렸어요.' }; }
+  const c = (p.colorInv || []).find(x => colorKey(x) === key);
+  if (!c) return { ok: false, error: '가지고 있지 않은 색이에요.' };
+  p.nickColor = c;
+  return { ok: true, nickColor: c, nickColorKey: colorKey(c), msg: '🎨 닉네임 색을 "' + c.name + '"(으)로 바꿨어요.' };
+}
 // 상점은 이제 '인벤토리에 아이템을 넣어주는' 창구다. 염색약·직업변경권은
 // 구매 즉시 발동하지 않고 인벤토리에서 useItem 으로 써야 한다.
 function shopItems() {
@@ -584,7 +603,7 @@ function gainGold(p, amount, raw) {
 const ITEMS = {
   protect:  { id: 'protect',  emoji: '🛡️', name: '파괴방지권',   kind: 'passive', desc: '파괴를 1회 자동으로 막아줍니다 (초월 ★1+ 무효)' },
   boost:    { id: 'boost',    emoji: '🍀', name: '강화 부스트권', kind: 'passive', desc: '강화 성공률 ' + CONFIG.boostMult + '배 (1개 = 1회 소모)' },
-  dye:      { id: 'dye',      emoji: '🎨', name: '닉네임 염색약', kind: 'use',     desc: '사용하면 닉네임 색을 랜덤으로 뽑아요' },
+  dye:      { id: 'dye',      emoji: '🎨', name: '닉네임 염색약', kind: 'use',     desc: '닉네임 색을 랜덤으로 뽑아 도감에 모아요 · 프로필에서 자유 교체 · 중복은 💰 환급' },
   eltkt:    { id: 'eltkt',    emoji: '🔁', name: '속성 재련권',   kind: 'use',     desc: '장착한 무기(🟣에픽 +25 이상)의 속성을 무작위로 다시 뽑아요 · 강화 수치의 ' + Math.round(CONFIG.rerollLevelPct * 100) + '%가 깎여요' },
   shard:    { id: 'shard',    emoji: '💠', name: '초월의 파편',   kind: 'mat',     desc: '몬스터 사냥 드랍 · 초월 승급 재료' },
   essence:  { id: 'essence',  emoji: '🌟', name: '초월의 정수',   kind: 'mat',     desc: '보스 레이드 확정 드랍 · 초월 승급 재료' },
@@ -700,12 +719,20 @@ function useItem(db, id, itemId) {
   if (itemCount(p, itemId) < 1) return { ok: false, error: it.name + '이(가) 없어요.' };
   if (itemId === 'dye') {
     takeItem(p, 'dye', 1);
-    p.dyeCount = (p.dyeCount || 0) + 1;              // 도전과제: 염색 횟수
+    p.dyeCount = (p.dyeCount || 0) + 1;              // 도전과제: 염색 횟수(중복이어도 '사용'은 했으니 센다)
     const dye = rollDye();
-    p.nickColor = dye;
-    if (dye.kind === 'rainbow') p.gotRainbow = true; // 도전과제: 무지개 획득
+    if (dye.kind === 'rainbow') p.gotRainbow = true; // 도전과제: 무지개 획득(한 번 뜨면 중복이어도 유지)
+    // 이미 가진 색이면 덮어쓰지 않고 골드 환급 — 뽑기가 '수집'이 돼서 아무 결과도 버려지지 않는다
+    if (ownsColor(p, dye)) {
+      p.gold += CONFIG.dyeRefund;
+      addLog(db, '🎨 ' + p.nick + ' 염색: ' + dye.name + ' (중복 · 💰' + CONFIG.dyeRefund.toLocaleString() + 'G 환급)');
+      return { ok: true, used: 'dye', dye, dup: true, refund: CONFIG.dyeRefund,
+        msg: '🎨 ' + dye.name + ' — 이미 가진 색! 💰' + CONFIG.dyeRefund.toLocaleString() + 'G 환급' };
+    }
+    p.colorInv = (p.colorInv || []).concat([dye]);   // 컬렉션에 영구 추가
+    p.nickColor = dye;                               // 새 색은 바로 장착(프로필에서 언제든 다른 색으로 교체)
     addLog(db, '🎨 ' + p.nick + ' 염색: ' + dye.name + (dye.rarity !== '기본' ? ' [' + dye.rarity + ']' : ''));
-    return { ok: true, used: 'dye', dye, msg: '🎨 염색 결과: ' + dye.name + ' [' + dye.rarity + ']' };
+    return { ok: true, used: 'dye', dye, dup: false, msg: '🎨 새 색 획득: ' + dye.name + ' [' + dye.rarity + ']' };
   }
   if (itemId === 'hammer') {
     if (p.level >= CONFIG.maxLevel) return { ok: false, error: '만렙 무기에는 쓸 필요가 없어요. 🌈 초월하세요!' };
@@ -717,9 +744,18 @@ function useItem(db, id, itemId) {
   if (itemId === 'prismdye') {
     takeItem(p, 'prismdye', 1);
     // 염색약 뽑기에서는 절대 나오지 않는 프리즘 상점 전용 색 — 칭호 조건(무지개 등)과는 무관
-    p.nickColor = { kind: 'prism', name: '프리즘 오로라', rarity: '프리즘' };
+    const color = { kind: 'prism', name: '프리즘 오로라', rarity: '프리즘' };
+    // 이미 오로라를 가졌으면(컬렉션에 있음) 다시 사도 💎 소액 환급 — 비싼 재화가 그냥 날아가지 않게
+    if (ownsColor(p, color)) {
+      p.prism = (p.prism || 0) + CONFIG.prismDyeRefund;
+      addLog(db, '🫧 ' + p.nick + ' 프리즘 오로라 (중복 · 💎' + CONFIG.prismDyeRefund + ' 환급)');
+      return { ok: true, used: 'prismdye', dup: true, refund: CONFIG.prismDyeRefund,
+        msg: '🫧 이미 프리즘 오로라를 가지고 있어요 · 💎' + CONFIG.prismDyeRefund + ' 환급' };
+    }
+    p.colorInv = (p.colorInv || []).concat([color]); // 컬렉션에 영구 추가 — 이후 프로필에서 무료로 꺼내 쓴다
+    p.nickColor = color;
     addLog(db, '🫧 ' + p.nick + ' 프리즘 오로라 닉네임!');
-    return { ok: true, used: 'prismdye', msg: '🫧 닉네임이 프리즘 오로라색이 됐어요!' };
+    return { ok: true, used: 'prismdye', dup: false, msg: '🫧 닉네임이 프리즘 오로라색이 됐어요!' };
   }
   if (itemId === 'eltkt') {
     // 🔁 속성 재련 — 에픽 이상 무기만. 강화 수치의 일정 %(내림, 최소 1)를 내고 속성을 무작위로(지금 속성 제외) 다시 뽑는다.
@@ -1487,6 +1523,8 @@ function norm(p) {
   if (p.raidDmg == null) p.raidDmg = 0;      // 단일 레이드 최고 기여 피해
   if (p.dyeCount == null) p.dyeCount = 0;
   if (p.gotRainbow == null) p.gotRainbow = false;
+  // 🎨 닉네임 색 컬렉션 — 기존 유저는 지금 끼고 있던 색을 컬렉션으로 이관(아무도 색을 잃지 않게)
+  if (!Array.isArray(p.colorInv)) p.colorInv = p.nickColor ? [p.nickColor] : [];
   if (!Array.isArray(p.masteredClasses)) p.masteredClasses = []; // +99 달성한 직업들
   if (p.equippedTitle === undefined) p.equippedTitle = null;     // 장착 칭호 id
   ensureArmory(p);                                               // 보관 무기(장비 칸)
@@ -1604,6 +1642,7 @@ function publicView(db, id) {
     ascendNext: ascendProgress(p),
     ascendBonus: { gold: starsOf(p) * CONFIG.ascendGoldBonus, atk: starsOf(p) * CONFIG.ascendAtkBonus, cost: starsOf(p) * CONFIG.ascendCostMult, succ: 1 - ascendSuccMult(p) },
     odds: od, luck: luckBonus(p), combatLevel: combatLevel(p), enhanceBoost: itemCount(p, 'boost'), pity: p.pity || 0, nickColor: p.nickColor || null,
+    colorInv: (p.colorInv || []).map(c => Object.assign({ key: colorKey(c) }, c)), nickColorKey: colorKey(p.nickColor),  // 🎨 보유 색 컬렉션 + 장착한 색 키(프로필 교체용)
     inv: invView(p), protectBuyLeft: protectBuyLeft(p), protectDailyBuy: CONFIG.protectDailyBuy,
     huntsLeft: huntsLeft(p), dailyHunts: limitOf(p, 'dailyHunts'),
     fightsLeft: fightsLeft(p), dailyFights: limitOf(p, 'dailyFights'),
@@ -2734,7 +2773,7 @@ module.exports = {
   partyCreate, partyJoin, partyLeave, partyList, partyView, raidStart,
   partyInvite, partyAccept, partyReject, myInvites, raidState,
   raidHit, raidSkill, raidFinish,
-  buyBoost, buyDye, buyClassChange, shopItems, equipTitle,
+  buyBoost, buyDye, buyClassChange, shopItems, equipTitle, equipColor, colorKey,
   newWeapon, equipWeapon, weaponsView, slotUnlock, openBox, alchemy, capsule, buyPrism, prismShopItems, prismInfo, prismView,
   BOX_TABLE, ALCHEMY, CAPSULE_TABLE,
   // 속성 상성 · 초월 던전
