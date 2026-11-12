@@ -609,6 +609,41 @@ async function main() {
     const er = GAME.enhance(pdb, 'p'); Math.random = realRandom;
     ok(er.ok && er.result === 'destroy' && pp.level === 59 && pp.pity > 0.4 && pp.element === 'water', '프리즘 무기 파괴 구간 = 금 감(−1강) · 기운 유지·상승 · 속성 유지');
   }
+  // 🎨 닉네임 색 컬렉션 — 중복 환급 · 무료 교체 · 기존 유저 이관
+  {
+    const cdb = { players: {}, parties: {}, log: [] };
+    const cp = GAME.makePlayer('색칠이'); GAME.norm(cp);
+    cp.inv.items = { dye: 5, prismdye: 5 }; cp.gold = 0; cp.prism = 0; cdb.players.c = cp;
+    const realRandom = Math.random; Math.random = () => 0.5;   // 같은 색이 반복해서 나오게 난수 고정
+    const d1 = GAME.useItem(cdb, 'c', 'dye');
+    ok(d1.ok && !d1.dup && cp.colorInv.length === 1 && GAME.colorKey(cp.nickColor) === GAME.colorKey(d1.dye), '새 색 획득 → 컬렉션 1종 · 바로 장착');
+    const goldBefore = cp.gold;
+    const d2 = GAME.useItem(cdb, 'c', 'dye');
+    Math.random = realRandom;
+    ok(d2.ok && d2.dup && cp.colorInv.length === 1 && cp.gold === goldBefore + GAME.CONFIG.dyeRefund, '같은 색 재뽑기 → 중복 · 컬렉션 그대로 · 💰' + GAME.CONFIG.dyeRefund + 'G 환급');
+    const key = GAME.colorKey(cp.nickColor);
+    ok(GAME.equipColor(cdb, 'c', 'default').ok && cp.nickColor === null, '기본(흰색)으로 무료 교체 — 컬렉션은 유지');
+    ok(cp.colorInv.length === 1, '기본으로 되돌려도 모은 색은 안 사라진다');
+    ok(GAME.equipColor(cdb, 'c', key).ok && GAME.colorKey(cp.nickColor) === key, '보유한 색으로 무료 교체');
+    ok(!GAME.equipColor(cdb, 'c', 'rainbow').ok, '가지고 있지 않은 색은 교체 거부');
+    // 🫧 프리즘 오로라 — 일회성 소장. 미보유 땐 상점 판매 중, 보유하면 판매 종료(보유 중)
+    ok(GAME.prismShopItems(cp).find(x => x.id === 'prismdye').soldOut === false, '오로라 미보유 → 상점에서 프리즘 염색약 판매 중');
+    const q1 = GAME.useItem(cdb, 'c', 'prismdye');
+    ok(q1.ok && cp.colorInv.some(x => x.kind === 'prism') && cp.nickColor.kind === 'prism', '프리즘 오로라 획득 → 컬렉션 영구 소장');
+    const shopDye = GAME.prismShopItems(cp).find(x => x.id === 'prismdye');
+    ok(shopDye.soldOut === true && shopDye.soldLabel === '보유 중', '오로라 보유 → 상점에서 판매 종료(보유 중)');
+    ok(!GAME.buyPrism(cdb, 'c', 'prismdye').ok, '오로라 보유 중이면 프리즘 염색약 재구매 거부');
+    const dyeLeft = cp.inv.items.prismdye;
+    const q2 = GAME.useItem(cdb, 'c', 'prismdye');
+    ok(!q2.ok && cp.inv.items.prismdye === dyeLeft && cp.colorInv.filter(x => x.kind === 'prism').length === 1, '남은 프리즘 염색약을 또 써도 소모 안 함(손해 0) · 중복 저장 안 함');
+    // 기존 유저 이관 — nickColor 만 있고 colorInv 가 없던 데이터
+    const op = GAME.makePlayer('옛유저'); op.nickColor = { kind: 'gold', name: '금색', rarity: '금색' }; delete op.colorInv;
+    GAME.norm(op);
+    ok(Array.isArray(op.colorInv) && op.colorInv.length === 1 && GAME.colorKey(op.colorInv[0]) === 'gold', '기존 유저: 끼고 있던 색이 컬렉션으로 이관(유실 없음)');
+    // 화면 전달 — colorInv(키 포함) · nickColorKey
+    const cv = GAME.publicView(cdb, 'c');
+    ok(Array.isArray(cv.colorInv) && cv.colorInv.every(x => x.key) && cv.nickColorKey === GAME.colorKey(cp.nickColor), 'me 응답에 colorInv(키 포함)·nickColorKey 전달');
+  }
   // ⚗️ 연금술 확률표 — 합이 1 · 꽝은 불이 셀수록 낮다
   {
     const A = GAME.ALCHEMY, sum = t => t.reduce((x, e) => x + e.p, 0), fail = a => a.table.find(e => e.n === 0).p;

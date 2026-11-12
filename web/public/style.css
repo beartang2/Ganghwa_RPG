@@ -637,6 +637,18 @@ body.loading-on #globalLoading{opacity:1}
 .pf-line{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
 .pf-line:last-child{border-bottom:0}
 .pf-line span{color:var(--muted)}
+/* 🎨 닉네임 색 컬렉션(내 프로필) — 칭호 아코디언과 같은 결. 눌러서 무료 교체 */
+.pf-colors{margin:10px 0 12px;border-radius:12px;background:var(--card2)}
+.pf-colors>summary{list-style:none;display:flex;align-items:center;gap:8px;padding:11px 12px;cursor:pointer;
+  font-size:12.5px;font-weight:800;color:var(--text);-webkit-tap-highlight-color:transparent}
+.pf-colors>summary::-webkit-details-marker{display:none}
+.pf-colors>summary small{color:var(--muted);font-weight:700}
+.color-grid{display:flex;flex-wrap:wrap;gap:7px;padding:0 12px 12px;animation:taccIn .18s ease-out}
+/* 어떤 색 글자든(흰색 포함) 잘 보이게 칩 바탕은 어둡게 고정 */
+.color-chip{font-size:13px;font-weight:800;padding:6px 12px;border-radius:20px;cursor:pointer;
+  background:#0f131c;border:1px solid var(--line);transition:transform .08s,box-shadow .12s}
+.color-chip:hover{transform:translateY(-1px)}
+.color-chip.on{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary),0 0 10px color-mix(in srgb,var(--primary) 50%,transparent)}
 
 /* ---------- 이메일 계정 (로그인 화면 + Auth 모달) ---------- */
 .email-login{margin-top:14px}

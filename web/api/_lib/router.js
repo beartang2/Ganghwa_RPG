@@ -298,6 +298,7 @@ async function handle(method, pathname, ctx) {
     else if (pathname === '/api/atk-report') fn = (db) => game.atkReport(db, id, b.atk);
     else if (pathname === '/api/egg') fn = (db) => game.eggFound(db, id, b.id);
     else if (pathname === '/api/title') fn = (db) => game.equipTitle(db, id, b.title || null);
+    else if (pathname === '/api/equip-color') fn = (db) => game.equipColor(db, id, b.key);   // 🎨 보유 색으로 무료 교체
     else if (pathname === '/api/protect') fn = (db) => game.buyProtect(db, id, b.qty);
     else if (pathname === '/api/mission-claim') fn = (db) => game.missionClaim(db, id, b.id);
     else if (pathname === '/api/bp-claim') fn = (db) => game.bpClaim(db, id, b.level, b.track);
