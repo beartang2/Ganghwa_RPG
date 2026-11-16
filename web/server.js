@@ -611,6 +611,7 @@ const server = http.createServer(async (req, res) => {
       else if (p === '/api/equip-color') { const b = await readBody(req); r = game.equipColor(db, id, b.key); }
       else if (p === '/api/protect') { const b = await readBody(req); r = game.buyProtect(db, id, b.qty); }
       else if (p === '/api/mission-claim') { const b = await readBody(req); r = game.missionClaim(db, id, b.id); }
+      else if (p === '/api/mission-claim-all') { r = game.missionClaimAll(db, id); }   // 🎯 모두 받기
       else if (p === '/api/bp-claim') { const b = await readBody(req); r = game.bpClaim(db, id, b.level, b.track); }
       else if (p === '/api/bp-premium') r = game.bpBuyPremium(db, id);
       else if (p === '/api/shop-buy') {

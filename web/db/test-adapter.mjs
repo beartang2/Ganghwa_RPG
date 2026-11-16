@@ -644,6 +644,27 @@ async function main() {
     const cv = GAME.publicView(cdb, 'c');
     ok(Array.isArray(cv.colorInv) && cv.colorInv.every(x => x.key) && cv.nickColorKey === GAME.colorKey(cp.nickColor), 'me 응답에 colorInv(키 포함)·nickColorKey 전달');
   }
+  // 🧭 UX 다듬기 — 미션 모두 받기 · 출석 상태 · 보스 잠금 ★ 표기 · 등급 이름 '신화'
+  {
+    const udb = { players: {}, parties: {}, log: [] };
+    const up = GAME.makePlayer('편의러'); GAME.norm(up); Object.assign(up, { class: 'warrior', level: 10, best: 10 }); udb.players.u = up;
+    GAME.missionView(udb, 'u');
+    for (const k of Object.keys(up.mstat.d)) { up.mstat.d[k] = 999; up.mstat.w[k] = 999; }
+    up.inv.bought = 8;   // 가방 넉넉히(꾸러미가 다 들어가게)
+    const before = GAME.missionView(udb, 'u'), ready = before.daily.concat(before.weekly).filter(m => m.done && !m.claimed).length;
+    const all = GAME.missionClaimAll(udb, 'u');
+    const after = GAME.missionView(udb, 'u'), left = after.daily.concat(after.weekly).filter(m => m.done && !m.claimed).length;
+    ok(all.ok && all.count === ready && ready > 1 && left === 0, '🎯 모두 받기 — 일일+주간 ' + ready + '개 한 번에 (' + all.msg + ')');
+    const again = GAME.missionClaimAll(udb, 'u');
+    ok(!again.ok && /받을 보상이 없어요/.test(again.error), '받을 게 없으면 모두 받기 거부');
+    ok(GAME.publicView(udb, 'u').attended === false, '📅 출석 전: attended=false');
+    GAME.attend(udb, 'u');
+    ok(GAME.publicView(udb, 'u').attended === true, '📅 출석 후: attended=true (빨간 점 끄기)');
+    ok(GAME.combatLevelText(300) === '★3' && GAME.combatLevelText(150) === '★1 +50' && GAME.combatLevelText(60) === '+60', '전투 레벨 표기: 300→★3 · 150→★1 +50 · 60→+60');
+    const voidBoss = GAME.BOSSES.find(b => b.id === 'void'), lockMsg = GAME.bossLock(up, voidBoss);
+    ok(/★3/.test(lockMsg) && !/\+300/.test(lockMsg), '공허의 군주 입장 조건 문구 = ' + lockMsg + ' (+300 아님)');
+    ok(GAME.grade(80).name === '신화' && GAME.weaponName(80, 'tanker', 0).includes('신화') && !GAME.weaponName(80, 'tanker', 0).includes('초월'), "일반 무기 최고 등급 이름 '신화' (" + GAME.weaponName(80, 'tanker', 0) + ')');
+  }
   // ⚗️ 연금술 확률표 — 합이 1 · 꽝은 불이 셀수록 낮다
   {
     const A = GAME.ALCHEMY, sum = t => t.reduce((x, e) => x + e.p, 0), fail = a => a.table.find(e => e.n === 0).p;

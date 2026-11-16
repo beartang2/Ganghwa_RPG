@@ -213,7 +213,8 @@ function memberStats(p) {
 /* 등급 경계는 만렙 대비 '비율'(r)로 잡는다 — CONFIG.maxLevel 만 올리면 경계가 따라 움직인다.
  * maxLevel 99 기준: 일반0~15, 희귀16~24, 에픽25~48, 전설49~68, 초월69~99 */
 const GRADES = [
-  { r: 0.70, name: '초월', key: 'transcend', emoji: '🌈', color: '#c471ed' },
+  // 일반 무기의 최고 등급. 예전 이름 '초월' 은 ★ 초월(→ 💎 프리즘)과 겹쳐서 '신화' 로(몬스터 희귀도와 같은 사다리). key 는 그대로.
+  { r: 0.70, name: '신화', key: 'transcend', emoji: '🌈', color: '#c471ed' },
   { r: 0.50, name: '전설', key: 'legend',    emoji: '🟠', color: '#f7971e' },
   { r: 0.25, name: '에픽', key: 'epic',      emoji: '🟣', color: '#a770ef' },
   { r: 0.16, name: '희귀', key: 'rare',      emoji: '🔵', color: '#4facfe' },
@@ -1470,8 +1471,13 @@ function raidDurationFor(n) { return n <= 1 ? CONFIG.raidSoloDuration : CONFIG.r
 function raidAtk(p, raid) { return memberStats(p).atk * (1 + ((raid && raid.atkBuff) || 0)) * ((raid && raid.soloMult) || 1); }
 function soloSupportMult(cls) { const c = CLASS_ATK[cls], to = CONFIG.raidSoloSupportAtk[cls]; return c && to > c ? to / c : 1; }
 // 입장 조건 미달 사유. 만족하면 null.
+// 전투 레벨 → 화면 표기. 100 단위가 ★ 하나라서 300 은 '+300' 이 아니라 '★3'(강화는 +99 까지라 '+300' 은 읽히지 않는다)
+function combatLevelText(lv) {
+  const per = CONFIG.maxLevel + 1, s = Math.floor(lv / per), r = lv % per;
+  return s > 0 ? '★' + s + (r ? ' +' + r : '') : '+' + lv;
+}
 function bossLock(p, boss) {
-  if (combatLevel(p) < boss.reqLevel) return '무기 +' + boss.reqLevel + ' 이상 필요';   // ★ 무기는 전투 레벨(+100×★)로 본다
+  if (combatLevel(p) < boss.reqLevel) return '무기 ' + combatLevelText(boss.reqLevel) + ' 이상 필요';   // ★ 무기는 전투 레벨(+100×★)로 본다
   if (starsOf(p) < boss.reqAscend) return '초월 ★' + boss.reqAscend + ' 이상 필요';
   return null;
 }
@@ -1641,6 +1647,7 @@ function publicView(db, id) {
     ascendBonus: { gold: starsOf(p) * CONFIG.ascendGoldBonus, atk: starsOf(p) * CONFIG.ascendAtkBonus, cost: starsOf(p) * CONFIG.ascendCostMult, succ: 1 - ascendSuccMult(p) },
     odds: od, luck: luckBonus(p), combatLevel: combatLevel(p), enhanceBoost: itemCount(p, 'boost'), pity: p.pity || 0, nickColor: p.nickColor || null,
     colorInv: (p.colorInv || []).map(c => Object.assign({ key: colorKey(c) }, c)), nickColorKey: colorKey(p.nickColor),  // 🎨 보유 색 컬렉션 + 장착한 색 키(프로필 교체용)
+    attended: p.attendDay === today(),   // 📅 오늘 출석했는지 — 출석 버튼 빨간 점/완료 표시
     inv: invView(p), protectBuyLeft: protectBuyLeft(p), protectDailyBuy: CONFIG.protectDailyBuy,
     huntsLeft: huntsLeft(p), dailyHunts: limitOf(p, 'dailyHunts'),
     fightsLeft: fightsLeft(p), dailyFights: limitOf(p, 'dailyFights'),
@@ -1939,7 +1946,7 @@ function attend(db, id) {
   p.attendDay = today();
   bumpMstat(p, 'attend');                     // 미션: 출석
   const gained = gainGold(p, CONFIG.attendGold);
-  return { ok: true, gained, msg: '출석 완료! +' + gained + 'G' };
+  return { ok: true, gained, msg: '출석 완료! +' + gained.toLocaleString() + 'G' };
 }
 function mine(db, id) {
   const p = norm(db.players[id]);
@@ -2666,6 +2673,26 @@ function missionClaim(db, id, missionId) {
   addBpXp(p, m.xp);
   return { ok: true, reward: got, gold: got.gold || 0, xp: m.xp, msg: '미션 완료! ' + bundleText(got) + ' · 패스 XP +' + m.xp };
 }
+// 🎯 모두 받기 — 일일·주간에서 완료하고 안 받은 미션을 한 번에. 가방이 모자란 건 건너뛰고(미수령 유지) 나머지는 받는다.
+function missionClaimAll(db, id) {
+  const p = norm(db.players[id]);
+  const rows = currentDaily().map(m => [m, 'daily']).concat(currentWeekly().map(m => [m, 'weekly']));
+  const sum = {};
+  let n = 0, xp = 0, full = false;
+  for (const [m, scope] of rows) {
+    const row = missionRow(p, m, scope);
+    if (row.claimed || !row.done) continue;
+    if (!bundleFits(p, m.reward)) { full = true; continue; }
+    const cl = ensureMclaim(p);
+    (scope === 'daily' ? cl.d : cl.w).push(m.id);
+    const got = grantBundle(p, m.reward);
+    for (const k in got) sum[k] = (sum[k] || 0) + got[k];
+    addBpXp(p, m.xp); xp += m.xp; n++;
+  }
+  if (!n) return { ok: false, error: full ? BAG_FULL : '받을 보상이 없어요.' };
+  return { ok: true, count: n, reward: sum, xp, bagFull: full,
+    msg: '🎯 미션 ' + n + '개 보상! ' + bundleText(sum) + ' · 패스 XP +' + xp + (full ? ' (가방이 모자란 건 남겨뒀어요)' : '') };
+}
 
 // ----- 배틀패스 -----
 const BP_XP_PER_LEVEL = 100, BP_MAX_LEVEL = 30;
@@ -2765,7 +2792,7 @@ function bpBuyPremium(db, id) {
 module.exports = {
   devEgg, raidStrong, dunStrong, STRONG_ATTACKS, CLASS_CRIT, eggFound, atkReport, reportAtk, ACHIEVEMENTS,
   CONFIG, GRADES, RARITIES, CLASSES, BOSSES, odds, enhanceCost, weaponName, grade,
-  missionView, missionClaim, bpView, bpClaim, bpBuyPremium,
+  missionView, missionClaim, missionClaimAll, bpView, bpClaim, bpBuyPremium, combatLevelText, bossLock,
   login, setClass, rename, publicView, enhance, ascend, attend, mine, mineSwing, hunt, buyProtect, fight, fightList, fightOdds, fightPower,
   ITEMS, useItem, buyInvPack, invView, ascendReq, ascendProgress,
   partyCreate, partyJoin, partyLeave, partyList, partyView, raidStart,

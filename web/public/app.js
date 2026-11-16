@@ -10,6 +10,9 @@ const PATCH = {
   version: '6',
   title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
+    '🧭 <b>메뉴 정리</b> — 아래 탭 💎프리즘 → <b>🛒 상점</b>(골드 상점 · 💎 상점 · 상자 · 연금술 · 캡슐을 한 곳에), 🗡️사냥 → <b>사냥·싸움</b>. 상점 카드에서 염색약·망치·재련권을 <b>바로 사용</b>해요',
+    '✨ <b>편의</b> — ⚔️ 승률 50% 미만 싸움은 한 번 더 물어봐요(지면 골드 20%) · 🎯 미션 <b>모두 받기</b> · 📅 출석 안 했으면 빨간 점 · 🗡️ 사냥 횟수는 어디서나 <b>남은 횟수</b> · 🐉 보스 입장 조건을 ★로(무기 +300 → ★3) · 휴대폰 알림이 무기 이름·창 내용을 가리지 않게 · 대장간 아래 전적 카드',
+    '🌈 <b>등급 이름</b> — 일반 무기의 최고 등급 \'초월\' → <b>\'신화\'</b>(★ 초월하면 💎 프리즘). 몬스터 희귀도와 같은 사다리예요',
     '🎨 <b>닉네임 색 도감</b> — 염색약으로 뽑은 색이 이제 <b>사라지지 않고 모여요</b>! 📇프로필 → 🎨닉네임 색에서 모은 색을 눌러 <b>언제든 무료로 바꿔요</b>(기본 흰색 포함). 이미 가진 색이 또 나오면 💰<b>1,000G 환급</b> · 🫧프리즘 오로라는 <b>한 번만 사면 영구 소장</b>(이미 있으면 상점에서 \'보유 중\') · 염색약 값 2,000→<b>3,000G</b>',
     '🛠️ <b>고침 · 다듬기</b> — 🔨 <b>장인의 기운 100%인데 실패</b>하던 문제(99.6%도 반올림돼 100%로 보였어요 — 이제 진짜 100%일 때만 100%·확정) · 탭을 옮길 때마다 직전 강화 연출이 다시 재생되던 문제 · 🌌 초월 던전 <b>무기 교체·스킬이 훨씬 빨라져요</b>(교체 쿨 1.2초→0.4초 + 교체 직후 다음 동작이 막히던 지연 제거 — 피지컬로 콤보!) · 같은 알림이 줄줄이 쌓이면 <b>×N</b>으로 합쳐요',
     '🔑 <b>PIN 변경</b> — ⚙️설정 → 🔑 PIN 변경에서 로그인 PIN을 바꿀 수 있어요. 현재 PIN을 확인하고 새 PIN(숫자 8자리)으로 교체해요. 캐릭터·기록은 그대로, 다른 기기는 새 PIN으로 다시 로그인해요',
@@ -458,10 +461,14 @@ function render() {
   el('invCount').textContent = me.inv.used + '/' + me.inv.slots;
   el('invCount').classList.toggle('full', !!me.inv.full);
 
-  el('huntLeft').textContent = me.huntsLeft > 0 ? '(' + me.huntsLeft + '/' + me.dailyHunts + ')' : '♾️';
+  el('huntLeft').textContent = me.huntsLeft > 0 ? '남은 ' + me.huntsLeft + '/' + me.dailyHunts : '♾️';   // 사냥터 안 표기와 같은 '남은 횟수'
   el('huntBtn').disabled = false;   // 무한 사냥: 항상 가능(소진 후엔 보상 축소)
   el('mineAmt').textContent = me.mine > 0 ? '(+' + me.mine.toLocaleString() + ')' : '';
   el('mineBtn').disabled = false;   // 채굴 모달 열기 — 항상 가능(누적 없어도 돌 깨기)
+  // 📅 출석: 안 했으면 빨간 점, 했으면 ✅ 로 흐리게(눌러 봐야 아는 일이 없게)
+  el('attendBtn').classList.toggle('done', !!me.attended);
+  el('attendLabel').textContent = me.attended ? '✅ 출석' : '📅 출석';
+  el('attendDot').hidden = !!me.attended;
 
   el('sAscend').textContent = me.ascend > 0 ? '★' + me.ascend : '-';
   el('sBest').textContent = '+' + me.best;
@@ -562,7 +569,7 @@ function goPrismShop() {
  *   응답이 오면 '터뜨림'(불꽃·빛줄기·보상 튀어나옴) → 끝나면 결과 화면을 다시 그린다(연출 끝 모습과 똑같이 그려서 티 안 나게).
  * 보상·잔액은 터지는 순간에 반영한다(미리 숫자가 바뀌어 결과가 스포일러되지 않게).
  * 연출 중 화면을 한 번 더 누르면 건너뛴다(pskip). prefers-reduced-motion 이면 짧은 페이드만 남는다. */
-let prismSub = 'box', prismData = null, boxReveal = null, alchLast = null, capLast = null;
+let prismSub = 'shop', prismData = null, boxReveal = null, alchLast = null, capLast = null;
 let alchTier = (() => { try { return localStorage.getItem('alchTier') || 'low'; } catch (_) { return 'low'; } })();
 let prismGlares = [];   // 이 화면에 붙인 광택(Fx.glare) — 다시 그릴 때 정리
 let pfx = null;         // 진행 중인 연출 { sub, skip, waits, anims }
@@ -664,7 +671,7 @@ function paintPrism() {
   const d = prismData; if (!d || currentTab !== 'prism') return;
   prismGlares.forEach(g => { try { g.destroy(); } catch (_) { /* 무시 */ } });
   prismGlares = [];
-  const subs = [['box', '📦', '상자'], ['alch', '⚗️', '연금술'], ['cap', '🧸', '캡슐'], ['shop', '💎', '상점']];
+  const subs = [['shop', '🛒', '상점'], ['box', '📦', '상자'], ['alch', '⚗️', '연금술'], ['cap', '🧸', '캡슐']];   // 골드·💎 상점이 한 곳(하단 '상점' 탭)
   let h = `<div class="prism-head"><span class="prism-bal">💎 <b>${d.prism.toLocaleString()}</b></span>
     <span class="prism-mats"><span title="상자 열쇠">🗝️ ${d.keys}</span><span title="마석">🔮 ${d.stones}</span><span title="골드">💰 ${d.gold.toLocaleString()}</span></span></div>`;
   h += `<div class="psub-tabs">${subs.map(([k, e, l]) => `<button class="psub${prismSub === k ? ' active' : ''}" data-psub="${k}"><span>${e}</span>${l}</button>`).join('')}</div>`;
@@ -962,20 +969,55 @@ async function doCapsule(times) {
   finish();
 }
 
-/* ================= 💎 상점 ================= */
+/* ================= 🛒 상점 (💰 골드 + 💎 프리즘) ================= */
+// 💰 골드 상점 목록(하단 '상점' 탭 · 🛒 상점 서브탭 위쪽). 쓰는 아이템은 가진 게 있으면 바로 '사용'
+function goldShopHTML(items) {
+  return items.map(it => {
+        // 방지권은 하루 구매 상한이 있고, 초월 ★1+ 는 아예 살 수 없다
+        const capped = it.id === 'protect';
+        const once = !!it.once;
+        const onceDone = once && (me.inv.packBought || me.inv.atMaxSlots);
+        const soldOut = (capped && (!me.protectWorks || me.protectBuyLeft <= 0)) || onceDone;
+        const note = once ? ` <span class="shop-lim${onceDone ? ' off' : ''}">${onceDone ? '구매 완료' : '계정당 1회'}</span>`
+          : !capped ? ''
+          : !me.protectWorks ? ' <span class="shop-lim off">초월 이후 사용 불가</span>'
+          : ` <span class="shop-lim${me.protectBuyLeft <= 0 ? ' off' : ''}">오늘 ${me.protectBuyLeft}/${me.protectDailyBuy}개</span>`;
+        return `<div class="raid-boss"><span class="bemoji">${it.emoji}</span>
+          <div class="binfo"><div class="bname">${esc(it.name)} <small>${it.price.toLocaleString()}G</small>${note}</div>
+            <div class="bstat">${esc(it.desc)}${capped ? ' · 더 필요하면 🗡️사냥에서 얻으세요' : ''}</div></div>
+          <div class="shop-btns"><button class="btn sm primary" data-buy="${it.id}" ${me.gold < it.price || soldOut ? 'disabled' : ''}>구매</button>${shopUseBtn(it.id)}</div></div>`;
+      }).join('');
+}
+// 가방에 있는 '쓰는 아이템'(염색약·재련권·망치·프리즘 염색약)은 상점 카드에서 바로 사용 — 사고 → 가방 열고 → 고르고 → 사용 을 줄인다
+const SHOP_USE = ['dye', 'eltkt', 'hammer', 'prismdye'];
+function invCnt(id) { const it = me && me.inv.items.find(i => i.id === id); return it ? it.count : 0; }
+function shopUseBtn(id, hide) {
+  const n = SHOP_USE.includes(id) ? invCnt(id) : 0;
+  return n > 0 && !hide ? `<button class="btn sm ghost shop-use" data-use="${id}">사용 <small>×${n}</small></button>` : '';
+}
+// 상점 탭 데이터: 💎 프리즘 탭 정보 + 골드 상점 목록(목록은 고정이라 한 번 받은 걸 재사용)
+let goldShopItems = null;
+async function fetchShopData() {
+  const [r, g] = await Promise.all([api('prism'), goldShopItems ? Promise.resolve(null) : api('shop')]);
+  if (g && g.ok) goldShopItems = g.items;
+  if (!r || !r.ok) return null;
+  r.goldShop = goldShopItems || [];
+  return r;
+}
 function pshopHTML(d) {
-  return '<p class="hint" style="margin:0 0 10px">💎 프리즘으로만 살 수 있는 물건이에요.</p>' + d.shop.map(it =>
+  return `<div class="shop-sec-h">💰 골드 상점 <small>🎒 ${me.inv.used}/${me.inv.slots}칸</small></div>` + goldShopHTML(d.goldShop || [])
+    + '<div class="shop-sec-h">💎 프리즘 상점 <small>프리즘으로만 살 수 있어요</small></div>' + d.shop.map(it =>
     `<div class="raid-boss"><span class="bemoji">${it.emoji}</span>
       <div class="binfo"><div class="bname">${it.nickPreview ? `<span class="nick-${it.nickPreview}">${esc(it.name)}</span>` : esc(it.name)} ${it.soldOut ? `<span class="shop-lim off">${esc(it.soldLabel || '최대')}</span>` : `<small class="pprice">💎 ${it.price}</small>`}</div>
         ${it.locked ? `<div class="plock">🔒 ${esc(it.lockMsg)} 필요</div>` : ''}<div class="bstat">${esc(it.desc)}</div></div>
-      <button class="btn sm primary" data-pbuy="${it.id}" ${it.soldOut || it.locked || d.prism < it.price ? 'disabled' : ''}>구매</button></div>`).join('');
+      <div class="shop-btns"><button class="btn sm primary" data-pbuy="${it.id}" ${it.soldOut || it.locked || d.prism < it.price ? 'disabled' : ''}>구매</button>${shopUseBtn(it.id, it.id === 'prismdye' && it.soldOut)}</div></div>`).join('');
 }
 async function doPrismBuy(item) {
   const r = await api('prism-buy', 'POST', { item });
   if (!r.ok) return toast(r.error, 'bad');
   applyMe(r.me); render();
-  toast(r.msg + (item === 'prismdye' || item === 'hammer' ? ' 🎒가방에서 사용하세요.' : ''), 'ok');
-  const v = await api('prism'); if (v.ok) { prismData = v; paintPrism(); }   // 장비 칸 가격이 바뀌므로 새로 받는다
+  toast(r.msg + (item === 'prismdye' || item === 'hammer' ? ' · 옆의 「사용」으로 바로 써요' : ''), 'ok');
+  const v = await fetchShopData(); if (v) { prismData = v; paintPrism(); }   // 장비 칸 가격이 바뀌므로 새로 받는다
 }
 
 /* ---------- 인벤토리 ----------
@@ -1038,7 +1080,27 @@ const TOAST_MAX = 4, TOAST_MS = 3800;
 function placeToastLog() {
   const box = el('toastLog'); if (!box) return;
   const s = box.style;
-  if (window.innerWidth < 880) { s.left = s.width = s.top = s.bottom = s.maxHeight = ''; return; }   // 휴대폰은 CSS 자리 그대로
+  if (window.innerWidth < 880) {   // 휴대폰: 기본은 CSS 자리(왼쪽 가운데). 단, 내용을 덮는 두 경우만 옮긴다
+    s.left = s.width = s.top = s.bottom = s.maxHeight = '';
+    const vh = window.innerHeight;
+    // ① 창(가방·미션·프로필 …)이 열려 있으면 창 바깥 빈 띠(아래 → 위)로 — 아이템 칸·목록을 덮지 않게
+    const mc = Array.from(document.querySelectorAll('.modal:not([hidden]) .modal-card')).pop();
+    if (mc) {
+      const r = mc.getBoundingClientRect(), below = vh - r.bottom, above = r.top;
+      if (below >= 64) { s.top = 'auto'; s.bottom = 'calc(env(safe-area-inset-bottom, 0px) + 8px)'; s.maxHeight = Math.round(below - 16) + 'px'; s.width = '64vw'; }
+      else if (above >= 64) { s.top = 'auto'; s.bottom = Math.round(vh - r.top + 8) + 'px'; s.maxHeight = Math.round(above - 16) + 'px'; s.width = '64vw'; }
+      return;
+    }
+    // ② 대장간: 무기 그림 판 안 왼쪽 아래 — 강화 직후 무기 이름·수치(★1 +45)를 가리지 않게
+    if (el('game').dataset.view === 'forge') {
+      const hearth = document.querySelector('.hearth'), a = hearth && hearth.offsetParent ? hearth.getBoundingClientRect() : null;
+      if (a && a.height > 80 && a.bottom > 100 && a.top < vh) {
+        s.left = Math.round(a.left + 8) + 'px'; s.width = Math.round(a.width * 0.5) + 'px'; s.top = 'auto';
+        s.bottom = Math.round(vh - a.bottom + 8) + 'px'; s.maxHeight = Math.round(a.height - 16) + 'px';
+      }
+    }
+    return;
+  }
   const g = el('game'), gr = g && g.offsetParent ? g.getBoundingClientRect() : null;
   if (gr && gr.left >= 240) { s.left = '16px'; s.width = Math.min(320, Math.floor(gr.left - 32)) + 'px'; s.top = 'auto'; s.bottom = '50%'; s.maxHeight = ''; return; }
   // 무기 그림 판(.hearth) — 그림 말고는 비어 있는 곳이라 알림이 잠깐 덮어도 괜찮다. 판 안에서만 쌓이고 넘치면 오래된 줄이 잘린다.
@@ -1048,6 +1110,11 @@ function placeToastLog() {
     s.bottom = Math.round(window.innerHeight - a.bottom + 8) + 'px'; s.maxHeight = Math.round(a.height - 16) + 'px'; return;
   }
   s.left = '16px'; s.width = '300px'; s.top = 'auto'; s.bottom = '16px'; s.maxHeight = '';
+}
+// 창(모달)이 열리고 닫히거나 화면을 바꿀 때도 자리를 다시 잡는다 — 먼저 떠 있던 알림이 새로 연 창 내용을 덮지 않게
+if (window.MutationObserver) {
+  const toastMo = new MutationObserver(() => { if (el('toastLog') && el('toastLog').childElementCount) placeToastLog(); });
+  document.querySelectorAll('.modal').forEach(m => toastMo.observe(m, { attributes: true, attributeFilter: ['hidden'] }));
 }
 function toast(msg, kind) {
   const box = el('toastLog'); if (!box || !msg) return;
@@ -1335,7 +1402,7 @@ function restoreHuntMonster() {
 function updateHuntHud() {
   if (!me) return;
   const overtime = me.huntsLeft <= 0;
-  el('huntCount').textContent = overtime ? '♾️ 무한 사냥' : ('오늘 ' + (me.dailyHunts - me.huntsLeft) + '/' + me.dailyHunts);
+  el('huntCount').textContent = overtime ? '♾️ 무한 사냥' : ('남은 ' + me.huntsLeft + '/' + me.dailyHunts + '회');   // 버튼과 같은 '남은 횟수'
   el('huntSession').innerHTML = '처치 <b>' + huntKills + '</b> · 획득 💰 <b>+' + huntSession.toLocaleString() + 'G</b>';
 }
 async function spawnHuntMonster() {
@@ -1904,15 +1971,21 @@ async function doBuy(item) {
   if (!r.ok) return toast(r.error, 'bad');
   applyMe(r.me); render();
   // 염색약·직업변경권은 구매 즉시 발동하지 않는다 — 가방에서 '사용하기'
-  const useHint = item === 'dye' ? ' 🎒가방에서 사용하세요.' : '';
+  const useHint = SHOP_USE.includes(item) ? ' · 옆의 「사용」으로 바로 써요' : '';
   toast((r.msg || '구매 완료') + useHint, 'ok');
-  if (currentTab === 'shop') loadTab();
+  if (currentTab === 'prism' && prismData) { syncPrismFromMe(); paintPrism(); }   // 보유 골드·'사용' 개수 갱신
 }
-async function doFight(target) {
+const FIGHT_STEAL = 0.2;   // 서버 CONFIG.stealPct 와 같은 값(확인창 표시용)
+async function doFight(target, odds) {
+  // ⚔️ 승률이 반도 안 되면 한 번 묻는다 — 지면 내 골드 20%가 한 번에 나가서 실수 탭이 아프다
+  if (odds != null && odds < 50) {
+    const lose = Math.floor((me.gold || 0) * FIGHT_STEAL);
+    if (!confirm('⚔️ ' + target + ' 에게 싸움을 걸까요?\n\n승률 ' + odds + '% — 지면 💰' + lose.toLocaleString() + 'G (내 골드의 20%)를 잃어요.')) return;
+  }
   const r = await api('fight', 'POST', { target });
   if (!r.ok) return toast(r.error, 'bad');
   applyMe(r.me); render();
-  let msg = (r.iWon ? '🏆 승리! ' : '😢 패배... ') + r.winner + ' 승 (💰' + r.steal + ' 이동' + (r.pWin != null ? ' · 승률 ' + Math.round(r.pWin * 100) + '%' : '') + ')';
+  let msg = (r.iWon ? '🏆 승리! ' : '😢 패배... ') + r.winner + ' 승 (💰' + Number(r.steal || 0).toLocaleString() + 'G 이동' + (r.pWin != null ? ' · 승률 ' + Math.round(r.pWin * 100) + '%' : '') + ')';
   if (r.broke) msg += ' · 💢' + r.broke.who + ' 무기 +' + r.broke.from + '→+' + r.broke.to;
   if (r.guarded) msg += ' · 🛡️' + r.guarded.who + ' 방지권으로 무기 손상 방어';
   toast(msg, r.iWon ? 'ok' : 'bad');
@@ -2162,7 +2235,7 @@ function paintParty(panel) {
       html += `<p class="hint" style="margin:0 0 8px">실패하면 보상은 없지만 <b>횟수도 깎이지 않아요</b>. 보스 체력·화력은 <b>참여 인원(${n}명)</b>에 맞춰 올라갑니다. 전투 시간 ⏱ <b>${n <= 1 ? RAID_SEC.solo + '초 (혼자 도전 +' + (RAID_SEC.solo - RAID_SEC.party) + '초)' : RAID_SEC.party + '초'}</b></p>`;
       html += BOSS_CACHE.map(b => {
         // 입장 조건은 파티 전원이 만족해야 하지만, 목록에서는 내 기준으로 잠금을 보여준다
-        const why = (me.combatLevel != null ? me.combatLevel : me.level) < b.reqLevel ? '무기 +' + b.reqLevel + ' 필요'   // ★ 무기는 전투 레벨(강화 + 100×★)
+        const why = (me.combatLevel != null ? me.combatLevel : me.level) < b.reqLevel ? '무기 ' + combatLvText(b.reqLevel) + ' 필요'   // ★ 무기는 전투 레벨(강화 + 100×★) — 300 은 '★3'
           : me.ascend < b.reqAscend ? '초월 ★' + b.reqAscend + ' 필요' : null;
         const sc = 1 + (n - 1) * BOSS_HPSCALE;   // 서버 raidScale 과 같은 식(표시용)
         return `<div class="raid-boss ${why ? 'locked' : ''}"><span class="bemoji">${b.emoji}</span>
@@ -2533,7 +2606,7 @@ async function loadTab() {
   stopRaidLoop();
   if (currentTab === 'forge') return;
   if (currentTab === 'prism') {
-    const r = await api('prism'); if (stale() || !r.ok) return;
+    const r = await fetchShopData(); if (stale() || !r) return;
     prismData = r; paintPrism(); return;
   }
   if (currentTab === 'rank') {
@@ -2548,24 +2621,6 @@ async function loadTab() {
       `<div class="row"><span class="rk">${medal(i)}</span>
         <div class="nm" data-nick="${esc(p.nick)}">${nmLine(p.nick, p.nickColor, p.title)}</div>
         <span class="val gold">${p.gold.toLocaleString()}G</span></div>`).join('') : emptyMsg('아직 참가자가 없어요');
-  } else if (currentTab === 'shop') {
-    const { items } = await api('shop'); if (stale()) return;
-    panel.innerHTML = `<p class="hint" style="margin:0 0 10px">보유 💰${me.gold.toLocaleString()}G · 🎒 ${me.inv.used}/${me.inv.slots}칸</p>` +
-      items.map(it => {
-        // 방지권은 하루 구매 상한이 있고, 초월 ★1+ 는 아예 살 수 없다
-        const capped = it.id === 'protect';
-        const once = !!it.once;
-        const onceDone = once && (me.inv.packBought || me.inv.atMaxSlots);
-        const soldOut = (capped && (!me.protectWorks || me.protectBuyLeft <= 0)) || onceDone;
-        const note = once ? ` <span class="shop-lim${onceDone ? ' off' : ''}">${onceDone ? '구매 완료' : '계정당 1회'}</span>`
-          : !capped ? ''
-          : !me.protectWorks ? ' <span class="shop-lim off">초월 이후 사용 불가</span>'
-          : ` <span class="shop-lim${me.protectBuyLeft <= 0 ? ' off' : ''}">오늘 ${me.protectBuyLeft}/${me.protectDailyBuy}개</span>`;
-        return `<div class="raid-boss"><span class="bemoji">${it.emoji}</span>
-          <div class="binfo"><div class="bname">${esc(it.name)} <small>${it.price.toLocaleString()}G</small>${note}</div>
-            <div class="bstat">${esc(it.desc)}${capped ? ' · 더 필요하면 🗡️사냥에서 얻으세요' : ''}</div></div>
-          <button class="btn sm primary" data-buy="${it.id}" ${me.gold < it.price || soldOut ? 'disabled' : ''}>구매</button></div>`;
-      }).join('');
   } else if (currentTab === 'hogu') {
     const { list } = await api('hogu'); if (stale()) return;
     panel.innerHTML = '<p class="hint" style="margin:0 0 8px">🕯️ 오늘 강화하다 파괴되거나 ⚔️ 싸움에서 손상된 무기를 기려요</p>' + (list.length ? list.map((p, i) =>
@@ -2584,11 +2639,13 @@ async function loadTab() {
         `<div class="fightrow"><div class="nm" data-nick="${esc(o.nick)}">${nmLine(o.nick, o.nickColor, o.title, o.classEmoji)}
             <div class="w">${o.ascend ? '★' + o.ascend + ' ' : ''}+${o.level}</div></div>
           <span class="fodds ${o.odds >= 70 ? 'hi' : o.odds <= 30 ? 'lo' : 'mid'}">승률 ${o.odds}%</span>
-          <button class="btn sm primary" data-fight="${esc(o.nick)}" ${me.fightsLeft <= 0 ? 'disabled' : ''}>싸움</button></div>`).join('') : emptyMsg('상대가 없어요'));
+          <button class="btn sm primary" data-fight="${esc(o.nick)}" data-odds="${o.odds}" ${me.fightsLeft <= 0 ? 'disabled' : ''}>싸움</button></div>`).join('') : emptyMsg('상대가 없어요'));
   }
   // 렌더 완료분을 캐시 — 다음에 그 탭 누르면 즉시 표시(뒤에서 갱신)
   if (cacheableTab(currentTab)) tabHtmlCache[currentTab] = panel.innerHTML;
 }
+// 전투 레벨 → 화면 표기(서버 combatLevelText 와 같은 규칙): 100 단위가 ★ 하나 — 300 = ★3, 150 = ★1 +50
+function combatLvText(lv) { const per = ((me && me.maxLevel) || 99) + 1, s = Math.floor(lv / per), r = lv % per; return s > 0 ? '★' + s + (r ? ' +' + r : '') : '+' + lv; }
 function medal(i) { return i < 3 ? ['🥇', '🥈', '🥉'][i] : (i + 1); }
 function emptyMsg(m) { return `<div class="empty">${m}</div>`; }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -2672,8 +2729,9 @@ function colorSection(p, isMe) {
   const chip = (key, nc, label) =>
     `<button class="color-chip${key === eqKey ? ' on' : ''}" data-color-key="${esc(key)}" title="${esc(label)}">${nickSpan(label, nc)}</button>`;
   const chips = [chip('default', null, '기본')].concat(inv.map(c => chip(c.key, c, c.name))).join('');
+  const cur = (inv.find(c => c.key === eqKey) || null);
   return `<details class="pf-colors"${open}>
-       <summary>🎨 닉네임 색 <small>${inv.length}종 보유 · 눌러서 교체</small></summary>
+       <summary><span class="tacc-h">🎨 닉네임 색 <small>${inv.length}종</small></span><span class="tacc-eq">${cur ? nickSpan(cur.name, cur) : '기본'}</span><i class="tacc-arrow">›</i></summary>
        <div class="color-grid">${chips}</div>
      </details>`;
 }
@@ -2779,6 +2837,7 @@ el('attendBtn').onclick = () => act(doAttend, el('attendBtn'));
 el('hNick').onclick = () => { if (me) openProfile(me.nick); };
 
 function selectTab(tab) {
+  if (tab === 'shop') { tab = 'prism'; prismSub = 'shop'; }   // 골드 상점은 상점 탭 안으로 합쳐졌다
   if (pfx && tab !== 'prism') pskip();   // 💎 연출 도중 다른 탭으로 가면 바로 끝낸다(연출이 다른 버튼을 붙잡지 않게)
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   currentTab = tab;
@@ -2793,12 +2852,13 @@ document.querySelectorAll('.tab').forEach(btn => { btn.onclick = () => selectTab
 /* ---------- 한 단 화면(휴대폰·태블릿) — 하단 탭바로 화면을 하나씩 ----------
  * 대장간은 탭 패널이 필요 없는 화면이라 currentTab 을 'forge' 로 두고(레이드 루프·목록 갱신이 멈춘다),
  * 나머지는 화면마다 정해진 탭을 연다. 두 단 이상(880px+)에서는 data-view 가 아무 영향이 없다. */
-const MORE_TABS = ['rank', 'goldrank', 'shop', 'hogu', 'log'];
+const MORE_TABS = ['rank', 'goldrank', 'hogu', 'log'];   // 골드 상점은 하단 '상점' 탭으로 옮겼다
 const VIEW_TAB = { act: 'fight', raid: 'raid', prism: 'prism' };
 let moreTab = 'rank';
 const oneCol = window.matchMedia('(max-width:879px)');
 function setView(v) {
   el('game').dataset.view = v;
+  placeToastLog();   // 대장간(무기 그림 판 안) ↔ 다른 화면(왼쪽 가운데)
   document.querySelectorAll('.bb-btn').forEach(b => b.classList.toggle('on', b.dataset.view === v));
   const tab = v === 'more' ? moreTab : VIEW_TAB[v];
   if (tab) { if (tab !== currentTab || v === 'more') selectTab(tab); }
@@ -2817,10 +2877,11 @@ oneCol.addEventListener('change', () => {
 el('panel').addEventListener('click', e => {
   // 💎 프리즘 연출 중 화면을 누르면 건너뛴다(서브탭을 누른 경우엔 건너뛰고 그 탭으로 이동)
   if (pfx) { pskip(); if (!e.target.closest('[data-psub]')) return; }
-  const f = e.target.closest('[data-fight]'); if (f) return act(() => doFight(f.dataset.fight), f);
+  const f = e.target.closest('[data-fight]'); if (f) return act(() => doFight(f.dataset.fight, f.dataset.odds != null ? +f.dataset.odds : null), f);
   const r = e.target.closest('[data-raid]'); if (r) return act(() => doRaid(r.dataset.raid), r);
   const j = e.target.closest('[data-join]'); if (j) return act(() => doPartyJoin(j.dataset.join), j);
   const bu = e.target.closest('[data-buy]'); if (bu) return act(() => doBuy(bu.dataset.buy), bu);
+  const us = e.target.closest('[data-use]'); if (us) return act(async () => { await doUseItem(us.dataset.use); if (currentTab === 'prism' && prismData) { syncPrismFromMe(); paintPrism(); } }, us);
   const iv = e.target.closest('[data-invite]'); if (iv) return act(() => doInvite(iv.dataset.invite), iv);
   const ac = e.target.closest('[data-accept]'); if (ac) return act(() => doAccept(ac.dataset.accept), ac);
   const rj = e.target.closest('[data-reject]'); if (rj) return act(() => doReject(rj.dataset.reject), rj);
@@ -3079,7 +3140,7 @@ async function afterSupabaseSignIn() {
     }
     // 게스트도 없고 이 이메일에 캐릭터도 없음
     if (el('authModal').hidden) openAuth('login');
-    authSay('이 이메일에 연결된 캐릭터가 없어요. 먼저 "게스트로 시작"해 캐릭터를 만든 뒤 메뉴의 "계정 만들기"로 연결해 주세요.', 'err');
+    authSay('이 이메일에 연결된 캐릭터가 없어요. 먼저 "시작하기"로 캐릭터를 만든 뒤 메뉴의 "계정 만들기"로 연결해 주세요.', 'err');
   } finally { authManual = false; }
 }
 
@@ -3164,7 +3225,9 @@ async function renderMissions() {
   if (!r.ok) { el('missionList').innerHTML = '<div class="empty">불러오기 실패</div>'; return; }
   const list = missionScope === 'daily' ? r.daily : r.weekly;
   document.querySelectorAll('.mission-tab').forEach(b => b.classList.toggle('active', b.dataset.scope === missionScope));
-  el('missionList').innerHTML = '<div class="mission-hint">💰 골드는 내 최고 강화 기록(★ 포함)의 강화 비용에 맞춰 커져요</div>' + list.map(m => {
+  const ready = r.daily.concat(r.weekly).filter(m => m.done && !m.claimed).length;   // 일일+주간 받을 수 있는 개수
+  el('missionList').innerHTML = (ready > 1 ? '<button id="missionAll" class="btn primary sm mission-all">🎁 모두 받기 <small>(' + ready + '개)</small></button>' : '')
+    + '<div class="mission-hint">💰 골드는 내 최고 강화 기록(★ 포함)의 강화 비용에 맞춰 커져요</div>' + list.map(m => {
     const pct = Math.min(100, Math.round(m.progress / m.target * 100));
     const btn = m.claimed
       ? '<button class="btn sm mission-claim" disabled>완료 ✓</button>'
@@ -3180,7 +3243,15 @@ async function renderMissions() {
   const bp = r.bp;
   el('missionBpFoot').innerHTML = '🎟️ 시즌 패스 Lv.' + bp.level + ' <span class="bpfoot-open" id="missionOpenPass">패스 보기 ›</span>';
   document.querySelectorAll('.mission-claim[data-id]').forEach(b => b.onclick = () => claimMission(b.dataset.id));
+  const all = el('missionAll'); if (all) all.onclick = claimAllMissions;
   const op = el('missionOpenPass'); if (op) op.onclick = () => { closeMissions(); openPass(); };
+}
+// 🎯 모두 받기 — 일일·주간 한 번에(서버가 가방에 안 들어가는 건 남겨 둔다)
+async function claimAllMissions() {
+  const r = await api('mission-claim-all', 'POST', {});
+  if (!r.ok) { toast(r.error, 'bad'); return; }
+  applyMe(r.me); render(); sfx('coin'); toast(r.msg, 'ok'); updateMissionBadge();
+  await renderMissions();
 }
 async function claimMission(id) {
   const r = await api('mission-claim', 'POST', { id });
@@ -3212,7 +3283,7 @@ async function renderPass() {
     + '<div class="pass-xpbar"><div class="pass-xpfill" style="width:' + pct + '%"></div></div>'
     + '<div class="pass-xptxt">' + (r.atMax ? '최대 레벨 달성' : (r.xpInLevel + ' / ' + r.xpPerLevel + ' XP')) + '</div>'
     + (r.premium ? '<div class="pass-premium-on">✨ 프리미엄 활성화됨</div>'
-                 : '<button class="btn primary sm pass-buy" id="passBuy">시즌 패스 구매</button>');
+                 : '<button class="btn sm pass-buy" disabled>✨ 프리미엄 패스 · 준비 중</button>');   // 구매가 열리면 id="passBuy" 버튼으로 되돌린다(buyPassPremium)
   el('passTrack').innerHTML =
     '<div class="pass-cols"><span>Lv</span><span>무료</span><span>프리미엄</span></div>'
     + r.track.map(t => {
