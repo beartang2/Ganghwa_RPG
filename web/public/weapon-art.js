@@ -23,7 +23,7 @@
     { hi: '#f3f8ff', mid: '#a6c0de', lo: '#4f6a8a', trim: '#9aa6b5', trimHi: '#eef3f9', trimLo: '#56606e' },   // 희귀: 푸른 강철 + 은
     { hi: '#eef0f7', mid: '#98a1b8', lo: '#383f54', trim: '#8b6fc4', trimHi: '#e6d9ff', trimLo: '#3f2c6e' },   // 에픽: 흑강 + 자수정 장식
     { hi: '#fff7de', mid: '#efc46a', lo: '#9a6418', trim: '#e0aa45', trimHi: '#fff1bd', trimLo: '#7a4a10' },   // 전설: 황금
-    { hi: '#ffffff', mid: '#dfd2ff', lo: '#7d62c7', trim: '#f0c56a', trimHi: '#fffbe6', trimLo: '#8a5c1c' },   // 초월: 결정 + 금
+    { hi: '#fff4f5', mid: '#ff9fac', lo: '#b3203b', trim: '#f0c56a', trimHi: '#fffbe6', trimLo: '#8a5c1c' },   // 신화: 루비 결정 + 금(예전 보랏빛 결정은 에픽 자수정과 겹쳤다)
     { hi: '#ffffff', mid: '#d6f4ff', lo: '#7d8ee0', trim: '#cbbcff', trimHi: '#ffffff', trimLo: '#6656c4' },   // 💎 프리즘: 무지갯빛 결정 + 백금
   ];
   const RAINBOW = ['#ff9ad5', '#ffd27a', '#fff3a8', '#b8ffd9', '#9fe8ff', '#c9b8ff'];

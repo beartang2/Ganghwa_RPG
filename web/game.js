@@ -214,7 +214,8 @@ function memberStats(p) {
  * maxLevel 99 기준: 일반0~15, 희귀16~24, 에픽25~48, 전설49~68, 초월69~99 */
 const GRADES = [
   // 일반 무기의 최고 등급. 예전 이름 '초월' 은 ★ 초월(→ 💎 프리즘)과 겹쳐서 '신화' 로(몬스터 희귀도와 같은 사다리). key 는 그대로.
-  { r: 0.70, name: '신화', key: 'transcend', emoji: '🌈', color: '#c471ed' },
+  // 색·이모지는 빨강 — 보라(#c471ed)는 에픽(🟣)과 겹쳤다. ⚪ 일반 · 🔵 희귀 · 🟣 에픽 · 🟠 전설 · 🔴 신화 (사냥 신화 몬스터도 붉은 빛)
+  { r: 0.70, name: '신화', key: 'transcend', emoji: '🔴', color: '#ff4a5f' },
   { r: 0.50, name: '전설', key: 'legend',    emoji: '🟠', color: '#f7971e' },
   { r: 0.25, name: '에픽', key: 'epic',      emoji: '🟣', color: '#a770ef' },
   { r: 0.16, name: '희귀', key: 'rare',      emoji: '🔵', color: '#4facfe' },
