@@ -655,6 +655,11 @@ async function main() {
     const all = GAME.missionClaimAll(udb, 'u');
     const after = GAME.missionView(udb, 'u'), left = after.daily.concat(after.weekly).filter(m => m.done && !m.claimed).length;
     ok(all.ok && all.count === ready && ready > 1 && left === 0, '🎯 모두 받기 — 일일+주간 ' + ready + '개 한 번에 (' + all.msg + ')');
+    const pv1 = GAME.publicView(udb, 'u');
+    ok(pv1.missionAlert === 0 && pv1.passAlert > 0, '🎟️ 미션 다 받은 뒤 남은 건 패스 보상 → 미션 점 0 · 패스 점 ' + pv1.passAlert + ' (따로 센다)');
+    const pAll = GAME.bpClaimAll(udb, 'u'), pv2 = GAME.publicView(udb, 'u');
+    ok(pAll.ok && pAll.count === pv1.passAlert && pv2.passAlert === 0, '🎟️ 패스 모두 받기 — ' + pAll.count + '개 한 번에 (' + pAll.msg + ')');
+    ok(!GAME.bpClaimAll(udb, 'u').ok, '받을 패스 보상이 없으면 거부');
     const again = GAME.missionClaimAll(udb, 'u');
     ok(!again.ok && /받을 보상이 없어요/.test(again.error), '받을 게 없으면 모두 받기 거부');
     ok(GAME.publicView(udb, 'u').attended === false, '📅 출석 전: attended=false');

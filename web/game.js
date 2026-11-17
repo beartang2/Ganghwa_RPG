@@ -537,6 +537,8 @@ function withLuck(o, p) {
   return { success: s, destroy: o.destroy, fail: Math.max(0, 1 - s - o.destroy) };
 }
 // 장인의 기운 상승폭(실패당): 저확률에서도 결국 100% 도달하도록 최소치 보장
+// 장인의 기운 % 표기 — 화면 막대처럼 버림(99.6% 를 '100%' 로 올려 쓰면 확정인 줄 안다. 확정은 정확히 100% 일 때만)
+function pityPct(v) { return (v || 0) >= 1 ? 100 : Math.floor((v || 0) * 100); }
 function pityGain(success, ascend) { return (CONFIG.pityBase + success * CONFIG.pityScale) * (1 + starsOf(ascend) * CONFIG.ascendPityBonus); }
 // 강화 비용 = 20 + 10 × (강화 + 100×★) — 💎 프리즘(★) 무기는 '100레벨 위' 비용(★1 +0 = 1,020G · ★1 +99 = 2,010G · ★2 +0 = 2,020G …).
 // (예전엔 강화 수치만 봐서 ★1 +0 이 36G 였다.) ★ 별도 배율(ascendCostMult)은 전투 레벨이 이미 올려 주므로 0.
@@ -740,7 +742,7 @@ function useItem(db, id, itemId) {
     if ((p.pity || 0) >= 1) return { ok: false, error: '장인의 기운이 이미 100%예요.' };
     takeItem(p, 'hammer', 1);
     p.pity = Math.min(1, (p.pity || 0) + 0.5);
-    return { ok: true, used: 'hammer', msg: '🔨 쾅! 장인의 기운 ' + Math.round(p.pity * 100) + '%' };
+    return { ok: true, used: 'hammer', msg: '🔨 쾅! 장인의 기운 ' + pityPct(p.pity) + '%' };
   }
   if (itemId === 'prismdye') {
     // 염색약 뽑기에서는 절대 나오지 않는 프리즘 상점 전용 색 — 칭호 조건(무지개 등)과는 무관
@@ -1659,7 +1661,7 @@ function publicView(db, id) {
     party,
     invites: myInvites(db, id),
     rank: enhanceRank(db, id),
-    missionAlert: missionAlert(p),   // 미션·패스에서 받을 수 있는 보상 개수(빨간점)
+    missionAlert: missionAlert(p), passAlert: bpAlert(p),   // 받을 수 있는 미션 · 패스 보상 개수(버튼마다 빨간점)
     prism: p.prism || 0,             // 💎 프리즘
     weapons: weaponsView(p),         // 장비 칸(무기 여러 자루)
     dunBest: dunBest(p), dunOpen: ascendMax(p) >= 1, inDungeon: inDungeonFight(p),
@@ -1898,7 +1900,7 @@ function enhance(db, id) {
     // 실패 = 유지 + 장인의 기운 상승
     p.pity = Math.min(1, p.pity + pg);
     result = 'fail';
-    msg = '❌ 실패... +' + before + ' 유지 · 🔨 장인의 기운 ' + Math.round(p.pity * 100) + '%';
+    msg = '❌ 실패... +' + before + ' 유지 · 🔨 장인의 기운 ' + pityPct(p.pity) + '%';
   }
   if (d44First) msg += '\n…사(死)의 숫자였다.';   // 처음 한 번만
   return { ok: true, result, msg, cost, boosted, boostLeft: itemCount(p, 'boost'), pity: p.pity, egg, luckHit: result === 'success' && luckHit };
@@ -2639,11 +2641,12 @@ function missionRow(p, m, scope) {
   const claimed = (scope === 'daily' ? cl.d : cl.w).includes(m.id);
   return { id: m.id, desc: m.desc, target: m.target, progress: prog, done: prog >= m.target, claimed, reward: bundleFor(p, m.reward), xp: m.xp };
 }
-function missionAlert(p) { // 받을 수 있는 보상 개수(빨간점 배지용)
+// 받을 수 있는 미션 보상 개수(🎯 미션 버튼 빨간점). 패스 보상은 bpAlert 로 따로 센다(🎟️ 패스 버튼 빨간점) —
+// 예전엔 둘을 합쳐 미션 버튼에만 점을 찍어서, 패스만 받을 게 있을 때 미션 창을 열면 아무것도 없었다.
+function missionAlert(p) {
   let n = 0;
   for (const m of currentDaily()) { const r = missionRow(p, m, 'daily'); if (r.done && !r.claimed) n++; }
   for (const m of currentWeekly()) { const r = missionRow(p, m, 'weekly'); if (r.done && !r.claimed) n++; }
-  n += bpAlert(p);
   return n;
 }
 function missionView(db, id) {
@@ -2724,6 +2727,29 @@ function ensureBp(p) {
 }
 function bpLevelOf(xp) { return Math.max(0, Math.min(BP_MAX_LEVEL, Math.floor(xp / BP_XP_PER_LEVEL))); }
 function addBpXp(p, xp) { const bp = ensureBp(p); bp.xp = Math.min(BP_MAX_LEVEL * BP_XP_PER_LEVEL, (bp.xp || 0) + (xp || 0)); }
+// 🎟️ 패스 모두 받기 — 도달한 레벨의 안 받은 보상(무료 + 프리미엄이면 유료)을 한 번에. 가방에 안 들어가는 건 남긴다.
+function bpClaimAll(db, id) {
+  const p = norm(db.players[id]);
+  const bp = ensureBp(p), lv = bpLevelOf(bp.xp);
+  const sum = {};
+  let n = 0, full = false;
+  for (const t of BP_TRACK) {
+    if (t.level > lv) continue;
+    for (const track of ['free', 'paid']) {
+      if (track === 'paid' && !bp.premium) continue;
+      const list = track === 'paid' ? bp.paid : bp.free, bundle = track === 'paid' ? t.paid : t.free;
+      if (list.includes(t.level)) continue;
+      if (!bundleFits(p, bundle)) { full = true; continue; }
+      list.push(t.level);
+      const got = grantBundle(p, bundle);
+      for (const k in got) sum[k] = (sum[k] || 0) + got[k];
+      n++;
+    }
+  }
+  if (!n) return { ok: false, error: full ? BAG_FULL : '받을 보상이 없어요.' };
+  return { ok: true, count: n, reward: sum, bagFull: full,
+    msg: '🎟️ 패스 보상 ' + n + '개! ' + bundleText(sum) + (full ? ' (가방이 모자란 건 남겨뒀어요)' : '') };
+}
 function bpAlert(p) {
   const bp = ensureBp(p), lv = bpLevelOf(bp.xp); let n = 0;
   for (const t of BP_TRACK) {
@@ -2792,7 +2818,7 @@ function bpBuyPremium(db, id) {
 module.exports = {
   devEgg, raidStrong, dunStrong, STRONG_ATTACKS, CLASS_CRIT, eggFound, atkReport, reportAtk, ACHIEVEMENTS,
   CONFIG, GRADES, RARITIES, CLASSES, BOSSES, odds, enhanceCost, weaponName, grade,
-  missionView, missionClaim, missionClaimAll, bpView, bpClaim, bpBuyPremium, combatLevelText, bossLock,
+  missionView, missionClaim, missionClaimAll, bpView, bpClaim, bpClaimAll, bpBuyPremium, combatLevelText, bossLock,
   login, setClass, rename, publicView, enhance, ascend, attend, mine, mineSwing, hunt, buyProtect, fight, fightList, fightOdds, fightPower,
   ITEMS, useItem, buyInvPack, invView, ascendReq, ascendProgress,
   partyCreate, partyJoin, partyLeave, partyList, partyView, raidStart,

@@ -213,7 +213,14 @@ body.loading-on #globalLoading{opacity:1}
 .odds-row{display:flex;gap:16px;justify-content:center;margin-top:8px;font-size:13px;color:var(--muted)}
 .odds b{font-variant-numeric:tabular-nums}
 .odds.success b{color:var(--success)} .odds.destroy b{color:var(--danger)}
-.next-cost{display:none}   /* 비용은 강화 버튼 안으로 옮겼다(누르면 무슨 일이 일어나는지 버튼이 말한다) */
+.next-cost{display:none}
+/* 강화 결과 한 줄 — 알림 대신(무기 그림을 가리지 않고 연타해도 쌓이지 않게). 자리를 미리 잡아 둬서 글이 바뀌어도 화면이 안 흔들린다 */
+.enh-result{min-height:1.4em;margin-top:4px;font-size:13px;font-weight:800;line-height:1.4;color:var(--muted);text-align:center;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.enh-result.ok{color:var(--success)} .enh-result.bad{color:var(--danger)} .enh-result.info{color:#ffb35c}
+.enh-result.pop{animation:enhPop .28s ease-out}
+@keyframes enhPop{from{transform:scale(1.07);opacity:.35}to{transform:none;opacity:1}}
+.weapon-panel.at-max .enh-result{display:none}   /* 비용은 강화 버튼 안으로 옮겼다(누르면 무슨 일이 일어나는지 버튼이 말한다) */
 .pity-wrap{width:100%;margin-top:6px}
 .pity-label{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:5px}
 .pity-label span{color:var(--molten-hi);font-weight:800;font-variant-numeric:tabular-nums}
@@ -295,6 +302,11 @@ body.loading-on #globalLoading{opacity:1}
 /* 🎯 미션 모두 받기 */
 .mission-all{display:block;width:100%;margin:0 0 10px}
 .mission-all small{opacity:.8;font-weight:700}
+#passBtn .dot{margin-left:4px;vertical-align:top}
+/* 🎟️ 패스: 미션 창 아래 '받을 보상' 표시 · 모두 받기 */
+.bpfoot-ready{color:var(--primary);font-weight:800;margin-left:6px}
+.pass-all{display:block;margin:8px auto 0}
+.pass-all small{opacity:.8;font-weight:700}
 /* 좁은 휴대폰: 한 줄에 4개(출석·가방·미션·패스)가 들어가도록 여백·글자를 줄인다 */
 @media (max-width:400px){ .actions{gap:6px} .btn.action{padding:11px 4px;font-size:14px} }
 /* 가방 칸수는 버튼 모서리 배지로 — 버튼 4개가 한 줄에 들어가도록 글자를 한 줄로 둔다 */
@@ -1290,8 +1302,8 @@ body.loading-on #globalLoading{opacity:1}
    * 그림이 따라 커졌다. svh 는 스크롤해도 변하지 않고, 주소창이 펼쳐진 상태에서도 한 화면에 들어온다. */
   #game[data-view="forge"] .weapon-panel{gap:8px;padding:14px 14px 14px}
   #game[data-view="forge"] .hearth{padding:10px 0 12px}
-  #game[data-view="forge"] .weapon-art,#game[data-view="forge"] .weapon-art svg{height:clamp(96px,calc(100vh - 494px),220px);height:clamp(96px,calc(100svh - 494px),220px)}
-  #game[data-view="forge"] .weapon-art .weapon-img{max-height:clamp(90px,calc(100svh - 504px),200px)}
+  #game[data-view="forge"] .weapon-art,#game[data-view="forge"] .weapon-art svg{height:clamp(96px,calc(100vh - 514px),220px);height:clamp(96px,calc(100svh - 514px),220px)}
+  #game[data-view="forge"] .weapon-art .weapon-img{max-height:clamp(90px,calc(100svh - 524px),200px)}
   /* +99: 강화 버튼(만렙) 대신 초월 단이 주인공 — 재료 칩은 한 줄로 */
   #game .weapon-panel.at-max #enhanceBtn{display:none}
   #game .weapon-panel.at-max .ascend-mats{flex-wrap:nowrap}

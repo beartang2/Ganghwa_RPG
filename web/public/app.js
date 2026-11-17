@@ -11,6 +11,7 @@ const PATCH = {
   title: '🌌 초월 던전 · 💎 프리즘 업데이트',
   notes: [
     '🧭 <b>메뉴 정리</b> — 아래 탭 💎프리즘 → <b>🛒 상점</b>(골드 상점 · 💎 상점 · 상자 · 연금술 · 캡슐을 한 곳에), 🗡️사냥 → <b>사냥·싸움</b>. 상점 카드에서 염색약·망치·재련권을 <b>바로 사용</b>해요',
+    '📢 <b>강화 결과는 무기 정보 아래 한 줄에</b> — 알림이 무기 그림을 가리지 않고, 연타해도 쌓이지 않고 그 자리에서 바뀌어요 · 🎟️ 패스 보상은 <b>패스 버튼에 빨간 점</b>(미션 창 아래에도 "받을 보상 n개") · 패스도 <b>모두 받기</b>, 열면 받을 칸으로 바로 이동',
     '✨ <b>편의</b> — ⚔️ 승률 50% 미만 싸움은 한 번 더 물어봐요(지면 골드 20%) · 🎯 미션 <b>모두 받기</b> · 📅 출석 안 했으면 빨간 점 · 🗡️ 사냥 횟수는 어디서나 <b>남은 횟수</b> · 🐉 보스 입장 조건을 ★로(무기 +300 → ★3) · 휴대폰 알림이 무기 이름·창 내용을 가리지 않게 · 대장간 아래 전적 카드',
     '🌈 <b>등급 이름</b> — 일반 무기의 최고 등급 \'초월\' → <b>\'신화\'</b>(★ 초월하면 💎 프리즘). 몬스터 희귀도와 같은 사다리예요',
     '🎨 <b>닉네임 색 도감</b> — 염색약으로 뽑은 색이 이제 <b>사라지지 않고 모여요</b>! 📇프로필 → 🎨닉네임 색에서 모은 색을 눌러 <b>언제든 무료로 바꿔요</b>(기본 흰색 포함). 이미 가진 색이 또 나오면 💰<b>1,000G 환급</b> · 🫧프리즘 오로라는 <b>한 번만 사면 영구 소장</b>(이미 있으면 상점에서 \'보유 중\') · 염색약 값 2,000→<b>3,000G</b>',
@@ -1344,20 +1345,27 @@ function spawnEnhParticles(emojis, count) {
 }
 
 /* ---------- 액션 ---------- */
+// 강화 결과는 무기 정보 아래 고정 한 줄(#enhResult)에 — 알림 로그처럼 쌓여 무기 그림을 덮지 않고, 연타하면 그 자리에서 바뀐다
+function enhSay(msg, kind) {
+  const e = el('enhResult'); if (!e) return toast(msg, kind);
+  e.textContent = msg; e.title = msg;
+  e.className = 'enh-result' + (kind ? ' ' + kind : '');
+  void e.offsetWidth; e.classList.add('pop');
+}
 async function doEnhance() {
   chargeWeapon();   // 슈우웅 — 응답 대기 동안 충전 연출
   const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const r = await api('enhance', 'POST');
-  if (!r.ok) { el('weaponArt').classList.remove('charging'); return toast(r.error, 'bad'); }
+  if (!r.ok) { el('weaponArt').classList.remove('charging'); return enhSay(r.error, 'bad'); }
   // 서버가 빨라도 충전 연출이 최소 300ms 는 보이도록(슈우웅→팡 리듬 유지)
   const wait = 300 - ((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0);
   if (wait > 0) await new Promise(res => setTimeout(res, wait));
   applyMe(r.me); render();
   if (r.egg) setTimeout(() => sfx('jackpot'), 260);   // 🥚 +77 · +44 · 한 끗 차이
-  if (r.result === 'success') { toast(r.msg, 'ok'); weaponResult('success'); vibe(r.guaranteed || r.luckHit ? [18, 40, 30] : 16); sfx(r.guaranteed ? 'guaranteed' : r.luckHit ? 'jackpot' : 'success'); sfx('pang'); }
-  else if (r.result === 'destroy') { toast(r.msg, 'bad'); weaponResult('destroy'); vibe([30, 50, 30, 50, 40]); sfx('destroy'); sfx('clink'); }
-  else if (r.result === 'protected') { toast(r.msg, 'info'); weaponResult('protect'); vibe([20, 35, 20]); sfx('protect'); sfx('pang'); }
-  else { toast(r.msg, ''); weaponResult('fail'); vibe(8); sfx('clink'); }   // 실패 = 쨍그랑
+  if (r.result === 'success') { enhSay(r.msg, 'ok'); weaponResult('success'); vibe(r.guaranteed || r.luckHit ? [18, 40, 30] : 16); sfx(r.guaranteed ? 'guaranteed' : r.luckHit ? 'jackpot' : 'success'); sfx('pang'); }
+  else if (r.result === 'destroy') { enhSay(r.msg, 'bad'); weaponResult('destroy'); vibe([30, 50, 30, 50, 40]); sfx('destroy'); sfx('clink'); }
+  else if (r.result === 'protected') { enhSay(r.msg, 'info'); weaponResult('protect'); vibe([20, 35, 20]); sfx('protect'); sfx('pang'); }
+  else { enhSay(r.msg, ''); weaponResult('fail'); vibe(8); sfx('clink'); }   // 실패 = 쨍그랑
   if (['rank', 'log', 'hogu'].includes(currentTab)) loadTab();
 }
 /* ---------- 사냥터: 몬스터 연타 처치 ----------
@@ -3215,8 +3223,9 @@ document.querySelectorAll('.auth-tab').forEach(b => { b.onclick = () => openAuth
 /* ---------- 미션 & 배틀패스 ---------- */
 let missionScope = 'daily';
 function updateMissionBadge() {
-  const n = (me && me.missionAlert) || 0;
+  const n = (me && me.missionAlert) || 0, b = (me && me.passAlert) || 0;   // 미션 · 패스 따로(받을 게 있는 버튼에 점)
   const dot = el('missionDot'); if (dot) dot.hidden = !(n > 0);
+  const pd = el('passDot'); if (pd) pd.hidden = !(b > 0);
 }
 async function openMissions() { el('missionModal').hidden = false; await renderMissions(); }
 function closeMissions() { el('missionModal').hidden = true; }
@@ -3241,7 +3250,9 @@ async function renderMissions() {
       + btn + '</div>';
   }).join('');
   const bp = r.bp;
-  el('missionBpFoot').innerHTML = '🎟️ 시즌 패스 Lv.' + bp.level + ' <span class="bpfoot-open" id="missionOpenPass">패스 보기 ›</span>';
+  const pa = (me && me.passAlert) || 0;   // 패스에 받을 보상이 있으면 미션 창 아래에서도 바로 보이게
+  el('missionBpFoot').innerHTML = '🎟️ 시즌 패스 Lv.' + bp.level + (pa ? ' <span class="bpfoot-ready">🎁 받을 보상 ' + pa + '개</span>' : '')
+    + ' <span class="bpfoot-open" id="missionOpenPass">패스 보기 ›</span>';
   document.querySelectorAll('.mission-claim[data-id]').forEach(b => b.onclick = () => claimMission(b.dataset.id));
   const all = el('missionAll'); if (all) all.onclick = claimAllMissions;
   const op = el('missionOpenPass'); if (op) op.onclick = () => { closeMissions(); openPass(); };
@@ -3284,6 +3295,8 @@ async function renderPass() {
     + '<div class="pass-xptxt">' + (r.atMax ? '최대 레벨 달성' : (r.xpInLevel + ' / ' + r.xpPerLevel + ' XP')) + '</div>'
     + (r.premium ? '<div class="pass-premium-on">✨ 프리미엄 활성화됨</div>'
                  : '<button class="btn sm pass-buy" disabled>✨ 프리미엄 패스 · 준비 중</button>');   // 구매가 열리면 id="passBuy" 버튼으로 되돌린다(buyPassPremium)
+  const claimable = r.track.reduce((a, t) => a + (t.freeClaimable ? 1 : 0) + (t.paidClaimable ? 1 : 0), 0);
+  if (claimable > 1) el('passHead').innerHTML += '<button id="passAll" class="btn primary sm pass-all">🎁 모두 받기 <small>(' + claimable + '개)</small></button>';
   el('passTrack').innerHTML =
     '<div class="pass-cols"><span>Lv</span><span>무료</span><span>프리미엄</span></div>'
     + r.track.map(t => {
@@ -3299,6 +3312,16 @@ async function renderPass() {
     }).join('');
   const buy = el('passBuy'); if (buy) buy.onclick = buyPassPremium;
   document.querySelectorAll('.pass-claim').forEach(b => b.onclick = () => claimPass(+b.dataset.lv, b.dataset.track));
+  const all = el('passAll'); if (all) all.onclick = claimAllPass;
+  // 받을 칸이 아래쪽(높은 레벨)에 있으면 찾기 어려우니 첫 칸으로 데려간다
+  const first = el('passTrack').querySelector('.pass-cell.claimable');
+  if (first) first.scrollIntoView({ block: 'center' });
+}
+async function claimAllPass() {
+  const r = await api('bp-claim-all', 'POST', {});
+  if (!r.ok) { toast(r.error, 'bad'); return; }
+  applyMe(r.me); render(); sfx('coin'); toast(r.msg, 'ok'); updateMissionBadge();
+  await renderPass();
 }
 async function claimPass(level, track) {
   const r = await api('bp-claim', 'POST', { level, track });

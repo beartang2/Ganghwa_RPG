@@ -303,6 +303,7 @@ async function handle(method, pathname, ctx) {
     else if (pathname === '/api/mission-claim') fn = (db) => game.missionClaim(db, id, b.id);
     else if (pathname === '/api/mission-claim-all') fn = (db) => game.missionClaimAll(db, id);   // 🎯 모두 받기
     else if (pathname === '/api/bp-claim') fn = (db) => game.bpClaim(db, id, b.level, b.track);
+    else if (pathname === '/api/bp-claim-all') fn = (db) => game.bpClaimAll(db, id);   // 🎟️ 패스 모두 받기
     else if (pathname === '/api/bp-premium') fn = (db) => game.bpBuyPremium(db, id);
     else if (pathname === '/api/shop-buy') {
       fn = (db) => b.item === 'protect' ? game.buyProtect(db, id, 1)

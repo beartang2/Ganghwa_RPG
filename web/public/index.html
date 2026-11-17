@@ -32,7 +32,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@600;800;900&display=swap">
-<link rel="stylesheet" href="/style.css?v=94">
+<link rel="stylesheet" href="/style.css?v=95">
 </head>
 <body>
 <!--
@@ -100,6 +100,8 @@
             <span class="odds destroy"><span id="oddsDLabel">파괴</span> <b id="oddsD">-</b></span>
           </div>
           <div id="nextCost" class="next-cost">다음 강화 비용 20G</div>
+          <!-- 강화 결과 한 줄 — 알림 대신 여기에 바꿔 쓴다(무기 그림을 가리지 않고, 연타해도 쌓이지 않게) -->
+          <div id="enhResult" class="enh-result" aria-live="polite"></div>
         </div>
         <div class="pity-wrap">
           <div class="pity-label">🔨 장인의 기운 <span id="pityPct">0%</span></div>
@@ -120,7 +122,7 @@
         <button id="attendBtn" class="btn action"><span id="attendLabel">📅 출석</span><span id="attendDot" class="dot" hidden></span></button>
         <button id="invBtn" class="btn action">🎒 가방 <small id="invCount"></small></button>
         <button id="missionBtn" class="btn action">🎯 미션<span id="missionDot" class="dot" hidden></span></button>
-        <button id="passBtn" class="btn action">🎟️ 패스</button>
+        <button id="passBtn" class="btn action">🎟️ 패스<span id="passDot" class="dot" hidden></span></button>
       </section>
 
       <section class="card stats">
@@ -426,10 +428,10 @@
 
 <!-- Supabase Realtime (선택) — 로드 실패해도 게임은 폴링으로 동작 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/fx.js?v=94"></script>
-<script src="/gesture.js?v=94"></script>
-<script src="/weapon-art.js?v=94"></script>
-<script src="/prism-art.js?v=94"></script>
-<script src="/app.js?v=94"></script>
+<script src="/fx.js?v=95"></script>
+<script src="/gesture.js?v=95"></script>
+<script src="/weapon-art.js?v=95"></script>
+<script src="/prism-art.js?v=95"></script>
+<script src="/app.js?v=95"></script>
 </body>
 </html>
