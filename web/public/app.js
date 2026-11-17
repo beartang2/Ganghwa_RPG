@@ -111,7 +111,7 @@ const FX = (() => {
     chaos: 0.55, spread: 0.5, glow: 0.8, intensity: 0.9, arcs: 1.2, active: false,
     pixelBudget: small ? 6e5 : 3e6,   // 휴대폰은 셰이더 픽셀 수를 줄여 발열·배터리 부담을 낮춘다
   }));
-  // 전설·초월 무기 이름은 등급색 그라디언트가 흐른다(그 아래 등급은 평범한 글자)
+  // 전설·신화 무기 이름은 등급색 한 계열 그라디언트가 흐르고, 💎 프리즘만 무지갯빛(그 아래 등급은 평범한 글자)
   tryFx('grade', () => F.gradientText(el('weaponName'), { enabled: false, animationSpeed: 6, scale: 2.5 }));
   tryFx('title', () => F.shinyText(el('loginTitle'), { color: '#e8b264', shineColor: '#fff6df', speed: 2.4, delay: 2.6, angle: 115, shineWidth: 34 }));
   tryFx('gold', () => F.counter(el('hGold'), { locale: 'ko-KR', duration: 0.6, bounce: 0.18, stagger: 0.035, fade: 0.25 }));
@@ -119,7 +119,7 @@ const FX = (() => {
 })();
 const GRADE_FLOW = {
   legend: ['#fff1c1', '#ffb347', '#f7971e', '#ffd27a'],
-  transcend: ['#ffd27a', '#ff5d6c', '#c471ed', '#7df9ff'],
+  transcend: ['#f6e3ff', '#dca3f7', '#c471ed', '#a64fd9'],   // 🌈 신화 — 등급색(#c471ed) 한 계열로만 흐른다(무지갯빛은 💎 프리즘 몫)
   prism: ['#ffffff', '#9fe8ff', '#c9b8ff', '#ffb8e6', '#b8ffd9', '#fff3a8'],   // 💎 프리즘(★) — 흰빛 위로 무지갯빛이 흐른다
 };
 let lastEnhDisabled = null;
