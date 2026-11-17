@@ -32,7 +32,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@600;800;900&display=swap">
-<link rel="stylesheet" href="/style.css?v=93">
+<link rel="stylesheet" href="/style.css?v=97">
 </head>
 <body>
 <!--
@@ -53,9 +53,9 @@
     <p class="move-notice">🌐 새 주소로 이사했어요! 기존 <b>닉네임 + PIN</b> 그대로 로그인하면 캐릭터가 이어져요.</p>
     <input id="nick" placeholder="닉네임 (1~12자)" maxlength="12" autocomplete="off">
     <input id="pin" type="password" placeholder="PIN 숫자 8자리" maxlength="8" inputmode="numeric" autocomplete="off">
-    <button id="loginBtn" class="btn primary big">게스트로 시작</button>
+    <button id="loginBtn" class="btn primary big">시작하기</button>
     <p id="loginErr" class="err"></p>
-    <p class="hint">PIN 8자리가 게스트 계정입니다. 같은 PIN이면 같은 계정이고, 로그인 시 닉네임+PIN이 일치해야 해요.<br>PIN을 꼭 기억하세요! (닉네임은 로그인 후 프로필에서 변경 가능)</p>
+    <p class="hint">처음이면 새 캐릭터가 만들어지고, 있던 캐릭터면 그대로 이어져요(닉네임+PIN이 맞아야 해요).<br>PIN을 꼭 기억하세요! (닉네임은 로그인 후 프로필에서 변경 가능)</p>
     <div id="emailLoginWrap" class="email-login" hidden>
       <div class="or-divider"><span>또는</span></div>
       <button id="emailAuthBtn" class="btn ghost big">✉️ 이메일로 로그인 / 회원가입</button>
@@ -100,6 +100,8 @@
             <span class="odds destroy"><span id="oddsDLabel">파괴</span> <b id="oddsD">-</b></span>
           </div>
           <div id="nextCost" class="next-cost">다음 강화 비용 20G</div>
+          <!-- 강화 결과 한 줄 — 알림 대신 여기에 바꿔 쓴다(무기 그림을 가리지 않고, 연타해도 쌓이지 않게) -->
+          <div id="enhResult" class="enh-result" aria-live="polite"></div>
         </div>
         <div class="pity-wrap">
           <div class="pity-label">🔨 장인의 기운 <span id="pityPct">0%</span></div>
@@ -117,10 +119,10 @@
         <button id="mineBtn" class="btn action">⛏️ 채굴 <small id="mineAmt"></small></button>
       </section>
       <section class="actions" id="quickRow">
-        <button id="attendBtn" class="btn action">📅 출석</button>
+        <button id="attendBtn" class="btn action"><span id="attendLabel">📅 출석</span><span id="attendDot" class="dot" hidden></span></button>
         <button id="invBtn" class="btn action">🎒 가방 <small id="invCount"></small></button>
         <button id="missionBtn" class="btn action">🎯 미션<span id="missionDot" class="dot" hidden></span></button>
-        <button id="passBtn" class="btn action">🎟️ 패스</button>
+        <button id="passBtn" class="btn action">🎟️ 패스<span id="passDot" class="dot" hidden></span></button>
       </section>
 
       <section class="card stats">
@@ -136,8 +138,7 @@
       <nav class="tabs">
         <button class="tab active" data-tab="rank"><span class="ti">🏅</span><span class="tl">랭킹</span></button>
         <button class="tab" data-tab="goldrank"><span class="ti">💰</span><span class="tl">부자</span></button>
-        <button class="tab" data-tab="shop"><span class="ti">🛒</span><span class="tl">상점</span></button>
-        <button class="tab" data-tab="prism"><span class="ti">💎</span><span class="tl">프리즘</span></button>
+        <button class="tab" data-tab="prism"><span class="ti">🛒</span><span class="tl">상점</span></button>
         <button class="tab" data-tab="raid"><span class="ti">🐉</span><span class="tl">레이드</span></button>
         <button class="tab" data-tab="fight"><span class="ti">⚔️</span><span class="tl">싸움</span></button>
         <button class="tab" data-tab="hogu"><span class="ti">🕯️</span><span class="tl">추모</span></button>
@@ -169,9 +170,9 @@
   <!-- 휴대폰·태블릿(한 단) 하단 탭바 — 화면 하나씩 바꿔 보며 페이지 스크롤을 줄인다 -->
   <nav id="bottomBar" class="bottombar" aria-label="화면">
     <button class="bb-btn on" data-view="forge"><span>⚒️</span>대장간</button>
-    <button class="bb-btn" data-view="act"><span>🗡️</span>사냥</button>
+    <button class="bb-btn" data-view="act"><span>🗡️</span>사냥·싸움</button>
     <button class="bb-btn" data-view="raid"><span>🐉</span>레이드<i id="bbRaidDot" class="dot" hidden></i></button>
-    <button class="bb-btn" data-view="prism"><span>💎</span>프리즘</button>
+    <button class="bb-btn" data-view="prism"><span>🛒</span>상점</button>
     <button class="bb-btn" data-view="more"><span>🏅</span>더보기</button>
   </nav>
 </div>
@@ -246,7 +247,7 @@
       <ul class="guide-list">
         <li>💰 <b>골드 수급</b> — <b>출석</b>(하루 1회) · <b>채굴</b>(시간당 누적 + 돌 깨기) · <b>사냥</b> · <b>싸움 승리</b>(상대 골드 약탈)</li>
         <li>💎 <b>프리즘</b> — 사냥에서 나오는 🗝️<b>상자 열쇠</b>로 상자 3개 중 하나를 열거나, 🔮<b>마석</b>과 골드로 ⚗️<b>연금술</b>, 골드만으로 🧸<b>캡슐</b>을 돌려 모아요. 확률은 화면에 그대로 공개돼 있어요</li>
-        <li>🎒 <b>가방</b> — 방지권·부스트권·염색약·초월 재료·열쇠·마석이 모두 가방에. 10칸으로 시작(한 칸 999개), 염색약·재련권은 가방에서 <b>사용하기</b></li>
+        <li>🎒 <b>가방</b> — 방지권·부스트권·염색약·초월 재료·열쇠·마석이 모두 가방에. 10칸으로 시작(한 칸 999개), 염색약·재련권은 가방이나 🛒 상점 카드에서 <b>사용하기</b></li>
         <li>🎯 <b>미션·패스</b> — 오늘 미션과 패스 보상도 챙기세요. 닉네임은 <b>프로필</b>에서 바꿀 수 있어요</li>
       </ul>
     </div>
@@ -427,10 +428,10 @@
 
 <!-- Supabase Realtime (선택) — 로드 실패해도 게임은 폴링으로 동작 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/fx.js?v=93"></script>
-<script src="/gesture.js?v=93"></script>
-<script src="/weapon-art.js?v=93"></script>
-<script src="/prism-art.js?v=93"></script>
-<script src="/app.js?v=93"></script>
+<script src="/fx.js?v=97"></script>
+<script src="/gesture.js?v=97"></script>
+<script src="/weapon-art.js?v=97"></script>
+<script src="/prism-art.js?v=97"></script>
+<script src="/app.js?v=97"></script>
 </body>
 </html>

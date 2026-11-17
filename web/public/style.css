@@ -213,7 +213,14 @@ body.loading-on #globalLoading{opacity:1}
 .odds-row{display:flex;gap:16px;justify-content:center;margin-top:8px;font-size:13px;color:var(--muted)}
 .odds b{font-variant-numeric:tabular-nums}
 .odds.success b{color:var(--success)} .odds.destroy b{color:var(--danger)}
-.next-cost{display:none}   /* 비용은 강화 버튼 안으로 옮겼다(누르면 무슨 일이 일어나는지 버튼이 말한다) */
+.next-cost{display:none}
+/* 강화 결과 한 줄 — 알림 대신(무기 그림을 가리지 않고 연타해도 쌓이지 않게). 자리를 미리 잡아 둬서 글이 바뀌어도 화면이 안 흔들린다 */
+.enh-result{min-height:1.4em;margin-top:4px;font-size:13px;font-weight:800;line-height:1.4;color:var(--muted);text-align:center;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.enh-result.ok{color:var(--success)} .enh-result.bad{color:var(--danger)} .enh-result.info{color:#ffb35c}
+.enh-result.pop{animation:enhPop .28s ease-out}
+@keyframes enhPop{from{transform:scale(1.07);opacity:.35}to{transform:none;opacity:1}}
+.weapon-panel.at-max .enh-result{display:none}   /* 비용은 강화 버튼 안으로 옮겼다(누르면 무슨 일이 일어나는지 버튼이 말한다) */
 .pity-wrap{width:100%;margin-top:6px}
 .pity-label{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:5px}
 .pity-label span{color:var(--molten-hi);font-weight:800;font-variant-numeric:tabular-nums}
@@ -289,6 +296,17 @@ body.loading-on #globalLoading{opacity:1}
 .actions{display:flex;gap:8px}
 .btn.action small{color:var(--muted);opacity:1;font-variant-numeric:tabular-nums}
 .btn.action{position:relative}
+/* 📅 오늘 출석을 마치면 흐리게(✅) — 안 했으면 빨간 점 */
+.btn.action.done{opacity:.55}
+#attendBtn .dot{margin-left:4px;vertical-align:top}
+/* 🎯 미션 모두 받기 */
+.mission-all{display:block;width:100%;margin:0 0 10px}
+.mission-all small{opacity:.8;font-weight:700}
+#passBtn .dot{margin-left:4px;vertical-align:top}
+/* 🎟️ 패스: 미션 창 아래 '받을 보상' 표시 · 모두 받기 */
+.bpfoot-ready{color:var(--primary);font-weight:800;margin-left:6px}
+.pass-all{display:block;margin:8px auto 0}
+.pass-all small{opacity:.8;font-weight:700}
 /* 좁은 휴대폰: 한 줄에 4개(출석·가방·미션·패스)가 들어가도록 여백·글자를 줄인다 */
 @media (max-width:400px){ .actions{gap:6px} .btn.action{padding:11px 4px;font-size:14px} }
 /* 가방 칸수는 버튼 모서리 배지로 — 버튼 4개가 한 줄에 들어가도록 글자를 한 줄로 둔다 */
@@ -638,14 +656,21 @@ body.loading-on #globalLoading{opacity:1}
 .pf-line:last-child{border-bottom:0}
 .pf-line span{color:var(--muted)}
 /* 🎨 닉네임 색 컬렉션(내 프로필) — 칭호 아코디언과 같은 결. 눌러서 무료 교체 */
+/* 🛒 상점 탭: 골드·💎 섹션 머리줄, 카드 오른쪽 버튼 묶음(구매 + 사용) */
+.shop-sec-h{display:flex;align-items:baseline;gap:8px;margin:4px 0 8px;font-weight:900;font-size:15px}
+.shop-sec-h small{color:var(--muted);font-weight:700;font-size:12px}
+.shop-sec-h:not(:first-child){margin-top:16px}
+.shop-btns{display:flex;flex-direction:column;gap:6px;align-items:stretch;flex:none}
+.shop-use small{opacity:.75;font-weight:700}
 .pf-colors{margin:10px 0 12px;border-radius:12px;background:var(--card2)}
 .pf-colors>summary{list-style:none;display:flex;align-items:center;gap:8px;padding:11px 12px;cursor:pointer;
   font-size:12.5px;font-weight:800;color:var(--text);-webkit-tap-highlight-color:transparent}
 .pf-colors>summary::-webkit-details-marker{display:none}
 .pf-colors>summary small{color:var(--muted);font-weight:700}
+.pf-colors[open] .tacc-arrow{transform:rotate(90deg)}
 .color-grid{display:flex;flex-wrap:wrap;gap:7px;padding:0 12px 12px;animation:taccIn .18s ease-out}
 /* 어떤 색 글자든(흰색 포함) 잘 보이게 칩 바탕은 어둡게 고정 */
-.color-chip{font-size:13px;font-weight:800;padding:6px 12px;border-radius:20px;cursor:pointer;
+.color-chip{font-size:13px;font-weight:800;padding:6px 12px;border-radius:20px;cursor:pointer;color:var(--text);
   background:#0f131c;border:1px solid var(--line);transition:transform .08s,box-shadow .12s}
 .color-chip:hover{transform:translateY(-1px)}
 .color-chip.on{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary),0 0 10px color-mix(in srgb,var(--primary) 50%,transparent)}
@@ -1266,7 +1291,9 @@ body.loading-on #globalLoading{opacity:1}
   #game[data-view="act"] #actRow .btn.action{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:18px 8px;font-size:17px;min-height:84px}
   #game[data-view="act"] #panel,#game[data-view="raid"] #panel,#game[data-view="prism"] #panel,#game[data-view="more"] #panel{display:block;min-height:0}
   #game[data-view="more"] .stats{display:grid}
-  #game[data-view="more"] .tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;overflow:visible}
+  /* 대장간 아래 빈자리에 전적·최고기록·순위 — 화면이 넉넉한 휴대폰만(작은 폰은 무기 그림이 줄어들지 않게 '더보기'에서만) */
+  @media (min-height:760px){ #game[data-view="forge"] .stats{display:grid} }
+  #game[data-view="more"] .tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;overflow:visible}
   #game[data-view="more"] .tab[data-tab="prism"],#game[data-view="more"] .tab[data-tab="raid"],#game[data-view="more"] .tab[data-tab="fight"]{display:none}
   #game[data-view="more"] .tab{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;padding:7px 0;font-size:12px;border-radius:8px 8px 0 0}
   #game[data-view="more"] .tab .ti{margin:0;font-size:18px;line-height:1.1}
@@ -1275,8 +1302,8 @@ body.loading-on #globalLoading{opacity:1}
    * 그림이 따라 커졌다. svh 는 스크롤해도 변하지 않고, 주소창이 펼쳐진 상태에서도 한 화면에 들어온다. */
   #game[data-view="forge"] .weapon-panel{gap:8px;padding:14px 14px 14px}
   #game[data-view="forge"] .hearth{padding:10px 0 12px}
-  #game[data-view="forge"] .weapon-art,#game[data-view="forge"] .weapon-art svg{height:clamp(96px,calc(100vh - 494px),220px);height:clamp(96px,calc(100svh - 494px),220px)}
-  #game[data-view="forge"] .weapon-art .weapon-img{max-height:clamp(90px,calc(100svh - 504px),200px)}
+  #game[data-view="forge"] .weapon-art,#game[data-view="forge"] .weapon-art svg{height:clamp(96px,calc(100vh - 514px),220px);height:clamp(96px,calc(100svh - 514px),220px)}
+  #game[data-view="forge"] .weapon-art .weapon-img{max-height:clamp(90px,calc(100svh - 524px),200px)}
   /* +99: 강화 버튼(만렙) 대신 초월 단이 주인공 — 재료 칩은 한 줄로 */
   #game .weapon-panel.at-max #enhanceBtn{display:none}
   #game .weapon-panel.at-max .ascend-mats{flex-wrap:nowrap}
